@@ -16,13 +16,13 @@ const dmSerif = DM_Serif_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Beckett — Your personal communication coach",
+  title: "Beckett — For brains that work differently",
   description:
-    "Beckett helps you communicate with more clarity and confidence — in Gmail, Slack, meetings, and beyond.",
+    "Beckett decodes what people really mean, helps you practice hard conversations, and meets you in the apps you use — built for brains that work differently.",
   openGraph: {
-    title: "Beckett — Your personal communication coach",
+    title: "Beckett — For brains that work differently",
     description:
-      "Beckett helps you communicate with more clarity and confidence.",
+      "Beckett decodes what people really mean, helps you practice hard conversations, and meets you in the apps you use — built for brains that work differently.",
     siteName: "Beckett",
   },
 };
