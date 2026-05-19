@@ -10,6 +10,7 @@ export default function HomePage() {
   const [betaEmail, setBetaEmail] = useState("");
   const [betaStatus, setBetaStatus] = useState<"idle" | "loading" | "done">("idle");
   const [activeSection, setActiveSection] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const sections = ["features", "triggers", "skills", "beta"];
@@ -141,29 +142,51 @@ export default function HomePage() {
       {/* NAV */}
       <nav className="hn-nav">
         <a href="#" className="nav-logo">beck<span>ett</span></a>
-        <div className="nav-links">
-          <a href="#features" className={activeSection === "features" ? "active" : ""}>Features</a>
-          <a href="#skills" className={activeSection === "skills" ? "active" : ""}>Scenarios</a>
-          <a href="#beta" className={activeSection === "beta" ? "active" : ""}>Beta</a>
+        <div className="mode-toggle">
+          <button
+            className={`mt-btn${mode === "personal" ? " mt-on" : ""}`}
+            onClick={() => setMode("personal")}
+          >
+            Personal
+          </button>
+          <button
+            className={`mt-btn${mode === "professional" ? " mt-on" : ""}`}
+            onClick={() => setMode("professional")}
+          >
+            Professional
+          </button>
         </div>
-        <div className="mode-toggle-wrap">
-          <div className="mode-toggle">
-            <button
-              className={`mt-btn${mode === "personal" ? " mt-on" : ""}`}
-              onClick={() => setMode("personal")}
-            >
-              Personal
-            </button>
-            <button
-              className={`mt-btn${mode === "professional" ? " mt-on" : ""}`}
-              onClick={() => setMode("professional")}
-            >
-              Professional
-            </button>
+        <div className="nav-right">
+          <div className="nav-links">
+            <a href="#features" className={activeSection === "features" ? "active" : ""}>Features</a>
+            <a href="#skills" className={activeSection === "skills" ? "active" : ""}>Scenarios</a>
+            <a href="/auth/signin" className="nav-signin">Sign in</a>
           </div>
-          <a href="/auth/signin" className="nav-signin">Sign in</a>
-          <a href="#beta" className="nav-cta">Join beta</a>
+          <a href="#beta" className="nav-cta">Join the beta →</a>
+          <button
+            className="nav-hamburger"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Menu"
+          >
+            {mobileMenuOpen ? (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M4 4L16 16M16 4L4 16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            )}
+          </button>
         </div>
+        {mobileMenuOpen && (
+          <div className="nav-mobile-menu">
+            <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
+            <a href="#skills" onClick={() => setMobileMenuOpen(false)}>Scenarios</a>
+            <a href="/auth/signin">Sign in</a>
+            <a href="#beta" className="nav-cta-mobile" onClick={() => setMobileMenuOpen(false)}>Join the beta →</a>
+          </div>
+        )}
       </nav>
 
       {/* HERO */}
@@ -285,7 +308,6 @@ export default function HomePage() {
         <div className="container">
           <div className="sec-label">What Beckett does</div>
           <h2>Five things that actually<br /><em>make a difference.</em></h2>
-          <p className="sec-sub">Not twelve features. Five that are genuinely different — built around the things most people find hardest.</p>
           <div className="feat-grid feat-grid-5">
             {features.map((f) => (
               <div key={f.n} className="feat-card">
