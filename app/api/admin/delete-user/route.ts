@@ -29,9 +29,9 @@ export async function DELETE(request: NextRequest) {
     }
   }
 
-  // Remove from profiles
+  // Remove from beta_signups
   const { error: deleteError } = await supabaseAdmin
-    .from('profiles')
+    .from('beta_signups')
     .delete()
     .eq('id', signupId)
 

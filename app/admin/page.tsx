@@ -20,9 +20,8 @@ export default async function AdminPage() {
   );
 
   const { data: signups } = await supabase
-    .from("profiles")
-    .select("id, email, full_name, created_at, approved")
-    .eq("plan", "beta")
+    .from("beta_signups")
+    .select("id, email, name, created_at, approved")
     .eq("approved", false)
     .order("created_at", { ascending: false });
 

@@ -5,7 +5,7 @@ import { useState } from "react";
 type Signup = {
   id: string;
   email: string;
-  full_name: string | null;
+  name: string | null;
   created_at: string;
   approved: boolean;
 };
@@ -76,7 +76,7 @@ export default function AdminApprovalList({ signups }: { signups: Signup[] }) {
             >
               <div className="flex flex-col gap-0.5 min-w-0">
                 <span className="text-sm font-medium text-ink truncate">
-                  {signup.full_name || "—"}
+                  {signup.name || "—"}
                 </span>
                 <span className="text-xs text-ink-mid truncate">
                   {signup.email}

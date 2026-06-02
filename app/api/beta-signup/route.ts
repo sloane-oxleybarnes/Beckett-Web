@@ -16,12 +16,11 @@ export async function POST(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { error } = await supabase.from("profiles").upsert({
+  const { error } = await supabase.from("beta_signups").upsert({
     email,
-    full_name: name,
+    name,
     source: source || "landing_page",
     plan: plan || "beta",
-    approved: false,
   }, { onConflict: "email" });
 
   if (error && error.code !== "23505") {
@@ -38,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   if (hsId) {
     await supabase
-      .from("profiles")
+      .from("beta_signups")
       .update({ hubspot_contact_id: hsId })
       .eq("email", email);
   }

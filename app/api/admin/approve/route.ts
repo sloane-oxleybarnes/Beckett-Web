@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   }
 
   await supabase
-    .from("profiles")
+    .from("beta_signups")
     .update({ approved: true })
     .eq("id", id);
 
