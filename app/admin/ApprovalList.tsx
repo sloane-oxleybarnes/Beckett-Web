@@ -16,13 +16,35 @@ export default function AdminApprovalList({ signups }: { signups: Signup[] }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   async function approve(signup: Signup) {
-    setLoading(signup.id);
+    setLoading(`approve-${signup.id}`);
     setErrors((prev) => ({ ...prev, [signup.id]: "" }));
 
     const res = await fetch("/api/admin/approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: signup.email, id: signup.id }),
+    });
+
+    if (res.ok) {
+      setList((prev) => prev.filter((s) => s.id !== signup.id));
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setErrors((prev) => ({
+        ...prev,
+        [signup.id]: data.error || "Something went wrong.",
+      }));
+    }
+    setLoading(null);
+  }
+
+  async function reject(signup: Signup) {
+    setLoading(`reject-${signup.id}`);
+    setErrors((prev) => ({ ...prev, [signup.id]: "" }));
+
+    const res = await fetch("/api/admin/delete-user", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ signupId: signup.id }),
     });
 
     if (res.ok) {
@@ -72,13 +94,22 @@ export default function AdminApprovalList({ signups }: { signups: Signup[] }) {
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => approve(signup)}
-                disabled={loading === signup.id}
-                className="shrink-0 bg-primary text-white text-xs font-medium rounded-pill px-4 py-2 hover:bg-primary-dark transition-colors disabled:opacity-50"
-              >
-                {loading === signup.id ? "…" : "Approve"}
-              </button>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => approve(signup)}
+                  disabled={!!loading}
+                  className="bg-primary text-white text-xs font-medium rounded-pill px-4 py-2 hover:bg-primary-dark transition-colors disabled:opacity-50"
+                >
+                  {loading === `approve-${signup.id}` ? "…" : "Approve"}
+                </button>
+                <button
+                  onClick={() => reject(signup)}
+                  disabled={!!loading}
+                  className="bg-white border border-border text-ink-mid text-xs font-medium rounded-pill px-4 py-2 hover:border-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                >
+                  {loading === `reject-${signup.id}` ? "…" : "Reject"}
+                </button>
+              </div>
             </div>
           ))}
         </div>
