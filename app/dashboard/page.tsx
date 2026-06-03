@@ -9,7 +9,7 @@ export default async function DashboardPage() {
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (!session) redirect("/auth/signin");
+  if (!session) redirect("/auth/login");
 
   const { data: profile } = await supabase
     .from("profiles")

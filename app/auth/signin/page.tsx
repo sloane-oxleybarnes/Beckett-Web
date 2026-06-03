@@ -1,7 +1,5 @@
-import dynamic from "next/dynamic";
-
-const SigninForm = dynamic(() => import("@/components/auth/SigninForm"), { ssr: false });
+import { redirect } from "next/navigation";
 
 export default function SigninPage() {
-  return <SigninForm />;
+  redirect("/auth/login");
 }

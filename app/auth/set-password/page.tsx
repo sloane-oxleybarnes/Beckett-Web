@@ -15,7 +15,7 @@ export default function SetPasswordPage() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true)
-      else setError('Session expired. Please request a new invite.')
+      else setError('This link has expired. Please request a new one.')
     })
   }, [])
 

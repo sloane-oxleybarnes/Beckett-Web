@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
         from: "Beckett <hello@meetbeckett.co>",
         to: email,
         subject: "You're on the Beckett waitlist",
-        html: `<p>Thanks for signing up for Beckett. We're reviewing applications and will send you a link to set up your account once you're approved.</p><p>— Sloane</p>`,
+        html: `<p>Thanks for signing up — we're reviewing applications and will be in touch if you're accepted into the beta.</p><p>— Sloane</p>`,
       });
     } catch (e) {
       console.error("Resend signup confirmation error:", e);

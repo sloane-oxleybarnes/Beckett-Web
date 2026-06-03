@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
   const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://meetbeckett.co'
   const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
     redirectTo: `${origin}/auth/callback`,
+    data: { plan: 'beta' },
   });
 
   if (inviteError) {
