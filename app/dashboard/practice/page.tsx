@@ -4,18 +4,22 @@ import { createClient } from '@/lib/supabase'
 
 type Phase = 'setup' | 'conversation' | 'debrief'
 type Mode = 'personal' | 'professional'
+type ConversationFormat = 'virtual' | 'in-person' | 'not-sure'
 type Message = { role: 'user' | 'assistant'; content: string }
 type TrustedPerson = { id: string; name: string; relationship: string; communication_style: string; notes: string }
 type ContactContext = { name: string; style: string; notes: string }
 type DebriefData = { other_person_felt: string; how_you_came_across: string; what_went_well: string; things_to_work_on: string }
 
-function buildSystemPrompt(person: string, situation: string, goal: string, contact?: ContactContext | null) {
+function buildSystemPrompt(person: string, situation: string, goal: string, format: ConversationFormat, contact?: ContactContext | null) {
   let prompt = `You are playing the role of ${person} in a practice conversation.
 The user is preparing to have this real conversation: "${situation}"
 Their goal: "${goal}"`
   if (contact?.style) {
     prompt += `\n\nContext about ${person}: ${contact.style}`
     if (contact.notes) prompt += ` Additional notes: ${contact.notes}`
+  }
+  if (format === 'in-person') {
+    prompt += `\n\nThis conversation would normally happen face to face. Play the role as you would in an in-person interaction.`
   }
   prompt += `\n\nStay in character throughout. Respond as this person realistically would — including appropriate resistance, questions, or emotional reactions. Do not be artificially easy or artificially difficult. Be realistic.`
   return prompt
@@ -65,7 +69,6 @@ function ContactOverlay({
           <button onClick={onClose} className="text-ink-light hover:text-ink text-xl leading-none">×</button>
         </div>
 
-        {/* Trusted People */}
         {trustedPeople.length > 0 && (
           <div className="mb-6">
             <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-3">Trusted People</p>
@@ -87,7 +90,6 @@ function ContactOverlay({
           </div>
         )}
 
-        {/* Gmail threads */}
         <div>
           <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-3">Email history</p>
           <p className="text-xs text-ink-mid mb-3">
@@ -148,6 +150,9 @@ export default function PracticePage() {
   const supabase = createClient()
   const [phase, setPhase] = useState<Phase>('setup')
   const [mode, setMode] = useState<Mode>('professional')
+  const [conversationFormat, setConversationFormat] = useState<ConversationFormat>('virtual')
+  const [formatRecommendation, setFormatRecommendation] = useState<{ format: string; reason: string } | null>(null)
+  const [formatLoading, setFormatLoading] = useState(false)
   const [person, setPerson] = useState('')
   const [situation, setSituation] = useState('')
   const [goal, setGoal] = useState('')
@@ -157,6 +162,8 @@ export default function PracticePage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [draftLoading, setDraftLoading] = useState(false)
+  const [draftNote, setDraftNote] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [debrief, setDebrief] = useState<DebriefData | null>(null)
   const [inlineFeedback, setInlineFeedback] = useState<Record<number, string>>({})
@@ -188,20 +195,40 @@ export default function PracticePage() {
       const res = await fetch('/api/practice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'suggested_prompts',
-          mode,
-          person,
-          situation,
-          goal,
-          messageCount: msgCount,
-          lastAIMessage,
-        }),
+        body: JSON.stringify({ action: 'suggested_prompts', mode, person, situation, goal, messageCount: msgCount, lastAIMessage }),
       })
       const data = await res.json() as { prompts?: string[] }
       if (data.prompts?.length) setSuggestedPrompts(data.prompts)
     } catch { /* non-blocking */ }
   }, [mode, person, situation, goal])
+
+  async function recommendFormat() {
+    if (!person.trim() || !situation.trim()) return
+    setFormatLoading(true)
+    setFormatRecommendation(null)
+    const res = await fetch('/api/practice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'recommend_format', person, situation, goal }),
+    })
+    const data = await res.json() as { format: string; reason: string }
+    setFormatLoading(false)
+    setFormatRecommendation(data)
+  }
+
+  async function getDraftFeedback() {
+    if (!input.trim() || draftLoading) return
+    setDraftLoading(true)
+    const history = messages.map(m => `[${m.role === 'user' ? 'You' : person}]: ${m.content}`).join('\n')
+    const res = await fetch('/api/practice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'draft_feedback', mode, userMessage: input, conversationHistory: history, person, situation, goal }),
+    })
+    const data = await res.json() as { note?: string }
+    setDraftLoading(false)
+    if (data.note) setDraftNote(data.note)
+  }
 
   async function startPractice() {
     if (!person.trim() || !situation.trim()) {
@@ -211,12 +238,12 @@ export default function PracticePage() {
     setError('')
     setPhase('conversation')
     setLoading(true)
-    const system = buildSystemPrompt(person, situation, goal, contactContext)
+    const system = buildSystemPrompt(person, situation, goal, conversationFormat, contactContext)
     const seed: Message[] = [{ role: 'user', content: '(start the conversation — say the first thing as this person would)' }]
     const res = await fetch('/api/practice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'turn', mode, system, messages: seed }),
+      body: JSON.stringify({ action: 'turn', mode, system, messages: seed, messageCount: 0 }),
     })
     const data = await res.json() as { text?: string; error?: string }
     setLoading(false)
@@ -233,13 +260,14 @@ export default function PracticePage() {
     const userIndex = next.length - 1
     setMessages(next)
     setInput('')
+    setDraftNote(null)
     setSuggestedPrompts([])
     setLoading(true)
-    const system = buildSystemPrompt(person, situation, goal, contactContext)
+    const system = buildSystemPrompt(person, situation, goal, conversationFormat, contactContext)
     const res = await fetch('/api/practice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'turn', mode, system, messages: next }),
+      body: JSON.stringify({ action: 'turn', mode, system, messages: next, messageCount: next.length }),
     })
     const data = await res.json() as { text?: string; error?: string }
     setLoading(false)
@@ -247,7 +275,6 @@ export default function PracticePage() {
       const aiMsg = data.text
       setMessages(prev => [...prev, { role: 'assistant', content: aiMsg }])
       const context = `${person} — ${situation}`
-      // Inline feedback + new suggested prompts in background
       fetch('/api/practice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -283,12 +310,19 @@ export default function PracticePage() {
     setDebrief(null)
     setInlineFeedback({})
     setSuggestedPrompts([])
+    setDraftNote(null)
     setError('')
   }
 
   // ── Setup ──────────────────────────────────────────────────────────────────
 
   if (phase === 'setup') {
+    const formatOptions: { value: ConversationFormat; label: string }[] = [
+      { value: 'virtual', label: 'Virtual' },
+      { value: 'in-person', label: 'In person' },
+      { value: 'not-sure', label: 'Not sure' },
+    ]
+
     return (
       <div className="max-w-lg">
         {showContactOverlay && (
@@ -306,23 +340,88 @@ export default function PracticePage() {
 
         {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
-        {/* Mode toggle */}
-        <div className="mb-6">
-          <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">Mode</p>
-          <div className="flex rounded-pill border border-border overflow-hidden w-fit">
-            {(['professional', 'personal'] as Mode[]).map(m => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={`px-5 py-2 text-sm font-medium transition-colors capitalize ${
-                  mode === m ? 'bg-primary text-white' : 'text-ink-mid hover:text-ink'
-                }`}
-              >
-                {m}
-              </button>
-            ))}
+        {/* Toggles row */}
+        <div className="flex gap-6 mb-7">
+          {/* Mode */}
+          <div>
+            <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">Mode</p>
+            <div className="flex rounded-pill border border-border overflow-hidden">
+              {(['professional', 'personal'] as Mode[]).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className={`px-4 py-2 text-sm font-medium transition-colors capitalize ${
+                    mode === m ? 'bg-primary text-white' : 'text-ink-mid hover:text-ink'
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Format */}
+          <div>
+            <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">Format</p>
+            <div className="flex rounded-pill border border-border overflow-hidden">
+              {formatOptions.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => { setConversationFormat(value); setFormatRecommendation(null) }}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    conversationFormat === value ? 'bg-primary text-white' : 'text-ink-mid hover:text-ink'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Format sub-messages */}
+        {conversationFormat === 'in-person' && (
+          <p className="text-xs text-ink-light mb-5 -mt-3">
+            In-person video mode is coming soon — your session will run as text for now.
+          </p>
+        )}
+
+        {conversationFormat === 'not-sure' && (
+          <div className="mb-5 -mt-3">
+            <button
+              onClick={recommendFormat}
+              disabled={formatLoading || !person.trim() || !situation.trim()}
+              className="text-xs text-primary border border-primary rounded-pill px-3 py-1.5 hover:bg-primary-light transition-colors disabled:opacity-40"
+            >
+              {formatLoading ? 'Thinking…' : 'Recommend for me →'}
+            </button>
+            {!person.trim() && !situation.trim() && (
+              <p className="text-xs text-ink-light mt-1">Fill in the fields below first.</p>
+            )}
+            {formatRecommendation && (
+              <div className="mt-3 bg-bg border border-border rounded-card p-4">
+                <p className="text-sm font-medium text-ink mb-1">
+                  {formatRecommendation.format === 'in-person' ? 'Better in person' : 'Works well over text'}
+                </p>
+                <p className="text-xs text-ink-mid leading-relaxed mb-3">{formatRecommendation.reason}</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setConversationFormat(formatRecommendation.format as ConversationFormat); setFormatRecommendation(null) }}
+                    className="text-xs bg-primary text-white rounded-pill px-3 py-1.5 hover:bg-primary-dark transition-colors"
+                  >
+                    Use this format
+                  </button>
+                  <button
+                    onClick={() => setFormatRecommendation(null)}
+                    className="text-xs text-ink-mid hover:text-ink"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="space-y-5">
           <div>
@@ -388,14 +487,17 @@ export default function PracticePage() {
 
   if (phase === 'conversation') {
     return (
-      <div className="max-w-lg flex flex-col" style={{ height: 'calc(100vh - 96px)' }}>
+      <div className="max-w-2xl mx-auto flex flex-col" style={{ height: 'calc(100vh - 96px)' }}>
         <div className="flex items-center justify-between mb-4 shrink-0">
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-medium text-ink">{person}</h2>
               <span className="text-xs bg-ink-light/20 text-ink-mid rounded-pill px-2 py-0.5 capitalize">{mode}</span>
+              {conversationFormat !== 'virtual' && (
+                <span className="text-xs bg-ink-light/10 text-ink-light rounded-pill px-2 py-0.5 capitalize">{conversationFormat}</span>
+              )}
             </div>
-            <p className="text-xs text-ink-light">{goal || situation.slice(0, 60)}{!goal && situation.length > 60 ? '…' : ''}</p>
+            <p className="text-xs text-ink-light">{goal || situation.slice(0, 80)}{!goal && situation.length > 80 ? '…' : ''}</p>
           </div>
           <button
             onClick={endAndDebrief}
@@ -412,7 +514,7 @@ export default function PracticePage() {
           {messages.map((m, i) => (
             <div key={i}>
               <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-xs rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                <div className={`max-w-sm rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                   m.role === 'user'
                     ? 'bg-primary text-white rounded-br-sm'
                     : 'bg-white border border-border text-ink rounded-bl-sm'
@@ -422,7 +524,7 @@ export default function PracticePage() {
               </div>
               {m.role === 'user' && inlineFeedback[i] && (
                 <div className="flex justify-end mt-1">
-                  <p className="text-xs text-ink-light/70 italic max-w-xs text-right pr-1">
+                  <p className="text-xs text-ink-light/70 italic max-w-sm text-right pr-1">
                     {inlineFeedback[i]}
                   </p>
                 </div>
@@ -461,12 +563,19 @@ export default function PracticePage() {
           <input
             type="text"
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={e => { setInput(e.target.value); setDraftNote(null) }}
             onKeyDown={e => { if (e.key === 'Enter') sendMessage() }}
             placeholder="Your turn…"
             disabled={loading}
             className="flex-1 border border-border rounded-pill px-4 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
           />
+          <button
+            onClick={getDraftFeedback}
+            disabled={draftLoading || loading || !input.trim()}
+            className="border border-border text-ink-mid rounded-pill px-4 py-2.5 text-sm hover:text-ink hover:border-primary transition-colors disabled:opacity-40"
+          >
+            {draftLoading ? '…' : 'Draft'}
+          </button>
           <button
             onClick={sendMessage}
             disabled={loading || !input.trim()}
@@ -475,6 +584,15 @@ export default function PracticePage() {
             Send
           </button>
         </div>
+
+        {draftNote && (
+          <div className="flex items-start gap-2 mt-2 shrink-0">
+            <p className="text-xs text-ink-mid italic flex-1">
+              <span className="not-italic text-ink-light">↳ Beckett:</span> {draftNote}
+            </p>
+            <button onClick={() => setDraftNote(null)} className="text-ink-light hover:text-ink text-xs shrink-0">×</button>
+          </div>
+        )}
       </div>
     )
   }

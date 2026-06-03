@@ -33,8 +33,13 @@ async function callAnthropic(system: string | null, messages: { role: string; co
 
 function modeInstruction(mode?: string) {
   if (mode === 'professional') return 'This is a professional workplace conversation. Keep your responses formal and focused on outcomes.'
-  if (mode === 'personal') return 'This is a personal conversation. Respond naturally with real emotion and warmth.'
+  if (mode === 'personal') return 'This is a personal conversation. Respond as a real person would — grounded, sometimes brief, occasionally distracted or terse. Avoid enthusiasm, over-explaining, or performative warmth. Be natural and human.'
   return ''
+}
+
+function lengthInstruction(messageCount: number) {
+  if (messageCount <= 2) return 'Keep your response to 2-3 sentences maximum.'
+  return 'Keep your response to 1-2 sentences. Be concise and realistic — real conversations don\'t monologue.'
 }
 
 export async function POST(req: NextRequest) {
@@ -54,10 +59,11 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json() as {
-    action: 'turn' | 'debrief' | 'inline_feedback' | 'suggested_prompts'
+    action: 'turn' | 'debrief' | 'inline_feedback' | 'suggested_prompts' | 'recommend_format' | 'draft_feedback'
     mode?: 'personal' | 'professional'
     system?: string
     messages?: { role: string; content: string }[]
+    messageCount?: number
     personDescription?: string
     situation?: string
     goal?: string
@@ -65,18 +71,21 @@ export async function POST(req: NextRequest) {
     userMessage?: string
     context?: string
     person?: string
-    messageCount?: number
     lastAIMessage?: string
   }
 
   const { action, mode } = body
 
   if (action === 'turn') {
-    const { system, messages } = body
+    const { system, messages, messageCount = 0 } = body
     if (!messages?.length) return NextResponse.json({ error: 'messages required' }, { status: 400 })
     const modeNote = modeInstruction(mode)
-    const fullSystem = system ? (modeNote ? `${system}\n\n${modeNote}` : system) : modeNote || null
-    const text = await callAnthropic(fullSystem, messages, 600)
+    const lenNote = lengthInstruction(messageCount)
+    const instructions = [modeNote, lenNote].filter(Boolean).join(' ')
+    const fullSystem = system
+      ? (instructions ? `${system}\n\n${instructions}` : system)
+      : instructions || null
+    const text = await callAnthropic(fullSystem, messages, 300)
     return NextResponse.json({ text: text.trim() })
   }
 
@@ -96,6 +105,47 @@ In one short sentence (max 20 words), note how they came across. Be direct and s
 
     const note = await callAnthropic(system, [{ role: 'user', content: user }], 80)
     return NextResponse.json({ note: note.trim() })
+  }
+
+  if (action === 'draft_feedback') {
+    const { userMessage, conversationHistory, person, situation, goal } = body
+    if (!userMessage) return NextResponse.json({ error: 'userMessage required' }, { status: 400 })
+    const toneNote = mode === 'professional' ? 'Focus on professional tone and effectiveness.' : 'Focus on emotional tone and how natural it sounds.'
+
+    const system = `You are a communication coach previewing a message before it is sent. ${toneNote}`
+    const user = `The user is practicing a conversation with ${person || 'someone'} about: ${situation || 'a difficult topic'}. Their goal: ${goal || 'not specified'}.
+
+${conversationHistory ? `Conversation so far:\n${conversationHistory}\n\n` : ''}The user is about to send: "${userMessage}"
+
+In one sentence (max 20 words), note how this message would likely land — focus on tone and effectiveness, not grammar. Return only the sentence.`
+
+    const note = await callAnthropic(system, [{ role: 'user', content: user }], 80)
+    return NextResponse.json({ note: note.trim() })
+  }
+
+  if (action === 'recommend_format') {
+    const { person, situation, goal } = body
+
+    const user = `Someone is deciding whether a conversation should happen in person or over text/virtually.
+
+Who they are talking to: ${person || 'someone'}
+What the conversation is about: ${situation || 'not specified'}
+What they want to achieve: ${goal || 'not specified'}
+
+Analyze whether this conversation would be more effective in person or over text/virtually. Return ONLY valid JSON:
+{ "format": "in-person" | "virtual", "reason": "1-2 sentence explanation" }`
+
+    const result = await callAnthropic(
+      'You analyze communication scenarios and return JSON recommendations. Return only valid JSON.',
+      [{ role: 'user', content: user }],
+      120
+    )
+    try {
+      const parsed = JSON.parse(result.trim()) as { format: string; reason: string }
+      return NextResponse.json(parsed)
+    } catch {
+      return NextResponse.json({ format: 'virtual', reason: 'Could not determine a recommendation. Proceeding with virtual.' })
+    }
   }
 
   if (action === 'suggested_prompts') {
