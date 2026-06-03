@@ -16,7 +16,7 @@ Stay in character. Respond realistically — including natural resistance, quest
 
 export default function SkillModulePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const module = SKILL_MODULES.find(m => m.id === id)
+  const skillModule = SKILL_MODULES.find(m => m.id === id)
 
   const [phase, setPhase] = useState<Phase>('frame')
   const [scenarioIndex, setScenarioIndex] = useState(0)
@@ -31,23 +31,23 @@ export default function SkillModulePage({ params }: { params: Promise<{ id: stri
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  if (!module) {
+  if (!skillModule) {
     return (
       <div className="max-w-lg mx-auto px-6 py-12">
-        <Link href="/dashboard/skills" className="text-sm text-ink-mid hover:text-ink mb-8 inline-block">← Skill modules</Link>
+        <Link href="/dashboard/skills" className="text-sm text-ink-mid hover:text-ink mb-8 inline-block">← Skill skillModules</Link>
         <p className="text-ink-mid">Module not found.</p>
       </div>
     )
   }
 
-  const scenario = module.scenarios[scenarioIndex]
+  const scenario = skillModule.scenarios[scenarioIndex]
 
   async function startPractice() {
     setPhase('conversation')
     setMessages([])
     setError('')
     setLoading(true)
-    const system = buildSystemPrompt(scenario, module!.description)
+    const system = buildSystemPrompt(scenario, skillModule!.description)
     const seed: Message[] = [{ role: 'user', content: '(start — greet me or react naturally as this person would at the beginning of this interaction)' }]
     const text = await callPractice({ action: 'turn', system, messages: seed })
     setLoading(false)
@@ -61,7 +61,7 @@ export default function SkillModulePage({ params }: { params: Promise<{ id: stri
     setMessages(next)
     setInput('')
     setLoading(true)
-    const system = buildSystemPrompt(scenario, module!.description)
+    const system = buildSystemPrompt(scenario, skillModule!.description)
     const text = await callPractice({ action: 'turn', system, messages: next })
     setLoading(false)
     if (text) setMessages(prev => [...prev, { role: 'assistant', content: text }])
@@ -74,7 +74,7 @@ export default function SkillModulePage({ params }: { params: Promise<{ id: stri
       action: 'debrief',
       personDescription: scenario.persona,
       situation: scenario.situation,
-      goal: module!.description,
+      goal: skillModule!.description,
       conversationHistory: history,
     })
     setLoading(false)
@@ -100,7 +100,7 @@ export default function SkillModulePage({ params }: { params: Promise<{ id: stri
 
   function tryHarderScenario() {
     const nextIndex = scenarioIndex + 1
-    if (nextIndex < module!.scenarios.length) {
+    if (nextIndex < skillModule!.scenarios.length) {
       setScenarioIndex(nextIndex)
       setPhase('frame')
       setMessages([])
@@ -120,16 +120,16 @@ export default function SkillModulePage({ params }: { params: Promise<{ id: stri
 
     return (
       <div className="max-w-lg mx-auto px-6 py-12">
-        <Link href="/dashboard/skills" className="text-sm text-ink-mid hover:text-ink mb-8 inline-block">← Skill modules</Link>
+        <Link href="/dashboard/skills" className="text-sm text-ink-mid hover:text-ink mb-8 inline-block">← Skill skillModules</Link>
 
         <h1 className="text-3xl text-ink mb-2" style={{ fontFamily: 'var(--font-dm-serif), Georgia, serif' }}>
-          {module.title}
+          {skillModule.title}
         </h1>
-        <p className="text-ink-mid text-sm mb-8">{module.description}</p>
+        <p className="text-ink-mid text-sm mb-8">{skillModule.description}</p>
 
         <div className="bg-white border border-border rounded-card p-6 mb-6">
           <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-3">The skill</p>
-          <p className="text-sm text-ink leading-relaxed">{module.frame}</p>
+          <p className="text-sm text-ink leading-relaxed">{skillModule.frame}</p>
         </div>
 
         <div className="bg-white border border-border rounded-card p-5 mb-6">
@@ -143,7 +143,7 @@ export default function SkillModulePage({ params }: { params: Promise<{ id: stri
               {difficultyLabel[scenario.difficulty]}
             </span>
           </div>
-          {module.scenarios.length > 1 && scenarioIndex < module.scenarios.length - 1 && (
+          {skillModule.scenarios.length > 1 && scenarioIndex < skillModule.scenarios.length - 1 && (
             <p className="text-xs text-ink-light mt-3">A harder scenario unlocks after you complete this one.</p>
           )}
         </div>
@@ -165,7 +165,7 @@ export default function SkillModulePage({ params }: { params: Promise<{ id: stri
       <div className="max-w-lg mx-auto px-6 py-8 flex flex-col" style={{ minHeight: 'calc(100vh - 64px)' }}>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-base font-medium text-ink">{module.title}</h2>
+            <h2 className="text-base font-medium text-ink">{skillModule.title}</h2>
             <p className="text-xs text-ink-light">{scenario.persona}</p>
           </div>
           <button
@@ -231,7 +231,7 @@ export default function SkillModulePage({ params }: { params: Promise<{ id: stri
 
   const parts = debrief.split(/\n(?=\d+\.)/).map(s => s.replace(/^\d+\.\s*/, '').trim())
   const [wentWell = '', rephrase = '', alternative = ''] = parts
-  const hasHarder = scenarioIndex < module.scenarios.length - 1
+  const hasHarder = scenarioIndex < skillModule.scenarios.length - 1
 
   return (
     <div className="max-w-lg mx-auto px-6 py-12">
@@ -280,7 +280,7 @@ export default function SkillModulePage({ params }: { params: Promise<{ id: stri
               href="/dashboard/skills"
               className="w-full border border-border rounded-pill py-3 text-sm font-medium text-ink text-center hover:bg-primary-light transition-colors"
             >
-              ← Back to skill modules
+              ← Back to skill skillModules
             </Link>
           </div>
         </div>
