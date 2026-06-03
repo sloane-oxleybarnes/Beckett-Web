@@ -1,47 +1,166 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 
 type Phase = 'setup' | 'conversation' | 'debrief'
+type Mode = 'personal' | 'professional'
 type Message = { role: 'user' | 'assistant'; content: string }
 type TrustedPerson = { id: string; name: string; relationship: string; communication_style: string; notes: string }
+type ContactContext = { name: string; style: string; notes: string }
 type DebriefData = { other_person_felt: string; how_you_came_across: string; what_went_well: string; things_to_work_on: string }
 
-const SUGGESTED_PROMPTS = [
-  "I need to bring something up with you.",
-  "I want to be honest with you about something.",
-  "That makes sense, but I see it differently.",
-  "Can we talk about this more directly?",
-]
-
-function buildSystemPrompt(person: string, situation: string, goal: string, trustedPerson?: TrustedPerson | null) {
+function buildSystemPrompt(person: string, situation: string, goal: string, contact?: ContactContext | null) {
   let prompt = `You are playing the role of ${person} in a practice conversation.
 The user is preparing to have this real conversation: "${situation}"
 Their goal: "${goal}"`
-
-  if (trustedPerson?.communication_style) {
-    prompt += `\n\nContext about ${person}: ${trustedPerson.communication_style}`
-    if (trustedPerson.notes) prompt += ` Additional notes: ${trustedPerson.notes}`
+  if (contact?.style) {
+    prompt += `\n\nContext about ${person}: ${contact.style}`
+    if (contact.notes) prompt += ` Additional notes: ${contact.notes}`
   }
-
   prompt += `\n\nStay in character throughout. Respond as this person realistically would — including appropriate resistance, questions, or emotional reactions. Do not be artificially easy or artificially difficult. Be realistic.`
   return prompt
 }
 
+// ── Contact overlay ────────────────────────────────────────────────────────
+
+function ContactOverlay({
+  onClose,
+  onSelect,
+  trustedPeople,
+}: {
+  onClose: () => void
+  onSelect: (c: ContactContext) => void
+  trustedPeople: TrustedPerson[]
+}) {
+  const [gmailEmail, setGmailEmail] = useState('')
+  const [gmailLoading, setGmailLoading] = useState(false)
+  const [gmailResult, setGmailResult] = useState<string | null>(null)
+  const [gmailError, setGmailError] = useState<string | null>(null)
+
+  async function loadGmailContext() {
+    if (!gmailEmail.trim()) return
+    setGmailLoading(true)
+    setGmailError(null)
+    setGmailResult(null)
+    const res = await fetch(`/api/gmail/contact-context?email=${encodeURIComponent(gmailEmail)}`)
+    const data = await res.json() as { summary?: string; error?: string }
+    setGmailLoading(false)
+    if (data.error === 'google_not_connected') {
+      setGmailError('Connect Google in Settings to load email history.')
+    } else if (data.error === 'no_threads_found') {
+      setGmailError('No emails found with that address.')
+    } else if (data.summary) {
+      setGmailResult(data.summary)
+    } else {
+      setGmailError('Something went wrong. Try again.')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto p-6 shadow-xl">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-base font-medium text-ink">Connect a contact</h2>
+          <button onClick={onClose} className="text-ink-light hover:text-ink text-xl leading-none">×</button>
+        </div>
+
+        {/* Trusted People */}
+        {trustedPeople.length > 0 && (
+          <div className="mb-6">
+            <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-3">Trusted People</p>
+            <div className="space-y-2">
+              {trustedPeople.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => onSelect({ name: p.name, style: p.communication_style, notes: p.notes })}
+                  className="w-full text-left border border-border rounded-card p-3 hover:border-primary transition-colors"
+                >
+                  <p className="text-sm font-medium text-ink">{p.name}</p>
+                  {p.relationship && <p className="text-xs text-ink-light">{p.relationship}</p>}
+                  {p.communication_style && (
+                    <p className="text-xs text-ink-mid mt-1 line-clamp-2">{p.communication_style}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Gmail threads */}
+        <div>
+          <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-3">Email history</p>
+          <p className="text-xs text-ink-mid mb-3">
+            Enter their email address to load context from your recent exchanges.
+          </p>
+          <div className="flex gap-2 mb-3">
+            <input
+              type="email"
+              value={gmailEmail}
+              onChange={e => setGmailEmail(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') loadGmailContext() }}
+              placeholder="their@email.com"
+              className="flex-1 border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <button
+              onClick={loadGmailContext}
+              disabled={gmailLoading || !gmailEmail.trim()}
+              className="bg-primary text-white text-sm rounded-pill px-4 py-2 hover:bg-primary-dark transition-colors disabled:opacity-50"
+            >
+              {gmailLoading ? '…' : 'Load'}
+            </button>
+          </div>
+          {gmailError && (
+            <p className="text-xs text-ink-mid mb-3">
+              {gmailError}{' '}
+              {gmailError.includes('Settings') && (
+                <a href="/dashboard/settings" className="text-primary underline">Go to Settings</a>
+              )}
+            </p>
+          )}
+          {gmailResult && (
+            <div className="bg-bg border border-border rounded-card p-3 mb-3">
+              <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-1">Communication style</p>
+              <p className="text-sm text-ink leading-relaxed">{gmailResult}</p>
+              <button
+                onClick={() => onSelect({ name: gmailEmail, style: gmailResult, notes: '' })}
+                className="mt-3 w-full bg-primary text-white text-sm rounded-pill py-2 hover:bg-primary-dark transition-colors"
+              >
+                Use this context
+              </button>
+            </div>
+          )}
+          {trustedPeople.length === 0 && !gmailResult && !gmailError && (
+            <p className="text-xs text-ink-light">
+              No Trusted People saved yet.{' '}
+              <a href="/dashboard/trusted-people" className="text-primary underline">Add someone</a>
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────
+
 export default function PracticePage() {
   const supabase = createClient()
   const [phase, setPhase] = useState<Phase>('setup')
+  const [mode, setMode] = useState<Mode>('professional')
   const [person, setPerson] = useState('')
   const [situation, setSituation] = useState('')
   const [goal, setGoal] = useState('')
+  const [contactContext, setContactContext] = useState<ContactContext | null>(null)
+  const [showContactOverlay, setShowContactOverlay] = useState(false)
   const [trustedPeople, setTrustedPeople] = useState<TrustedPerson[]>([])
-  const [selectedPersonId, setSelectedPersonId] = useState<string>('')
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [debrief, setDebrief] = useState<DebriefData | null>(null)
   const [inlineFeedback, setInlineFeedback] = useState<Record<number, string>>({})
+  const [suggestedPrompts, setSuggestedPrompts] = useState<string[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -64,7 +183,25 @@ export default function PracticePage() {
     loadTrustedPeople()
   }, [])
 
-  const selectedTrustedPerson = trustedPeople.find(p => p.id === selectedPersonId) || null
+  const loadSuggestedPrompts = useCallback(async (lastAIMessage?: string, msgCount = 0) => {
+    try {
+      const res = await fetch('/api/practice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'suggested_prompts',
+          mode,
+          person,
+          situation,
+          goal,
+          messageCount: msgCount,
+          lastAIMessage,
+        }),
+      })
+      const data = await res.json() as { prompts?: string[] }
+      if (data.prompts?.length) setSuggestedPrompts(data.prompts)
+    } catch { /* non-blocking */ }
+  }, [mode, person, situation, goal])
 
   async function startPractice() {
     if (!person.trim() || !situation.trim()) {
@@ -74,11 +211,19 @@ export default function PracticePage() {
     setError('')
     setPhase('conversation')
     setLoading(true)
-    const system = buildSystemPrompt(person, situation, goal, selectedTrustedPerson)
+    const system = buildSystemPrompt(person, situation, goal, contactContext)
     const seed: Message[] = [{ role: 'user', content: '(start the conversation — say the first thing as this person would)' }]
-    const text = await callPractice({ action: 'turn', system, messages: seed })
+    const res = await fetch('/api/practice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'turn', mode, system, messages: seed }),
+    })
+    const data = await res.json() as { text?: string; error?: string }
     setLoading(false)
-    if (text) setMessages([{ role: 'assistant', content: text }])
+    if (data.text) {
+      setMessages([{ role: 'assistant', content: data.text }])
+      loadSuggestedPrompts(data.text, 0)
+    }
   }
 
   async function sendMessage() {
@@ -88,69 +233,48 @@ export default function PracticePage() {
     const userIndex = next.length - 1
     setMessages(next)
     setInput('')
+    setSuggestedPrompts([])
     setLoading(true)
-    const system = buildSystemPrompt(person, situation, goal, selectedTrustedPerson)
-    const text = await callPractice({ action: 'turn', system, messages: next })
+    const system = buildSystemPrompt(person, situation, goal, contactContext)
+    const res = await fetch('/api/practice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'turn', mode, system, messages: next }),
+    })
+    const data = await res.json() as { text?: string; error?: string }
     setLoading(false)
-    if (text) {
-      setMessages(prev => [...prev, { role: 'assistant', content: text }])
-      // Fire inline feedback in background
+    if (data.text) {
+      const aiMsg = data.text
+      setMessages(prev => [...prev, { role: 'assistant', content: aiMsg }])
       const context = `${person} — ${situation}`
-      callPracticeRaw({ action: 'inline_feedback', userMessage: userMsg.content, context })
-        .then(data => {
-          if (data?.note) setInlineFeedback(prev => ({ ...prev, [userIndex]: data.note as string }))
-        })
+      // Inline feedback + new suggested prompts in background
+      fetch('/api/practice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'inline_feedback', mode, userMessage: userMsg.content, context }),
+      })
+        .then(r => r.json())
+        .then((d: { note?: string }) => { if (d.note) setInlineFeedback(prev => ({ ...prev, [userIndex]: d.note as string })) })
         .catch(() => {})
+      loadSuggestedPrompts(aiMsg, next.length)
+    } else if (data.error) {
+      setError(data.error)
     }
   }
 
   async function endAndDebrief() {
     setLoading(true)
     const history = messages.map(m => `[${m.role === 'user' ? 'You' : person}]: ${m.content}`).join('\n')
-    const result = await callPracticeRaw({
-      action: 'debrief',
-      personDescription: person,
-      situation,
-      goal,
-      conversationHistory: history,
+    const res = await fetch('/api/practice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'debrief', mode, personDescription: person, situation, goal, conversationHistory: history }),
     })
+    const result = await res.json() as DebriefData & { error?: string }
     setLoading(false)
-    if (result && !result.error) {
-      setDebrief(result as DebriefData)
-      setPhase('debrief')
-    } else {
-      setError(result?.error as string || 'Something went wrong.')
-    }
-  }
-
-  async function callPractice(body: Record<string, unknown>): Promise<string> {
-    setError('')
-    try {
-      const res = await fetch('/api/practice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json() as { text?: string; error?: string }
-      if (!res.ok || data.error) { setError(data.error || 'Something went wrong.'); return '' }
-      return data.text || ''
-    } catch {
-      setError('Network error — please try again.')
-      return ''
-    }
-  }
-
-  async function callPracticeRaw(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-    try {
-      const res = await fetch('/api/practice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      return await res.json() as Record<string, unknown>
-    } catch {
-      return {}
-    }
+    if (result.error) { setError(result.error); return }
+    setDebrief(result)
+    setPhase('debrief')
   }
 
   function resetToSetup() {
@@ -158,6 +282,7 @@ export default function PracticePage() {
     setMessages([])
     setDebrief(null)
     setInlineFeedback({})
+    setSuggestedPrompts([])
     setError('')
   }
 
@@ -166,6 +291,14 @@ export default function PracticePage() {
   if (phase === 'setup') {
     return (
       <div className="max-w-lg">
+        {showContactOverlay && (
+          <ContactOverlay
+            trustedPeople={trustedPeople}
+            onClose={() => setShowContactOverlay(false)}
+            onSelect={(c) => { setContactContext(c); if (!person) setPerson(c.name); setShowContactOverlay(false) }}
+          />
+        )}
+
         <h1 className="text-3xl text-ink mb-2" style={{ fontFamily: 'var(--font-dm-serif), Georgia, serif' }}>
           Practice a conversation
         </h1>
@@ -173,9 +306,35 @@ export default function PracticePage() {
 
         {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
+        {/* Mode toggle */}
+        <div className="mb-6">
+          <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">Mode</p>
+          <div className="flex rounded-pill border border-border overflow-hidden w-fit">
+            {(['professional', 'personal'] as Mode[]).map(m => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`px-5 py-2 text-sm font-medium transition-colors capitalize ${
+                  mode === m ? 'bg-primary text-white' : 'text-ink-mid hover:text-ink'
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-ink mb-1">Who is this with?</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-ink">Who is this with?</label>
+              <button
+                onClick={() => setShowContactOverlay(true)}
+                className="text-xs text-primary hover:underline"
+              >
+                {contactContext ? `Using: ${contactContext.name}` : '+ Connect a contact'}
+              </button>
+            </div>
             <input
               type="text"
               value={person}
@@ -183,6 +342,12 @@ export default function PracticePage() {
               placeholder="e.g. my manager, a close friend, a colleague named Alex"
               className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
             />
+            {contactContext && (
+              <div className="mt-2 flex items-center justify-between bg-primary-light rounded-sm px-3 py-2">
+                <p className="text-xs text-primary">Context loaded from {contactContext.name}</p>
+                <button onClick={() => setContactContext(null)} className="text-xs text-primary hover:underline ml-2">Remove</button>
+              </div>
+            )}
           </div>
 
           <div>
@@ -190,7 +355,7 @@ export default function PracticePage() {
             <textarea
               value={situation}
               onChange={e => setSituation(e.target.value)}
-              placeholder="e.g. I need to ask for a raise, I want to set a limit around weekend messages, I need to give feedback about their attitude in meetings"
+              placeholder="e.g. I need to ask for a raise, I want to set a limit around weekend messages"
               rows={3}
               className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary resize-none"
             />
@@ -206,36 +371,6 @@ export default function PracticePage() {
               className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
-
-          {trustedPeople.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1">
-                Is this someone from your Trusted People?{' '}
-                <span className="font-normal text-ink-light">(optional)</span>
-              </label>
-              <select
-                value={selectedPersonId}
-                onChange={e => {
-                  setSelectedPersonId(e.target.value)
-                  const tp = trustedPeople.find(p => p.id === e.target.value)
-                  if (tp && !person) setPerson(tp.name)
-                }}
-                className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">None</option>
-                {trustedPeople.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}{p.relationship ? ` — ${p.relationship}` : ''}
-                  </option>
-                ))}
-              </select>
-              {selectedTrustedPerson?.communication_style && (
-                <p className="text-xs text-ink-light mt-1.5 leading-relaxed">
-                  Using their communication style to shape the AI.
-                </p>
-              )}
-            </div>
-          )}
 
           <button
             onClick={startPractice}
@@ -256,7 +391,10 @@ export default function PracticePage() {
       <div className="max-w-lg flex flex-col" style={{ height: 'calc(100vh - 96px)' }}>
         <div className="flex items-center justify-between mb-4 shrink-0">
           <div>
-            <h2 className="text-base font-medium text-ink">{person}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-medium text-ink">{person}</h2>
+              <span className="text-xs bg-ink-light/20 text-ink-mid rounded-pill px-2 py-0.5 capitalize">{mode}</span>
+            </div>
             <p className="text-xs text-ink-light">{goal || situation.slice(0, 60)}{!goal && situation.length > 60 ? '…' : ''}</p>
           </div>
           <button
@@ -305,18 +443,19 @@ export default function PracticePage() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Suggested prompts */}
-        <div className="flex gap-2 flex-wrap mb-2 shrink-0">
-          {SUGGESTED_PROMPTS.map(prompt => (
-            <button
-              key={prompt}
-              onClick={() => setInput(prompt)}
-              className="text-xs border border-border rounded-pill px-3 py-1 text-ink-mid hover:text-ink hover:border-primary transition-colors"
-            >
-              {prompt}
-            </button>
-          ))}
-        </div>
+        {suggestedPrompts.length > 0 && (
+          <div className="flex gap-2 flex-wrap mb-2 shrink-0">
+            {suggestedPrompts.map((prompt, i) => (
+              <button
+                key={i}
+                onClick={() => setInput(prompt)}
+                className="text-xs border border-border rounded-pill px-3 py-1 text-ink-mid hover:text-ink hover:border-primary transition-colors"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="flex gap-2 shrink-0">
           <input
@@ -353,22 +492,17 @@ export default function PracticePage() {
 
       {!loading && debrief && (
         <div className="space-y-4">
-          <div className="bg-white border border-border rounded-card p-5">
-            <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">How they likely felt</p>
-            <p className="text-sm text-ink leading-relaxed">{debrief.other_person_felt}</p>
-          </div>
-          <div className="bg-white border border-border rounded-card p-5">
-            <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">How you came across</p>
-            <p className="text-sm text-ink leading-relaxed">{debrief.how_you_came_across}</p>
-          </div>
-          <div className="bg-white border border-border rounded-card p-5">
-            <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">What went well</p>
-            <p className="text-sm text-ink leading-relaxed">{debrief.what_went_well}</p>
-          </div>
-          <div className="bg-white border border-border rounded-card p-5">
-            <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">Things to work on</p>
-            <p className="text-sm text-ink leading-relaxed">{debrief.things_to_work_on}</p>
-          </div>
+          {[
+            { label: 'How they likely felt', value: debrief.other_person_felt },
+            { label: 'How you came across', value: debrief.how_you_came_across },
+            { label: 'What went well', value: debrief.what_went_well },
+            { label: 'Things to work on', value: debrief.things_to_work_on },
+          ].map(({ label, value }) => (
+            <div key={label} className="bg-white border border-border rounded-card p-5">
+              <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">{label}</p>
+              <p className="text-sm text-ink leading-relaxed">{value}</p>
+            </div>
+          ))}
 
           <div className="flex gap-3 pt-2">
             <button

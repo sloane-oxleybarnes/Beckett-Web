@@ -17,6 +17,9 @@ function maxDifficulty(scenarios: { difficulty: string }[]) {
 
 function ModuleCard({ mod, recommended }: { mod: typeof SKILL_MODULES[number]; recommended?: boolean }) {
   const diff = maxDifficulty(mod.scenarios)
+  const allInPerson = mod.scenarios.every(s => s.format === 'in-person')
+  const someInPerson = !allInPerson && mod.scenarios.some(s => s.format === 'in-person')
+
   return (
     <Link
       href={`/dashboard/skills/${mod.id}`}
@@ -26,13 +29,19 @@ function ModuleCard({ mod, recommended }: { mod: typeof SKILL_MODULES[number]; r
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <h2 className="text-base font-medium text-ink">{mod.title}</h2>
           {recommended && (
-            <span className="text-xs bg-primary-light text-primary rounded-pill px-2 py-0.5">
-              Start here
+            <span className="text-xs bg-primary-light text-primary rounded-pill px-2 py-0.5">Start here</span>
+          )}
+          {allInPerson && (
+            <span className="text-xs bg-ink-light/20 text-ink-mid rounded-pill px-2 py-0.5">Video coming soon</span>
+          )}
+          {someInPerson && (
+            <span className="text-xs bg-ink-light/10 text-ink-light rounded-pill px-2 py-0.5">Some text · some video</span>
+          )}
+          {!allInPerson && !someInPerson && (
+            <span className={`text-xs rounded-pill px-2 py-0.5 ${difficultyColor[diff]}`}>
+              {difficultyLabel[diff]}
             </span>
           )}
-          <span className={`text-xs rounded-pill px-2 py-0.5 ${difficultyColor[diff]}`}>
-            {difficultyLabel[diff]}
-          </span>
         </div>
         <p className="text-sm text-ink-mid leading-relaxed">{mod.description}</p>
       </div>
@@ -55,39 +64,24 @@ export default function SkillsPage() {
         Structured lessons for real conversations. Each module walks you through the skill, lets you practice with an AI, and gives you feedback.
       </p>
 
-      {/* Recommended */}
       <section className="mb-10">
-        <h2 className="text-xs font-medium text-ink-light uppercase tracking-wide mb-4">
-          Recommended for you
-        </h2>
+        <h2 className="text-xs font-medium text-ink-light uppercase tracking-wide mb-4">Recommended for you</h2>
         <div className="grid gap-4">
-          {recommended.map(mod => (
-            <ModuleCard key={mod.id} mod={mod} recommended />
-          ))}
+          {recommended.map(mod => <ModuleCard key={mod.id} mod={mod} recommended />)}
         </div>
       </section>
 
-      {/* Professional */}
       <section className="mb-10">
-        <h2 className="text-xs font-medium text-ink-light uppercase tracking-wide mb-4">
-          Professional
-        </h2>
+        <h2 className="text-xs font-medium text-ink-light uppercase tracking-wide mb-4">Professional</h2>
         <div className="grid gap-4">
-          {professional.map(mod => (
-            <ModuleCard key={mod.id} mod={mod} recommended={RECOMMENDED_IDS.includes(mod.id)} />
-          ))}
+          {professional.map(mod => <ModuleCard key={mod.id} mod={mod} recommended={RECOMMENDED_IDS.includes(mod.id)} />)}
         </div>
       </section>
 
-      {/* Personal */}
       <section>
-        <h2 className="text-xs font-medium text-ink-light uppercase tracking-wide mb-4">
-          Personal
-        </h2>
+        <h2 className="text-xs font-medium text-ink-light uppercase tracking-wide mb-4">Personal</h2>
         <div className="grid gap-4">
-          {personal.map(mod => (
-            <ModuleCard key={mod.id} mod={mod} recommended={RECOMMENDED_IDS.includes(mod.id)} />
-          ))}
+          {personal.map(mod => <ModuleCard key={mod.id} mod={mod} recommended={RECOMMENDED_IDS.includes(mod.id)} />)}
         </div>
       </section>
     </div>

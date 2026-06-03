@@ -31,6 +31,12 @@ async function callAnthropic(system: string | null, messages: { role: string; co
   return data.content.map((b) => b.text || '').join('')
 }
 
+function modeInstruction(mode?: string) {
+  if (mode === 'professional') return 'This is a professional workplace conversation. Keep your responses formal and focused on outcomes.'
+  if (mode === 'personal') return 'This is a personal conversation. Respond naturally with real emotion and warmth.'
+  return ''
+}
+
 export async function POST(req: NextRequest) {
   const supabase = createSupabaseServerClient()
   const { data: { session } } = await supabase.auth.getSession()
@@ -48,7 +54,8 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json() as {
-    action: 'turn' | 'debrief' | 'inline_feedback'
+    action: 'turn' | 'debrief' | 'inline_feedback' | 'suggested_prompts'
+    mode?: 'personal' | 'professional'
     system?: string
     messages?: { role: string; content: string }[]
     personDescription?: string
@@ -57,22 +64,30 @@ export async function POST(req: NextRequest) {
     conversationHistory?: string
     userMessage?: string
     context?: string
+    person?: string
+    messageCount?: number
+    lastAIMessage?: string
   }
 
-  const { action } = body
+  const { action, mode } = body
 
   if (action === 'turn') {
     const { system, messages } = body
     if (!messages?.length) return NextResponse.json({ error: 'messages required' }, { status: 400 })
-    const text = await callAnthropic(system || null, messages, 600)
+    const modeNote = modeInstruction(mode)
+    const fullSystem = system ? (modeNote ? `${system}\n\n${modeNote}` : system) : modeNote || null
+    const text = await callAnthropic(fullSystem, messages, 600)
     return NextResponse.json({ text: text.trim() })
   }
 
   if (action === 'inline_feedback') {
     const { userMessage, context } = body
     if (!userMessage) return NextResponse.json({ error: 'userMessage required' }, { status: 400 })
+    const toneNote = mode === 'professional'
+      ? 'Focus on professional effectiveness.'
+      : 'Include emotional and relational observations.'
 
-    const system = 'You are a communication coach giving brief, honest in-the-moment feedback.'
+    const system = `You are a communication coach giving brief, honest in-the-moment feedback. ${toneNote}`
     const user = `Context: ${context || 'a practice conversation'}
 
 The user just said: "${userMessage}"
@@ -83,11 +98,44 @@ In one short sentence (max 20 words), note how they came across. Be direct and s
     return NextResponse.json({ note: note.trim() })
   }
 
+  if (action === 'suggested_prompts') {
+    const { person, situation, goal, messageCount, lastAIMessage } = body
+    const isOpening = !messageCount || messageCount === 0
+
+    const user = `Someone is practicing a difficult conversation.
+Talking to: ${person || 'someone'}
+Situation: ${situation || 'not specified'}
+Goal: ${goal || 'not specified'}
+Mode: ${mode || 'not specified'}
+Messages so far: ${messageCount ?? 0}
+${lastAIMessage ? `The other person just said: "${lastAIMessage}"` : ''}
+
+Generate ${isOpening ? '3' : '4'} short suggested messages the user could send next.
+Rules:
+- ${isOpening ? 'These are OPENING lines only — introductory, not mid-conversation' : 'These MUST react to what the other person just said'}
+- Each suggestion max 12 words
+- Vary the approaches (direct, soft, clarifying)
+- Return ONLY valid JSON: { "prompts": ["...", "...", "..."] }`
+
+    const result = await callAnthropic(
+      'You generate short conversation suggestions. Return only valid JSON.',
+      [{ role: 'user', content: user }],
+      150
+    )
+    try {
+      const parsed = JSON.parse(result.trim()) as { prompts: string[] }
+      return NextResponse.json({ prompts: parsed.prompts || [] })
+    } catch {
+      return NextResponse.json({ prompts: [] })
+    }
+  }
+
   if (action === 'debrief') {
     const { personDescription, situation, goal, conversationHistory } = body
     if (!conversationHistory) return NextResponse.json({ error: 'conversationHistory required' }, { status: 400 })
+    const modeNote = modeInstruction(mode)
 
-    const system = 'You are Beckett, giving honest feedback after a practice conversation. Always respond with valid JSON only — no extra text.'
+    const system = `You are Beckett, giving honest feedback after a practice conversation. ${modeNote} Always respond with valid JSON only — no extra text.`
     const user = `You were just playing the role of ${personDescription} in a practice conversation.
 The situation: "${situation}"
 The user's goal: "${goal}"
