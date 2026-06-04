@@ -1,24 +1,29 @@
 import Link from 'next/link'
-import { SKILL_MODULES } from '@/lib/skills'
+import { SKILL_MODULES, RECOMMENDED_IDS, type SubCategory, type SkillModule } from '@/lib/skills'
 
-const difficultyLabel: Record<string, string> = { low: 'Beginner', medium: 'Intermediate', high: 'Advanced' }
+const difficultyLabel: Record<string, string> = {
+  foundations: 'Foundations',
+  intermediate: 'Intermediate',
+  advanced: 'Advanced',
+}
 const difficultyColor: Record<string, string> = {
-  low: 'bg-green-50 text-green-700',
-  medium: 'bg-amber-50 text-amber-700',
-  high: 'bg-red-50 text-red-700',
+  foundations: 'bg-green-50 text-green-700',
+  intermediate: 'bg-amber-50 text-amber-700',
+  advanced: 'bg-red-50 text-red-700',
 }
 
-const RECOMMENDED_IDS = ['navigate-small-talk', 'set-work-boundary']
+const SUBCATEGORY_SECTIONS: { sub: SubCategory; label: string }[] = [
+  { sub: 'personal-dating', label: 'Personal — Dating' },
+  { sub: 'personal-general', label: 'Personal — General Communication' },
+  { sub: 'personal-family-friends', label: 'Personal — Family and Friends' },
+  { sub: 'personal-self-advocacy', label: 'Personal — Self-Advocacy' },
+  { sub: 'professional-colleague', label: 'Professional — Colleague' },
+  { sub: 'professional-general', label: 'Professional — General Communication' },
+  { sub: 'professional-manager-boss', label: 'Professional — Manager and Boss' },
+]
 
-function maxDifficulty(scenarios: { difficulty: string }[]) {
-  const order = ['low', 'medium', 'high']
-  return scenarios.reduce((max, s) => order.indexOf(s.difficulty) > order.indexOf(max) ? s.difficulty : max, 'low')
-}
-
-function ModuleCard({ mod, recommended }: { mod: typeof SKILL_MODULES[number]; recommended?: boolean }) {
-  const diff = maxDifficulty(mod.scenarios)
-  const allInPerson = mod.scenarios.every(s => s.format === 'in-person')
-  const someInPerson = !allInPerson && mod.scenarios.some(s => s.format === 'in-person')
+function ModuleCard({ mod, recommended }: { mod: SkillModule; recommended?: boolean }) {
+  const isInPerson = mod.format === 'in-person'
 
   return (
     <Link
@@ -31,19 +36,16 @@ function ModuleCard({ mod, recommended }: { mod: typeof SKILL_MODULES[number]; r
           {recommended && (
             <span className="text-xs bg-primary-light text-primary rounded-pill px-2 py-0.5">Start here</span>
           )}
-          {allInPerson && (
-            <span className="text-xs bg-ink-light/20 text-ink-mid rounded-pill px-2 py-0.5">Video coming soon</span>
-          )}
-          {someInPerson && (
-            <span className="text-xs bg-ink-light/10 text-ink-light rounded-pill px-2 py-0.5">Some text · some video</span>
-          )}
-          {!allInPerson && !someInPerson && (
-            <span className={`text-xs rounded-pill px-2 py-0.5 ${difficultyColor[diff]}`}>
-              {difficultyLabel[diff]}
+          {isInPerson ? (
+            <span className="text-xs bg-amber-50 text-amber-700 rounded-pill px-2 py-0.5">Video lessons coming</span>
+          ) : (
+            <span className={`text-xs rounded-pill px-2 py-0.5 ${difficultyColor[mod.difficulty]}`}>
+              {difficultyLabel[mod.difficulty]}
             </span>
           )}
         </div>
         <p className="text-sm text-ink-mid leading-relaxed">{mod.description}</p>
+        <p className="text-xs text-ink-light mt-1">{mod.estimatedMinutes} min</p>
       </div>
       <span className="text-ink-light group-hover:text-primary transition-colors text-lg mt-0.5 shrink-0">→</span>
     </Link>
@@ -52,8 +54,6 @@ function ModuleCard({ mod, recommended }: { mod: typeof SKILL_MODULES[number]; r
 
 export default function SkillsPage() {
   const recommended = SKILL_MODULES.filter(m => RECOMMENDED_IDS.includes(m.id))
-  const professional = SKILL_MODULES.filter(m => m.category === 'professional')
-  const personal = SKILL_MODULES.filter(m => m.category === 'personal')
 
   return (
     <div className="max-w-2xl">
@@ -71,19 +71,20 @@ export default function SkillsPage() {
         </div>
       </section>
 
-      <section className="mb-10">
-        <h2 className="text-xs font-medium text-ink-light uppercase tracking-wide mb-4">Professional</h2>
-        <div className="grid gap-4">
-          {professional.map(mod => <ModuleCard key={mod.id} mod={mod} recommended={RECOMMENDED_IDS.includes(mod.id)} />)}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-xs font-medium text-ink-light uppercase tracking-wide mb-4">Personal</h2>
-        <div className="grid gap-4">
-          {personal.map(mod => <ModuleCard key={mod.id} mod={mod} recommended={RECOMMENDED_IDS.includes(mod.id)} />)}
-        </div>
-      </section>
+      {SUBCATEGORY_SECTIONS.map(({ sub, label }) => {
+        const modules = SKILL_MODULES.filter(m => m.subCategories.includes(sub))
+        if (!modules.length) return null
+        return (
+          <section key={sub} className="mb-10">
+            <h2 className="text-xs font-medium text-ink-light uppercase tracking-wide mb-4">{label}</h2>
+            <div className="grid gap-4">
+              {modules.map(mod => (
+                <ModuleCard key={mod.id} mod={mod} recommended={RECOMMENDED_IDS.includes(mod.id)} />
+              ))}
+            </div>
+          </section>
+        )
+      })}
     </div>
   )
 }
