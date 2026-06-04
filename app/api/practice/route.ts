@@ -32,7 +32,9 @@ async function callAnthropic(system: string | null, messages: { role: string; co
 }
 
 function modeInstruction(mode?: string) {
-  if (mode === 'professional') return 'This is a professional workplace conversation. Keep your responses formal and focused on outcomes.'
+  if (mode === 'professional') {
+    return 'This is a professional workplace conversation. Start composed and professional. If the user becomes repeatedly dismissive, rude, or hostile, let your frustration show progressively — become terser, push back more directly, and eventually disengage if it continues. Real professionals have limits.'
+  }
   if (mode === 'personal') return 'This is a personal conversation. Respond as a real person would — grounded, sometimes brief, occasionally distracted or terse. Avoid enthusiasm, over-explaining, or performative warmth. Be natural and human.'
   return ''
 }
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json() as {
-    action: 'turn' | 'debrief' | 'inline_feedback' | 'suggested_prompts' | 'recommend_format' | 'draft_feedback'
+    action: 'turn' | 'debrief' | 'inline_feedback' | 'suggested_prompts' | 'recommend_format' | 'draft_feedback' | 'intervention_check'
     mode?: 'personal' | 'professional'
     system?: string
     messages?: { role: string; content: string }[]
@@ -132,8 +134,8 @@ Who they are talking to: ${person || 'someone'}
 What the conversation is about: ${situation || 'not specified'}
 What they want to achieve: ${goal || 'not specified'}
 
-Analyze whether this conversation would be more effective in person or over text/virtually. Return ONLY valid JSON:
-{ "format": "in-person" | "virtual", "reason": "1-2 sentence explanation" }`
+Analyze whether this conversation would be more effective in person or over text. Return ONLY valid JSON:
+{ "format": "in-person" | "text", "reason": "1-2 sentence explanation" }`
 
     const result = await callAnthropic(
       'You analyze communication scenarios and return JSON recommendations. Return only valid JSON.',
@@ -144,7 +146,7 @@ Analyze whether this conversation would be more effective in person or over text
       const parsed = JSON.parse(result.trim()) as { format: string; reason: string }
       return NextResponse.json(parsed)
     } catch {
-      return NextResponse.json({ format: 'virtual', reason: 'Could not determine a recommendation. Proceeding with virtual.' })
+      return NextResponse.json({ format: 'text', reason: 'Could not determine a recommendation. Proceeding with text.' })
     }
   }
 
@@ -177,6 +179,40 @@ Rules:
       return NextResponse.json({ prompts: parsed.prompts || [] })
     } catch {
       return NextResponse.json({ prompts: [] })
+    }
+  }
+
+  if (action === 'intervention_check') {
+    const { messages, person } = body
+    if (!messages?.length) return NextResponse.json({ intervene: false })
+    const lastFew = messages.slice(-6)
+
+    const user = `You are Beckett, a communication coach monitoring a practice session.
+
+Practice: talking to ${person || 'someone'}, mode: ${mode || 'professional'}
+
+Recent conversation:
+${lastFew.map(m => `[${m.role === 'user' ? 'User' : (person || 'Other')}]: ${m.content}`).join('\n')}
+
+Assess whether this conversation is going very poorly — user being repeatedly hostile, aggressive, or dismissive in a way that has broken down the conversation.
+
+Normal difficulty or conflict is expected in practice — do NOT intervene for that. Only intervene for genuine communication breakdown.
+
+Return ONLY valid JSON — one of these three forms:
+{ "intervene": false }
+{ "intervene": true, "severity": "warning", "message": "brief supportive note from Beckett, max 20 words" }
+{ "intervene": true, "severity": "end", "message": "brief note from Beckett suggesting to wrap up, max 20 words" }`
+
+    const result = await callAnthropic(
+      'You monitor practice conversations and return JSON. Return only valid JSON.',
+      [{ role: 'user', content: user }],
+      100
+    )
+    try {
+      const parsed = JSON.parse(result.trim()) as { intervene?: boolean; severity?: string; message?: string }
+      return NextResponse.json(parsed)
+    } catch {
+      return NextResponse.json({ intervene: false })
     }
   }
 

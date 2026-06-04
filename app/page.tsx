@@ -62,7 +62,7 @@ export default function HomePage() {
     {
       n: "02",
       title: "Conversation practice",
-      personal: "Practice asking someone out, telling a friend something hard, or navigating a difficult family conversation — with an AI that plays the other person realistically, including the pushback.",
+      personal: "Practice asking someone out, telling a friend something hard, or navigating a difficult family conversation — with Beckett playing the other person realistically, including the pushback.",
       professional: "Practice asking for a raise, addressing a coworker who's taking credit for your work, or holding your ground in a meeting — before the real thing happens.",
       action: "Practice this conversation →",
     },

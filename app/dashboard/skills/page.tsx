@@ -61,7 +61,7 @@ export default function SkillsPage() {
         Skill modules
       </h1>
       <p className="text-ink-mid text-sm mb-10">
-        Structured lessons for real conversations. Each module walks you through the skill, lets you practice with an AI, and gives you feedback.
+        Structured lessons for real conversations. Each module walks you through the skill, lets you practice with Beckett, and gives you feedback.
       </p>
 
       <section className="mb-10">
