@@ -143,7 +143,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
         setMatchErrors(new Set())
       }
     }
-  }, [phase, currentSlideIndex])
+  }, [phase, currentSlideIndex, maybeCourse])
 
   if (!maybeCourse) {
     return <div className="max-w-lg mx-auto py-16 text-center"><p className="text-ink-mid">Course not found.</p></div>
@@ -212,21 +212,6 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     }
   }
 
-  // ── canAdvance ─────────────────────────────────────────────────────────────
-  function canAdvance(): boolean {
-    if (phase !== 'slides') return false
-    const slide = course.slides[currentSlideIndex]
-    switch (slide.type) {
-      case 'accordion': return checkedSections.size === (slide as AccordionSlide).sections.length
-      case 'read-through': case 'side-by-side': case 'interactive-read': return true
-      case 'flip-cards': return flippedCards.size === (slide as FlipCardsSlide).cards.length
-      case 'matching': return matchChecked && matchErrors.size === 0 && matchConns.length === (slide as MatchingSlide).pairs.length
-      case 'sorting': return sortingChecked && sortingErrors.size === 0 && Object.keys(sortedItems).length === (slide as SortingSlide).items.length
-      case 'multiple-choice': return mcRound >= (slide as MultipleChoiceSlide).rounds.length
-      case 'checklist': return checkedItems.size === (slide as ChecklistSlide).items.length
-      default: return false
-    }
-  }
 
   // ── Record wrong answer (dedup by slideIndex + itemIndex) ──────────────────
   function recordWrong(wa: Omit<WrongAnswer, 'slideIndex'> & { slideIndex: number }) {
@@ -307,7 +292,6 @@ export default function CoursePage({ params }: { params: { id: string } }) {
   }
 
   function checkMatching() {
-    const slide = course.slides[currentSlideIndex] as MatchingSlide
     const errors = new Set<number>()
     matchConns.forEach(c => {
       if (c.left !== shuffledRight[c.right]) errors.add(c.left)
@@ -508,7 +492,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
               <div key={i} className={`border rounded-xl overflow-hidden transition-colors ${isChecked ? 'border-primary/40 bg-primary/5' : 'border-border bg-white'}`}>
                 <button
                   className="w-full flex items-center justify-between px-4 py-3 text-left"
-                  onClick={() => setExpandedSections(prev => { const s = new Set(prev); isOpen ? s.delete(i) : s.add(i); return s })}
+                  onClick={() => setExpandedSections(prev => { const s = new Set(prev); if (isOpen) s.delete(i); else s.add(i); return s })}
                 >
                   <span className="text-sm font-medium text-ink flex items-center gap-2">
                     {isChecked && <span className="text-primary text-base">✓</span>}
@@ -951,7 +935,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
             return (
               <button
                 key={i}
-                onClick={() => setCheckedItems(prev => { const s = new Set(prev); checked ? s.delete(i) : s.add(i); return s })}
+                onClick={() => setCheckedItems(prev => { const s = new Set(prev); if (checked) s.delete(i); else s.add(i); return s })}
                 className={`w-full flex items-center gap-3 text-left px-4 py-3 border-2 rounded-xl transition-colors ${
                   checked ? 'border-primary/40 bg-primary/5' : 'border-border bg-white hover:border-primary'
                 }`}
@@ -1091,7 +1075,6 @@ export default function CoursePage({ params }: { params: { id: string } }) {
           )}
           {practiceMessages.map((m, i) => {
             const isLast = i === practiceMessages.length - 1
-            const isLastUser = m.role === 'user' && (i === practiceMessages.length - 1 || (i === practiceMessages.length - 2 && !practiceMessages[i + 1]))
             return (
               <div key={i}>
                 <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
