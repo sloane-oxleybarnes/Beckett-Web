@@ -1,10 +1,10 @@
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { getCourse } from '@/lib/courses'
 import type {
-  CourseSlide, AccordionSlide, ReadThroughSlide, FlipCardsSlide,
+  AccordionSlide, ReadThroughSlide, FlipCardsSlide,
   MatchingSlide, InteractiveReadSlide, SideBySideSlide,
   SortingSlide, MultipleChoiceSlide, ChecklistSlide,
 } from '@/lib/courses'
@@ -113,7 +113,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
   const [showGhostOverlay, setShowGhostOverlay] = useState(false)
   const [hardIntervention, setHardIntervention] = useState<string | null>(null)
   const [ghostAnalysis, setGhostAnalysis] = useState<string | null>(null)
-  const [ghostCheckStrikes, setGhostCheckStrikes] = useState(0)
+  const ghostCheckStrikes = useRef(0)
 
   // ── Debrief ──────────────────────────────────────────────────────────────
   const [debrief, setDebrief] = useState<DebriefData | null>(null)
@@ -376,17 +376,14 @@ export default function CoursePage({ params }: { params: { id: string } }) {
             setHardIntervention(d.hardIntervention)
             setGhosted(true)
           } else if (d.ghost) {
-            setGhostCheckStrikes(s => {
-              const next = s + 1
-              if (next >= 2) {
-                setGhosted(true)
-                setTimeout(() => {
-                  setShowGhostOverlay(true)
-                  loadGhostAnalysis(withAI)
-                }, 3500)
-              }
-              return next
-            })
+            ghostCheckStrikes.current += 1
+            if (ghostCheckStrikes.current >= 2) {
+              setGhosted(true)
+              setTimeout(() => {
+                setShowGhostOverlay(true)
+                loadGhostAnalysis(withAI)
+              }, 3500)
+            }
           }
         }).catch(() => {})
       }
