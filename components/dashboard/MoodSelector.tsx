@@ -24,6 +24,7 @@ export default function MoodSelector() {
       if (data?.mood) setSelected(data.mood);
     }
     loadTodaysMood();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function saveMood(mood: string) {

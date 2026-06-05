@@ -258,6 +258,7 @@ export default function PracticePage() {
       } catch { /* table may not exist yet */ }
     }
     loadTrustedPeople()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadSuggestedPrompts = useCallback(async (lastAIMessage?: string, msgCount = 0) => {

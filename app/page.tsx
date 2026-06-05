@@ -21,6 +21,7 @@ export default function HomePage() {
       const errorDesc = params.get("error_description");
       if (errorDesc) router.push(`/auth/signin?error=${encodeURIComponent(errorDesc)}`);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

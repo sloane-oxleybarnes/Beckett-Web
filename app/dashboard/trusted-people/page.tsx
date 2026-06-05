@@ -39,6 +39,7 @@ export default function TrustedPeoplePage() {
     setLoading(false);
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadPeople(); }, []);
 
   function openAdd() {

@@ -55,6 +55,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
       }
     }
     checkAccess()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── Phase + navigation ───────────────────────────────────────────────────
