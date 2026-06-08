@@ -1,0 +1,781 @@
+import {
+  buildMessagePrompt,
+  buildMeetingPrompt,
+  buildDraftFromScratchPrompt,
+  buildMeetingBriefPrompt,
+  buildDebriefPrompt,
+  buildPracticeSystemPrompt,
+  buildPracticeDebriefPrompt,
+  buildVoiceContext,
+} from '../utils/prompts.js';
+import { connectLinkedIn, buildLinkedInContext } from '../utils/linkedin.js';
+import { fetchUpcomingEvents } from '../utils/calendar.js';
+import { getGmailProfile, getGmailThread, parseThreadMessages } from '../utils/gmail.js';
+
+// Slack OAuth worker — deploy workers/slack-oauth.js to this URL
+const SLACK_OAUTH_WORKER = 'https://lumen-slack.sloane-oxleyhase.workers.dev';
+const BECKETT_SITE = 'https://meetbeckett.co';
+const BECKETT_API = `${BECKETT_SITE}/api`;
+
+// ── Install / startup ─────────────────────────────────────────
+
+chrome.runtime.onInstalled.addListener(async () => {
+  const { plan } = await chrome.storage.local.get('plan');
+  if (!plan) await chrome.storage.local.set({ plan: 'beta', lumenMode: 'business' });
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+});
+
+// Auto-open side panel on Gmail and Slack
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (info.status !== 'complete' || !tab.url) return;
+  const isTarget = tab.url.includes('mail.google.com') ||
+                   tab.url.includes('app.slack.com');
+  if (isTarget) chrome.sidePanel.open({ tabId }).catch(() => {});
+});
+
+// Stored context per tab
+const tabContexts = {};
+
+// ── Message router ────────────────────────────────────────────
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const tabId = sender.tab?.id;
+
+  switch (message.type) {
+
+    case 'CONTENT_UPDATED':
+      tabContexts[tabId] = { ...message.payload, tabId };
+      chrome.runtime.sendMessage({ type: 'CONTENT_UPDATED', context: tabContexts[tabId] }).catch(() => {});
+      sendResponse({ ok: true });
+      return true;
+
+    case 'GET_CURRENT_CONTEXT':
+      handleGetCurrentContext(sendResponse);
+      return true;
+
+    case 'TRIGGER_ANALYZE':
+      handleTriggerAnalyze(message.payload, sendResponse);
+      return true;
+
+    case 'ANALYZE_MEETING':
+      handleMeeting(message.payload, sender.tab?.id, sendResponse);
+      return true;
+
+    case 'MEETING_ENDED':
+      chrome.runtime.sendMessage({ type: 'MEETING_ENDED', payload: message.payload }).catch(() => {});
+      sendResponse({ ok: true });
+      return true;
+
+    case 'DRAFT_FROM_SCRATCH':
+      handleDraftFromScratch(message.payload, sendResponse);
+      return true;
+
+    case 'INJECT_DRAFT':
+      injectDraft(message.payload.text);
+      sendResponse({ ok: true });
+      return true;
+
+    case 'CONNECT_LINKEDIN':
+      connectLinkedIn()
+        .then(profile => sendResponse({ profile }))
+        .catch(e => sendResponse({ error: e.message }));
+      return true;
+
+    case 'CONNECT_SLACK':
+      connectSlack()
+        .then(result => sendResponse(result))
+        .catch(e => sendResponse({ error: e.message }));
+      return true;
+
+    case 'CONNECT_BECKETT':
+      connectBeckett()
+        .then(result => sendResponse(result))
+        .catch(e => sendResponse({ error: e.message }));
+      return true;
+
+    case 'DISCONNECT_BECKETT':
+      chrome.storage.local.remove(['beckettToken'], () => sendResponse({ ok: true }));
+      return true;
+
+    case 'DISCONNECT_SLACK':
+      chrome.storage.local.remove(['slackToken', 'slackUserId', 'slackUserName'], () => sendResponse({ ok: true }));
+      return true;
+
+    case 'GET_SETTINGS':
+      getSettings().then(sendResponse);
+      return true;
+
+    case 'SAVE_SETTING':
+      chrome.storage.local.set({ [message.payload.key]: message.payload.value }, () => sendResponse({ ok: true }));
+      return true;
+
+    case 'SAVE_SAFE_PERSON':
+      saveSafePerson(message.payload.person).then(() => sendResponse({ ok: true }));
+      return true;
+
+    case 'REMOVE_SAFE_PERSON':
+      removeSafePerson(message.payload.index).then(() => sendResponse({ ok: true }));
+      return true;
+
+    case 'SUBMIT_FEEDBACK':
+      storeFeedback(message.payload).then(() => sendResponse({ ok: true }));
+      return true;
+
+    case 'LOG_VOICE_SAMPLE':
+      logVoiceSample(message.payload).then(() => sendResponse({ ok: true }));
+      return true;
+
+    case 'RESET_VOICE':
+      chrome.storage.local.remove(['voice_samples', 'voice_edits'], () => sendResponse({ ok: true }));
+      return true;
+
+    case 'GET_VOICE_STATS':
+      getVoiceStats().then(sendResponse);
+      return true;
+
+    case 'GET_CALENDAR_EVENTS':
+      handleGetCalendarEvents(sendResponse);
+      return true;
+
+    case 'CONNECT_CALENDAR':
+      handleConnectCalendar(sendResponse);
+      return true;
+
+    case 'GENERATE_MEETING_BRIEF':
+      handleMeetingBrief(message.payload, sendResponse);
+      return true;
+
+    case 'GENERATE_DEBRIEF':
+      handleDebrief(message.payload, sendResponse);
+      return true;
+
+    case 'PRACTICE_TURN':
+      handlePracticeTurn(message.payload, sendResponse);
+      return true;
+
+    case 'PRACTICE_DEBRIEF':
+      handlePracticeDebrief(message.payload, sendResponse);
+      return true;
+
+    case 'FETCH_CONTACT_HISTORY':
+      handleFetchContactHistory(message.payload, sendResponse);
+      return true;
+
+    case 'ASK_ABOUT_CONTEXT':
+      handleAskAboutContext(message.payload, sendResponse);
+      return true;
+
+    case 'OPEN_SIDE_PANEL':
+      if (tabId) chrome.sidePanel.open({ tabId }).catch(() => {});
+      sendResponse({ ok: true });
+      return true;
+
+    case 'OPEN_SETTINGS':
+      chrome.tabs.create({ url: 'https://meetbeckett.co/dashboard/settings' });
+      sendResponse({ ok: true });
+      return true;
+  }
+});
+
+// ── Core handlers ─────────────────────────────────────────────
+
+async function handleGetCurrentContext(sendResponse) {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) { sendResponse({ context: null }); return; }
+
+    // Use cached context if available
+    if (tabContexts[tab.id]) {
+      sendResponse({ context: tabContexts[tab.id] });
+      return;
+    }
+
+    // Ask the content script directly
+    chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_CONTEXT' }, res => {
+      const ctx = res?.context || null;
+      if (ctx) tabContexts[tab.id] = { ...ctx, tabId: tab.id };
+      sendResponse({ context: ctx });
+    });
+  } catch (e) {
+    sendResponse({ context: null });
+  }
+}
+
+async function handleTriggerAnalyze(payload, sendResponse) {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) { sendResponse({ error: 'No active tab found.' }); return; }
+
+    const ctx = await new Promise(resolve => {
+      chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_CONTEXT' }, res => {
+        resolve(res?.context || tabContexts[tab.id] || null);
+      });
+    });
+
+    if (!ctx) { sendResponse({ error: 'Could not read the page. Try opening a message first.' }); return; }
+
+    const { linkedInProfile, lumenMode, plan, voice_samples, currentUserEmail, slackUserName } = await chrome.storage.local.get([
+      'linkedInProfile', 'lumenMode', 'plan', 'voice_samples', 'currentUserEmail', 'slackUserName',
+    ]);
+    const mode = payload.mode || lumenMode || 'business';
+    const isPro = plan === 'pro' || plan === 'beta';
+    const voiceContext = isPro ? buildVoiceContext(voice_samples, mode) : '';
+
+    // Enrich Gmail thread via API — fetches all messages including collapsed ones
+    let thread = ctx.thread || null;
+    if (ctx.platform === 'gmail' && ctx.threadId) {
+      try {
+        // Try silent token first; only prompt if needed to avoid interrupting the user
+        let token = null;
+        try { token = await getGoogleToken(false); } catch (_) {}
+        if (!token) { try { token = await getGoogleToken(true); } catch (_) {} }
+
+        if (token) {
+          const userEmail = await getOrFetchUserEmail(token);
+          const threadData = await getGmailThread(token, ctx.threadId);
+          const apiThread = parseThreadMessages(threadData).map(m => ({
+            ...m,
+            isCurrentUser: userEmail
+              ? (m.senderEmail ? m.senderEmail === userEmail.toLowerCase() : m.sender.toLowerCase().includes(userEmail.toLowerCase()))
+              : false,
+          }));
+          if (apiThread.length > 0) {
+            thread = apiThread;
+            const latestIncoming = [...apiThread].reverse().find(m => !m.isCurrentUser);
+            if (latestIncoming) ctx.messageText = latestIncoming.body || ctx.messageText;
+          }
+        }
+      } catch (e) {
+        console.warn('Beckett: Gmail API thread fetch failed:', e.message);
+      }
+    }
+
+    // Resolve user identity: LinkedIn name is most reliable, then Slack name from context/storage, then email
+    const currentUser = {
+      name: linkedInProfile?.name || ctx.currentUserName || slackUserName || null,
+      email: currentUserEmail || null,
+    };
+
+    const prompt = buildMessagePrompt({
+      messageText: ctx.messageText,
+      thread,
+      sender: ctx.sender,
+      platform: ctx.platform,
+      channelType: ctx.channelType,
+      mode,
+      linkedInContext: mode === 'business' ? buildLinkedInContext(linkedInProfile) : null,
+      isSafePerson: ctx.isSafePerson || false,
+      voiceContext,
+      currentUser,
+    });
+
+    const result = await callBeckettJson('analyze_message', prompt, 1000, {
+      platform: ctx.platform,
+      mode,
+      threadCount: Array.isArray(thread) ? thread.length : 0,
+    });
+    sendResponse({ result, isSafePerson: ctx.isSafePerson || false, sender: ctx.sender });
+  } catch (e) {
+    sendResponse({ error: e.message });
+  }
+}
+
+async function handleMeeting(payload, tabId, sendResponse) {
+  try {
+    const { linkedInProfile, lumenMode, plan } = await chrome.storage.local.get(['linkedInProfile', 'lumenMode', 'plan']);
+    const isPro = plan === 'pro' || plan === 'beta';
+    if (!isPro) { sendResponse({ error: 'Meeting guidance is a Pro feature.' }); return; }
+
+    const mode = lumenMode || 'business';
+    const prompt = buildMeetingPrompt({
+      ...payload,
+      mode,
+      linkedInContext: mode === 'business' ? buildLinkedInContext(linkedInProfile) : null,
+    });
+
+    const result = await callBeckettJson('analyze_message', prompt, 1000, { platform: 'meeting', mode });
+    chrome.runtime.sendMessage({ type: 'MEETING_RESULT', data: result }).catch(() => {});
+    sendResponse({ result });
+  } catch (e) {
+    sendResponse({ error: e.message });
+  }
+}
+
+async function handleDraftFromScratch(payload, sendResponse) {
+  try {
+    const { linkedInProfile, lumenMode, voice_samples } = await chrome.storage.local.get([
+      'linkedInProfile', 'lumenMode', 'voice_samples',
+    ]);
+    const mode = payload.mode || lumenMode || 'business';
+    const voiceContext = buildVoiceContext(voice_samples, mode);
+
+    const prompt = buildDraftFromScratchPrompt({
+      ...payload,
+      mode,
+      linkedInContext: mode === 'business' ? buildLinkedInContext(linkedInProfile) : null,
+      voiceContext,
+    });
+
+    const raw = await callBeckettText('draft_from_scratch', prompt, 800, { mode });
+    sendResponse({ text: raw.trim() });
+  } catch (e) {
+    sendResponse({ error: e.message });
+  }
+}
+
+// ── New v3 handlers ───────────────────────────────────────────
+
+async function handleConnectCalendar(sendResponse) {
+  try {
+    const token = await getGoogleToken(true);
+    const events = await fetchUpcomingEvents(token);
+    await chrome.storage.local.set({ upcoming_meetings: events, calendar_cache_ts: Date.now() });
+    sendResponse({ ok: true, eventCount: events.length });
+  } catch (e) {
+    sendResponse({ error: e.message });
+  }
+}
+
+async function handleGetCalendarEvents(sendResponse) {
+  try {
+    const { upcoming_meetings, calendar_cache_ts } = await chrome.storage.local.get([
+      'upcoming_meetings', 'calendar_cache_ts',
+    ]);
+    if (upcoming_meetings && calendar_cache_ts && Date.now() - calendar_cache_ts < 15 * 60 * 1000) {
+      sendResponse({ events: upcoming_meetings });
+      return;
+    }
+
+    const token = await getGoogleToken();
+    const events = await fetchUpcomingEvents(token);
+    await chrome.storage.local.set({ upcoming_meetings: events, calendar_cache_ts: Date.now() });
+    sendResponse({ events });
+  } catch (e) {
+    sendResponse({ error: e.message });
+  }
+}
+
+async function handleMeetingBrief(payload, sendResponse) {
+  try {
+    const { lumenMode } = await chrome.storage.local.get('lumenMode');
+    const mode = lumenMode || 'business';
+
+    let recentThreads = '';
+    if (payload.attendeeEmails?.length) {
+      try {
+        const token = await getGoogleToken(false);
+        recentThreads = await fetchAttendeeThreadSummary(payload.attendeeEmails, token);
+      } catch (_) {}
+    }
+
+    const prompt = buildMeetingBriefPrompt({
+      meetingTitle: payload.meetingTitle,
+      attendees: payload.attendees,
+      recentThreads,
+      mode,
+    });
+
+    const result = await callBeckettText('meeting_brief', prompt, 900, { mode });
+    sendResponse({ result: result.trim() });
+  } catch (e) {
+    sendResponse({ error: e.message });
+  }
+}
+
+async function handleDebrief(payload, sendResponse) {
+  try {
+    const { transcript, meetingType } = payload;
+    if (!transcript || transcript.split(/\s+/).length < 50) {
+      sendResponse({ error: 'Transcript too short for a debrief.' });
+      return;
+    }
+
+    const { lumenMode } = await chrome.storage.local.get('lumenMode');
+    const mode = lumenMode || 'business';
+
+    const prompt = buildDebriefPrompt({
+      transcript,
+      meetingTitle: meetingType || 'Meeting',
+      attendees: '',
+      mode,
+    });
+
+    const result = await callBeckettText('meeting_debrief', prompt, 1000, { mode });
+    sendResponse({ result: result.trim() });
+  } catch (e) {
+    sendResponse({ error: e.message });
+  }
+}
+
+async function handlePracticeTurn(payload, sendResponse) {
+  try {
+    const { system, messages } = payload;
+    const result = await callBeckettChat('practice_turn', system, messages, 600);
+    sendResponse({ text: result.trim() });
+  } catch (e) {
+    sendResponse({ error: e.message });
+  }
+}
+
+async function handlePracticeDebrief(payload, sendResponse) {
+  try {
+    const { personDescription, situation, goal, conversationHistory } = payload;
+    const prompt = buildPracticeDebriefPrompt({ personDescription, situation, goal, conversationHistory });
+    const result = await callBeckettText('practice_debrief', prompt, 800);
+    sendResponse({ result: result.trim() });
+  } catch (e) {
+    sendResponse({ error: e.message });
+  }
+}
+
+async function handleAskAboutContext(payload, sendResponse) {
+  try {
+    const { question, context, lastResult, mode } = payload;
+
+    const threadSummary = (context?.thread || [])
+      .slice(-20)
+      .map(m => `[${m.sender}]${m.isCurrentUser ? ' (you)' : ''}: ${m.body || m.text || ''}`)
+      .join('\n');
+
+    const system = 'You are Beckett, an AI communication assistant for neurodivergent professionals. Answer the user\'s question about their conversation clearly and concisely. Be direct, warm, and specific to what you can see in the conversation.';
+
+    const user = `Platform: ${context?.platform || 'unknown'} | Sender: ${context?.sender || 'unknown'}
+
+Conversation thread:
+${threadSummary || '(no thread available)'}
+
+Previous analysis:
+- Intent: ${lastResult?.intent || ''}
+- Tone: ${lastResult?.tone || ''}
+- What they want: ${lastResult?.want || ''}
+
+User's question: "${question}"
+
+Answer in 2-4 sentences. Be specific to the actual conversation above.`;
+
+    const answer = await callBeckettText('ask_about_context', { system, user }, 800, { mode: mode || null });
+    sendResponse({ answer: answer.trim() });
+  } catch (e) {
+    sendResponse({ error: e.message });
+  }
+}
+
+async function handleFetchContactHistory(payload, sendResponse) {
+  try {
+    const { email } = payload;
+    if (!email) { sendResponse({ threads: [], slackMessages: [] }); return; }
+
+    const cacheKey = `contact_history_${email.replace(/[^a-z0-9]/gi, '_')}`;
+    const cached = await chrome.storage.local.get(cacheKey);
+    if (cached[cacheKey] && Date.now() - cached[cacheKey].ts < 24 * 60 * 60 * 1000) {
+      sendResponse({ threads: cached[cacheKey].threads, slackMessages: cached[cacheKey].slackMessages || [] });
+      return;
+    }
+
+    const token = await getGoogleToken();
+    const threads = await fetchContactThreads(email, token);
+
+    // Also fetch Slack DM history if Slack is connected
+    let slackMessages = [];
+    const { slackToken } = await chrome.storage.local.get('slackToken');
+    if (slackToken) {
+      slackMessages = await fetchSlackContactHistory(email, slackToken);
+    }
+
+    await chrome.storage.local.set({ [cacheKey]: { threads, slackMessages, ts: Date.now() } });
+    sendResponse({ threads, slackMessages });
+  } catch (e) {
+    sendResponse({ error: e.message });
+  }
+}
+
+async function fetchSlackContactHistory(email, slackToken) {
+  try {
+    // Find DM channel with this user by matching email → Slack user ID
+    const usersRes = await fetch(
+      `https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(email)}`,
+      { headers: { Authorization: `Bearer ${slackToken}` } }
+    );
+    const usersData = await usersRes.json();
+    if (!usersData.ok || !usersData.user?.id) return [];
+
+    const userId = usersData.user.id;
+
+    // Open or find existing DM channel
+    const openRes = await fetch('https://slack.com/api/conversations.open', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${slackToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ users: userId }),
+    });
+    const openData = await openRes.json();
+    if (!openData.ok || !openData.channel?.id) return [];
+
+    const channelId = openData.channel.id;
+    const histRes = await fetch(
+      `https://slack.com/api/conversations.history?channel=${channelId}&limit=50`,
+      { headers: { Authorization: `Bearer ${slackToken}` } }
+    );
+    const histData = await histRes.json();
+    if (!histData.ok) return [];
+
+    return (histData.messages || [])
+      .filter(m => m.text)
+      .slice(0, 50)
+      .map(m => ({ text: m.text, ts: m.ts }));
+  } catch (_) {
+    return [];
+  }
+}
+
+// ── Voice calibration ─────────────────────────────────────────
+
+async function logVoiceSample(payload) {
+  const { voice_samples = [] } = await chrome.storage.local.get('voice_samples');
+  voice_samples.push({ text: payload.text, mode: payload.mode, platform: payload.platform, timestamp: Date.now() });
+  if (voice_samples.length > 100) voice_samples.splice(0, voice_samples.length - 100);
+  await chrome.storage.local.set({ voice_samples });
+}
+
+async function getVoiceStats() {
+  const { voice_samples = [] } = await chrome.storage.local.get('voice_samples');
+  const personal = voice_samples.filter(s => s.mode === 'personal').length;
+  const business = voice_samples.filter(s => s.mode === 'business').length;
+  return { personal, business, total: voice_samples.length };
+}
+
+// ── Gmail helpers ─────────────────────────────────────────────
+
+async function getOrFetchUserEmail(token) {
+  const { currentUserEmail } = await chrome.storage.local.get('currentUserEmail');
+  if (currentUserEmail) return currentUserEmail;
+  try {
+    const profile = await getGmailProfile(token);
+    await chrome.storage.local.set({ currentUserEmail: profile.emailAddress });
+    return profile.emailAddress;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function fetchContactThreads(email, token) {
+  const searchRes = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?` +
+    new URLSearchParams({ q: `from:${email} OR to:${email}`, maxResults: 20 }),
+    { headers: { Authorization: 'Bearer ' + token } }
+  );
+  if (!searchRes.ok) throw new Error(`Gmail search error ${searchRes.status}`);
+  const { messages = [] } = await searchRes.json();
+
+  const threads = await Promise.all(
+    messages.slice(0, 10).map(async m => {
+      const detail = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject`,
+        { headers: { Authorization: 'Bearer ' + token } }
+      );
+      return detail.json();
+    })
+  );
+
+  return threads.map(t => ({
+    id: t.id,
+    subject: t.payload?.headers?.find(h => h.name === 'Subject')?.value || 'No subject',
+    snippet: t.snippet || '',
+  }));
+}
+
+async function fetchAttendeeThreadSummary(emails, token) {
+  const lines = [];
+  for (const email of emails.slice(0, 3)) {
+    try {
+      const threads = await fetchContactThreads(email, token);
+      if (threads.length) {
+        lines.push(`${email}: Recent threads — ${threads.slice(0, 3).map(t => t.subject).join(', ')}`);
+      }
+    } catch (_) {}
+  }
+  return lines.join('\n') || 'No recent email context found.';
+}
+
+function getGoogleToken(interactive = true) {
+  return new Promise((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive }, token => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve(token);
+    });
+  });
+}
+
+// ── Slack OAuth ───────────────────────────────────────────────
+
+async function connectSlack() {
+  const redirectUri = chrome.identity.getRedirectURL('slack');
+  const authRes = await fetch(`${SLACK_OAUTH_WORKER}/auth-url?redirect_uri=${encodeURIComponent(redirectUri)}`);
+  if (!authRes.ok) throw new Error(`Slack setup error ${authRes.status}`);
+  const authData = await authRes.json();
+  if (!authData.auth_url) throw new Error(authData.error || 'Slack authorization is not configured.');
+
+  const responseUrl = await new Promise((resolve, reject) => {
+    chrome.identity.launchWebAuthFlow({ url: authData.auth_url, interactive: true }, url => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve(url);
+    });
+  });
+
+  const params = new URL(responseUrl).searchParams;
+  const code = params.get('code');
+  if (!code) throw new Error('Authorization cancelled.');
+
+  // Exchange code for token via Cloudflare Worker (workers/slack-oauth.js)
+  const res = await fetch(SLACK_OAUTH_WORKER, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, redirect_uri: redirectUri }),
+  });
+
+  if (!res.ok) throw new Error(`Token exchange error ${res.status}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'Slack authorization failed.');
+
+  const token = data.authed_user?.access_token;
+  const userId = data.authed_user?.id || '';
+  if (!token) throw new Error('No access token returned from Slack.');
+
+  // Fetch display name for identity context
+  let slackUserName = null;
+  try {
+    const profileRes = await fetch(`https://slack.com/api/users.info?user=${userId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const profileData = await profileRes.json();
+    slackUserName = profileData?.user?.profile?.real_name || profileData?.user?.name || null;
+  } catch (_) {}
+
+  await chrome.storage.local.set({ slackToken: token, slackUserId: userId, ...(slackUserName && { slackUserName }) });
+  return { ok: true, userId, slackUserName };
+}
+
+async function connectBeckett() {
+  const redirectUri = chrome.identity.getRedirectURL('beckett');
+  const authUrl = `${BECKETT_SITE}/auth/extension-connect?redirect_uri=${encodeURIComponent(redirectUri)}`;
+
+  const responseUrl = await new Promise((resolve, reject) => {
+    chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, url => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve(url);
+    });
+  });
+
+  const params = new URL(responseUrl).searchParams;
+  const token = params.get('token');
+  if (!token) throw new Error('Beckett connection cancelled.');
+
+  await chrome.storage.local.set({
+    beckettToken: token,
+    plan: params.get('plan') || 'beta',
+    lumenMode: 'business',
+  });
+
+  return { ok: true, plan: params.get('plan') || 'beta' };
+}
+
+// ── Draft injection ───────────────────────────────────────────
+
+async function injectDraft(text) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
+  if (!tab) return;
+  chrome.tabs.sendMessage(tab.id, { type: 'INJECT_DRAFT', text }).catch(() => {});
+}
+
+// ── Storage helpers ───────────────────────────────────────────
+
+async function getSettings() {
+  const keys = [
+    'plan', 'lumenMode', 'linkedInProfile',
+    'safe_people', 'betaEmail', 'voice_samples',
+    'slackToken', 'slackUserId', 'currentUserEmail', 'beckettToken',
+  ];
+  const data = await chrome.storage.local.get(keys);
+  const samples = data.voice_samples || [];
+  return {
+    apiKey: '',
+    plan: data.plan || 'free',
+    mode: data.lumenMode || 'business',
+    linkedInProfile: data.linkedInProfile || null,
+    safePeople: data.safe_people || [],
+    betaEmail: data.betaEmail || '',
+    voiceSampleCounts: {
+      personal: samples.filter(s => s.mode === 'personal').length,
+      business: samples.filter(s => s.mode === 'business').length,
+    },
+    slackConnected: !!data.slackToken,
+    gmailUserEmail: data.currentUserEmail || '',
+    beckettToken: data.beckettToken || null,
+  };
+}
+
+async function saveSafePerson(person) {
+  const { safe_people = [] } = await chrome.storage.local.get('safe_people');
+  safe_people.push(person);
+  await chrome.storage.local.set({ safe_people });
+}
+
+async function removeSafePerson(index) {
+  const { safe_people = [] } = await chrome.storage.local.get('safe_people');
+  safe_people.splice(index, 1);
+  await chrome.storage.local.set({ safe_people });
+}
+
+async function storeFeedback(entry) {
+  const { lumen_feedback = [] } = await chrome.storage.local.get('lumen_feedback');
+  lumen_feedback.push(entry);
+  await chrome.storage.local.set({ lumen_feedback });
+}
+
+// ── API helpers ───────────────────────────────────────────────
+
+async function callBeckettAi(action, { system = null, user = null, messages = null, responseFormat = 'text', maxTokens = 900, metadata = {} }) {
+  const { beckettToken } = await chrome.storage.local.get('beckettToken');
+  if (!beckettToken) throw new Error('Connect your Beckett account first.');
+
+  const response = await fetch(`${BECKETT_API}/extension/ai`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${beckettToken}`,
+    },
+    body: JSON.stringify({
+      action,
+      system,
+      messages: messages || [{ role: 'user', content: user }],
+      maxTokens,
+      responseFormat,
+      metadata,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.error || `Beckett API error ${response.status}`);
+  }
+
+  return response.json();
+}
+
+async function callBeckettJson(action, prompt, maxTokens, metadata = {}) {
+  const data = await callBeckettAi(action, { ...prompt, maxTokens, responseFormat: 'json', metadata });
+  return data.result;
+}
+
+async function callBeckettText(action, prompt, maxTokens, metadata = {}) {
+  const data = await callBeckettAi(action, { ...prompt, maxTokens, responseFormat: 'text', metadata });
+  return data.text || '';
+}
+
+async function callBeckettChat(action, system, messages, maxTokens, metadata = {}) {
+  const data = await callBeckettAi(action, { system, messages, maxTokens, responseFormat: 'text', metadata });
+  return data.text || '';
+}

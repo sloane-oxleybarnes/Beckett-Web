@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beckett</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- Header -->
+    <header class="header">
+      <span class="logo">☀</span>
+      <div>
+        <h1>Beckett</h1>
+        <p class="tagline">Communication clarity, in context.</p>
+      </div>
+      <span class="plan-chip" id="planChip" hidden></span>
+    </header>
+
+    <!-- Beckett account -->
+    <section class="section">
+      <div class="label">Beckett account</div>
+      <div id="beckettConnected" class="profile-row" hidden>
+        <div class="profile-avatar">B</div>
+        <div>
+          <div class="profile-name">Connected to Beckett</div>
+          <div class="profile-email">Beta access active</div>
+        </div>
+        <button class="btn-text" id="disconnectBeckett">Disconnect</button>
+      </div>
+      <button class="btn-save" id="connectBeckett" style="width:100%;">Log in with Beckett</button>
+      <p class="note">Required for message coaching, drafting, Gmail, Slack, and beta limits.</p>
+      <p class="key-status" id="beckettStatus" hidden></p>
+    </section>
+
+    <!-- Mode toggle -->
+    <section class="section">
+      <div class="label">Default mode</div>
+      <div class="mode-row">
+        <button class="mode-btn active" data-mode="business" id="modeBusiness">Professional</button>
+        <button class="mode-btn" data-mode="personal" id="modePersonal">Personal</button>
+      </div>
+      <p class="note">Professional is the default. Use personal for friends or close contacts at work.</p>
+    </section>
+
+    <!-- LinkedIn -->
+    <section class="section">
+      <div class="label">LinkedIn profile</div>
+      <div id="linkedInConnected" class="profile-row" hidden>
+        <div class="profile-avatar" id="profileAvatar"></div>
+        <div>
+          <div class="profile-name" id="profileName"></div>
+          <div class="profile-email" id="profileEmail"></div>
+        </div>
+        <button class="btn-text" id="disconnectLinkedIn">Disconnect</button>
+      </div>
+      <button class="btn-linkedin" id="connectLinkedIn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+        Connect LinkedIn
+      </button>
+      <p class="note">Your name and role personalize AI responses. Nothing is stored externally.</p>
+      <p class="linkedin-status" id="linkedInStatus" hidden></p>
+    </section>
+
+    <!-- Safe people -->
+    <section class="section">
+      <div class="label">Safe people</div>
+      <p class="note">Beckett uses a warmer, more casual tone with these contacts automatically.</p>
+
+      <ul class="safe-list" id="safeList"></ul>
+
+      <div class="safe-add-row">
+        <input type="text" id="safePersonName" class="input" placeholder="Name" style="flex:1.2">
+        <input type="email" id="safePersonEmail" class="input" placeholder="Email (optional)" style="flex:2">
+        <button class="btn-save" id="addSafePerson">Add</button>
+      </div>
+      <p class="field-note" id="safeStatus" hidden></p>
+    </section>
+
+    <!-- Gmail -->
+    <section class="section">
+      <div class="label">Gmail</div>
+      <div id="gmailConnected" class="profile-row" hidden>
+        <div class="profile-avatar" style="background:#EA4335;">G</div>
+        <div>
+          <div class="profile-name">Gmail connected</div>
+          <div class="profile-email" id="gmailUserEmail"></div>
+        </div>
+        <button class="btn-text" id="disconnectGmail">Disconnect</button>
+      </div>
+      <button class="btn-save" id="connectGmail" style="width:100%;background:#EA4335;">Connect Gmail — enables full thread reading</button>
+      <p class="note">Required to read collapsed messages in email threads.</p>
+      <p class="linkedin-status" id="gmailStatus" hidden></p>
+    </section>
+
+    <!-- Google Calendar -->
+    <section class="section">
+      <div class="label">Google Calendar</div>
+      <div id="calendarConnected" class="profile-row" hidden>
+        <div class="profile-avatar" style="background:#1A73E8;">C</div>
+        <div>
+          <div class="profile-name">Calendar connected</div>
+          <div class="profile-email">Pre-meeting briefs enabled</div>
+        </div>
+      </div>
+      <button class="btn-save" id="connectCalendar" style="width:100%;background:#1A73E8;">Connect Calendar — enables pre-meeting briefs</button>
+      <p class="note">Fetches today and tomorrow&apos;s events to surface briefs before meetings.</p>
+      <p class="linkedin-status" id="calendarStatus" hidden></p>
+    </section>
+
+    <!-- Slack -->
+    <section class="section">
+      <div class="label">Slack</div>
+      <div id="slackConnected" class="profile-row" hidden>
+        <div class="profile-avatar" style="background:#4A154B;">S</div>
+        <div>
+          <div class="profile-name">Slack connected</div>
+          <div class="profile-email" id="slackUserId"></div>
+        </div>
+        <button class="btn-text" id="disconnectSlack">Disconnect</button>
+      </div>
+      <button class="btn-linkedin" id="connectSlack" style="background:#4A154B;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg>
+        Connect Slack
+      </button>
+      <p class="note">Connect Slack to enable API-based message history.</p>
+      <p class="linkedin-status" id="slackStatus" hidden></p>
+    </section>
+
+    <!-- Voice calibration -->
+    <section class="section" id="voiceSection" hidden>
+      <div class="label">Voice calibration</div>
+      <p class="note" id="voiceCountNote">Beckett learns from your sent messages to match your writing style.</p>
+      <button class="btn-text" id="resetVoiceBtn" style="color:#c0392b;margin-top:6px;">Reset voice profile</button>
+      <p class="field-note" id="voiceResetStatus" hidden></p>
+    </section>
+
+    <!-- Platform status -->
+    <section class="section">
+      <div class="label">Active on</div>
+      <div class="platform-list">
+        <div class="platform-item"><span class="platform-dot active"></span> Gmail</div>
+        <div class="platform-item"><span class="platform-dot active"></span> Slack</div>
+        <div class="platform-item"><span class="platform-dot"></span> Google Meet — coming soon</div>
+        <div class="platform-item"><span class="platform-dot"></span> Zoom — coming soon</div>
+      </div>
+    </section>
+
+    <!-- Beta section -->
+    <section class="section" id="betaSection" hidden>
+      <div class="beta-banner">
+        <strong>You're in beta</strong> — thanks for being an early user.
+      </div>
+      <div id="betaEmailRow">
+        <label class="label" for="betaEmail" style="margin-bottom:6px;display:block;">Get release notes</label>
+        <div class="input-row">
+          <input type="email" id="betaEmail" class="input" placeholder="your@email.com">
+          <button class="btn-save" id="saveBetaEmail">Subscribe</button>
+        </div>
+        <p class="field-note" id="betaEmailStatus" hidden></p>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="section">
+      <button class="collapsible" id="howToggle" aria-expanded="false">
+        How Beckett works
+        <span class="chevron">▾</span>
+      </button>
+      <div class="collapsible-body" id="howBody" hidden>
+        <p>Beckett reads the message context currently on your screen when you ask for coaching. Requests go through Beckett's backend with beta rate limits. Beckett stores account and usage metadata, not full message threads by default.</p>
+        <a class="privacy-link" href="#" id="privacyLink">Privacy policy ↗</a>
+      </div>
+    </section>
+
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

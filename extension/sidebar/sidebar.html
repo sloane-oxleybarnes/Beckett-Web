@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beckett</title>
+  <link rel="stylesheet" href="sidebar.css">
+</head>
+<body>
+  <div class="app">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-top">
+        <div class="header-brand">
+          <span class="logo">☀</span>
+          <span class="wordmark">Beckett</span>
+          <span class="plan-badge" id="planBadge" hidden></span>
+          <button class="voice-badge" id="voiceBadge" hidden title="Voice calibrated — Beckett has learned your writing style">Voice ✓</button>
+        </div>
+        <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
+      </div>
+    </header>
+
+    <!-- ── ANALYZE PANEL ─────────────────────────────────────────── -->
+    <section id="tab-analyze">
+
+      <!-- Meeting brief cards (upcoming meetings within 2h) -->
+      <div id="meetingBriefs"></div>
+
+      <!-- Debrief offer — full card (shown after meeting ends) -->
+      <div class="debrief-offer" id="debriefOffer" hidden>
+        <button class="debrief-dismiss-btn" id="debriefDismissBtn" aria-label="Dismiss">✕</button>
+        <div class="debrief-offer-title">Your meeting just ended</div>
+        <p class="debrief-offer-body">Would you like a quick debrief — what went well, one thing to revisit, and a draft follow-up?</p>
+        <div class="debrief-offer-actions">
+          <button class="debrief-yes-btn" id="startDebriefBtn">Yes, debrief me</button>
+          <button class="debrief-no-btn" id="skipDebriefBtn">Not now</button>
+        </div>
+      </div>
+
+      <!-- Debrief pill — minimized persistent state (after "Not now") -->
+      <div class="debrief-pill" id="debriefPill" hidden>
+        <span class="debrief-pill-label">Debrief available</span>
+        <div class="debrief-pill-actions">
+          <button class="debrief-pill-start" id="startDebriefMiniBtn">Start</button>
+          <button class="debrief-pill-close" id="debriefPillCloseBtn" aria-label="Dismiss">✕</button>
+        </div>
+      </div>
+
+      <!-- Debrief results (shown after AI generates debrief) -->
+      <div id="debriefResults" hidden>
+        <div class="debrief-header">
+          <span class="debrief-label">Meeting debrief</span>
+          <button class="btn-text" id="closeDebriefBtn">✕</button>
+        </div>
+        <div class="card">
+          <div class="card-label">What went well</div>
+          <p class="card-text" id="dWentWell"></p>
+        </div>
+        <div class="card">
+          <div class="card-label">One moment to handle differently</div>
+          <p class="card-text" id="dDifferently"></p>
+        </div>
+        <div class="card highlight">
+          <div class="card-label">Follow-up message</div>
+          <p class="card-text" id="dFollowUp"></p>
+          <div class="response-actions">
+            <button class="copy-btn" id="copyFollowUpBtn">Copy</button>
+            <button class="use-btn" id="sendFollowUpBtn">Send to composer ↗</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mode-row">
+        <button class="mode-btn active" data-mode="personal">Personal</button>
+        <button class="mode-btn" data-mode="business" id="businessModeBtn">
+          Business
+          <span class="pro-lock" id="businessLock" hidden>Pro</span>
+        </button>
+      </div>
+
+      <div class="profile-pill" id="profilePill" hidden></div>
+      <div class="safe-badge" id="safeBadge" hidden>💛 Safe contact</div>
+
+      <div id="statusBar" class="status" hidden>
+        <div class="spinner"></div>
+        <span id="statusText">Analyzing…</span>
+      </div>
+      <div class="error-box" id="errorBox" hidden></div>
+
+      <div class="empty-state" id="emptyState">
+        <p id="emptyStateMsg">Open an email or message,<br>then click Analyze.</p>
+      </div>
+
+      <button class="primary-btn" id="analyzeBtn" style="display:none">Analyze message</button>
+
+      <!-- Message analysis results -->
+      <div id="results" hidden>
+
+        <!-- Contact history row -->
+        <div class="contact-history-row" id="contactHistoryRow" hidden>
+          <span class="contact-name-label" id="contactNameDisplay"></span>
+          <button class="history-link" id="seeHistoryBtn">See history</button>
+          <span class="history-badge" id="historyBadge" hidden>History loaded ✓</span>
+          <button class="btn-text refresh-history" id="refreshHistoryBtn" hidden>Refresh</button>
+        </div>
+
+        <div class="card">
+          <div class="card-label">What's happening</div>
+          <p class="card-text" id="rIntent"></p>
+        </div>
+        <div class="card">
+          <div class="card-label">Tone</div>
+          <p class="card-text" id="rTone"></p>
+        </div>
+        <div class="card">
+          <div class="card-label">What they want</div>
+          <p class="card-text" id="rWant"></p>
+        </div>
+        <div class="card">
+          <div class="card-label">Suggested responses</div>
+          <div id="responses"></div>
+        </div>
+
+        <!-- Contacts strip -->
+        <div class="contact-strip" id="contactStrip" hidden>
+          <span class="contact-strip-label" id="contactStripLabel"></span>
+          <button class="btn-text contact-strip-add" id="contactStripAdd" hidden>+ Add to contacts</button>
+        </div>
+
+        <!-- Ask Beckett a question about this person / conversation -->
+        <div class="ask-section" id="askSection" hidden>
+          <div class="ask-header">
+            <span class="card-label">Ask about this conversation</span>
+          </div>
+          <div class="ask-input-row">
+            <input type="text" id="askInput" class="input" placeholder="e.g. Is this person frustrated with me?">
+            <button class="btn-save" id="askBtn">Ask</button>
+          </div>
+          <div id="askStatus" class="status" hidden>
+            <div class="spinner"></div>
+          </div>
+          <div class="card ask-answer-card" id="askAnswerCard" hidden>
+            <p class="card-text" id="askAnswer"></p>
+          </div>
+        </div>
+
+        <!-- Beta-only feedback row -->
+        <div class="feedback-row" id="feedbackRow" hidden>
+          <span class="feedback-label">Was this helpful?</span>
+          <button class="feedback-btn" data-value="yes" aria-label="Yes, this was helpful">👍 Yes</button>
+          <button class="feedback-btn" data-value="no" aria-label="This needs improvement">👎 No</button>
+        </div>
+        <p class="feedback-confirm" id="feedbackConfirm" hidden>Thanks — this helps Beckett improve.</p>
+        <div class="feedback-improve" id="feedbackImprove" hidden>
+          <textarea id="feedbackText" placeholder="What would make this better?"></textarea>
+          <div class="feedback-improve-actions">
+            <button class="btn-save" id="submitFeedbackText">Send</button>
+            <button class="btn-text" id="dismissFeedback">Dismiss</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Meeting mode results (live guidance) -->
+      <div id="meetingResults" hidden>
+        <div class="live-header">
+          <span class="live-dot">●</span>
+          <span class="live-label">LIVE</span>
+          <span class="timer" id="meetTimer">0:00</span>
+        </div>
+        <div class="card">
+          <div class="card-label">What's happening</div>
+          <p class="card-text" id="mHappening"></p>
+        </div>
+        <div class="card">
+          <div class="card-label">Emotional undercurrent</div>
+          <p class="card-text" id="mEmotion"></p>
+        </div>
+        <div class="card highlight">
+          <div class="card-label">Say this now</div>
+          <p class="card-text" id="mSuggestion"></p>
+        </div>
+        <div class="card">
+          <div class="card-label">Watch for</div>
+          <p class="card-text" id="mTips"></p>
+        </div>
+      </div>
+
+      <!-- Upgrade prompt -->
+      <div class="upgrade-prompt" id="upgradePrompt" hidden>
+        <p id="upgradeMsg"></p>
+        <div class="upgrade-actions">
+          <a class="upgrade-link" href="https://sloane-oxleybarnes.github.io/lumen-app#pricing" target="_blank">Upgrade to Pro — $9/month →</a>
+          <button class="btn-text" id="dismissUpgrade">Dismiss</button>
+        </div>
+      </div>
+
+    </section>
+
+
+  </div>
+
+  <script src="panel.js"></script>
+</body>
+</html>
