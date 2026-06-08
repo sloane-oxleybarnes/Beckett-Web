@@ -63,7 +63,6 @@ export default function ProfileSetupForm() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [userId, setUserId] = useState("");
   const [email, setEmail] = useState("");
 
   const [firstName, setFirstName] = useState("");
@@ -85,7 +84,6 @@ export default function ProfileSetupForm() {
         return;
       }
 
-      setUserId(user.id);
       setEmail(user.email || "");
 
       const { data: profile } = await supabase
@@ -130,7 +128,6 @@ export default function ProfileSetupForm() {
     setError("");
     const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
     const payload = {
-      id: userId,
       email,
       full_name: fullName,
       first_name: firstName.trim(),
@@ -142,14 +139,17 @@ export default function ProfileSetupForm() {
       coaching_tone: coachingTone,
       neurodivergent_context: context,
       neurodivergent_context_other: contextOther.trim() || null,
-      first_login_complete: true,
-      onboarding_completed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from("profiles").upsert(payload, { onConflict: "id" });
-    if (error) {
-      setError(error.message);
+    const res = await fetch("/api/onboarding/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      setError(data.error || "Could not save onboarding. Please try again.");
       setSaving(false);
       return;
     }
