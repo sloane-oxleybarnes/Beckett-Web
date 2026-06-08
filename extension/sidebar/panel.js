@@ -62,8 +62,10 @@ async function setEmptyStateForCurrentTab() {
     const msgEl = $('emptyStateMsg');
     if (url.includes('mail.google.com')) {
       msgEl.innerHTML = 'Open an email to get started.';
+      if (state.beckettToken) $('analyzeBtn').style.display = '';
     } else if (url.includes('app.slack.com')) {
       msgEl.innerHTML = 'Open a conversation to get started.';
+      if (state.beckettToken) $('analyzeBtn').style.display = '';
     } else {
       msgEl.innerHTML = 'Beckett works on Gmail and Slack.<br>Navigate to one of those to get started.';
       // Hide the analyze button entirely on non-supported pages
@@ -673,7 +675,7 @@ chrome.runtime.onMessage.addListener((message) => {
       $('results').hidden = true;
       $('meetingResults').hidden = true;
       // Auto-analyze on Slack when a new incoming message is detected
-      if (message.context?.autoAnalyze && message.context?.platform === 'slack') {
+      if (state.beckettToken && message.context?.autoAnalyze && message.context?.platform === 'slack') {
         $('analyzeBtn').click();
       }
       break;

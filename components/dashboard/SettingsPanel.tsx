@@ -17,16 +17,12 @@ function ConnectRow({
   name,
   description,
   onConnect,
-  extensionOnly,
 }: {
   icon: string;
   name: string;
   description: string;
   onConnect?: () => void;
-  extensionOnly?: boolean;
 }) {
-  const [notice, setNotice] = useState<string | null>(null);
-
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="flex items-start gap-3">
@@ -34,17 +30,10 @@ function ConnectRow({
         <div>
           <p className="text-sm text-ink font-medium">{name}</p>
           <p className="text-xs text-ink-light">{description}</p>
-          {notice && <p className="text-xs text-ink-mid mt-1">{notice}</p>}
         </div>
       </div>
       <button
-        onClick={() => {
-          if (extensionOnly) {
-            setNotice("Connect via the Beckett extension. Dashboard OAuth coming soon.");
-          } else {
-            onConnect?.();
-          }
-        }}
+        onClick={() => onConnect?.()}
         className="shrink-0 text-xs border border-border rounded-pill px-4 py-1.5 text-ink hover:bg-bg transition-colors"
       >
         Connect
@@ -536,14 +525,18 @@ export default function SettingsPage() {
             icon="💬"
             name="Slack"
             description="Message history and contact context"
-            extensionOnly
+            onConnect={() => {
+              window.location.href = "/api/slack/connect";
+            }}
           />
           {/* LinkedIn */}
           <ConnectRow
             icon="💼"
             name="LinkedIn"
             description="Professional context for contacts"
-            extensionOnly
+            onConnect={() => {
+              window.alert("LinkedIn web connection is coming soon. For now, Beckett can use LinkedIn context from the extension.");
+            }}
           />
         </div>
       </section>
@@ -557,12 +550,12 @@ export default function SettingsPage() {
           Extension setup
         </h2>
         <p className="text-sm text-ink-mid mb-4">
-          Beckett for Chrome will connect through a secure login flow.
+          Beckett for Chrome connects through a secure login flow in the side panel.
         </p>
         <div className="rounded-sm border border-primary/20 bg-primary-light p-4">
           <p className="text-sm font-medium text-ink">Included in beta access</p>
           <p className="text-xs text-ink-mid mt-1">
-            The next extension build will remove token copy/paste and connect directly to your Beckett account.
+            Reload the extension and use “Log in with Beckett” in the side panel if it is not connected.
           </p>
         </div>
       </section>
