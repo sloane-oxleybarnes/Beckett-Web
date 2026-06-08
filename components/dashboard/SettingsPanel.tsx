@@ -62,6 +62,7 @@ export default function SettingsPage() {
   const [betaStatus, setBetaStatus] = useState<"idle" | "success" | "error">("idle");
   const [newPassword, setNewPassword] = useState("");
   const [pwSaved, setPwSaved] = useState(false);
+  const [tokenCopied, setTokenCopied] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -243,6 +244,41 @@ export default function SettingsPage() {
             extensionOnly
           />
         </div>
+      </section>
+
+      {/* Extension token */}
+      <section className="bg-white rounded-card border border-border p-6 mb-5">
+        <h2
+          className="text-lg text-ink mb-1"
+          style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
+        >
+          Extension token
+        </h2>
+        <p className="text-sm text-ink-mid mb-4">
+          Paste this into the Beckett Chrome extension to enable contacts lookup.
+        </p>
+        {profile.extension_token ? (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              readOnly
+              value={profile.extension_token}
+              className="flex-1 border border-border rounded-sm px-3 py-2 text-sm font-mono bg-bg text-ink-mid cursor-text select-all"
+            />
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(profile.extension_token!);
+                setTokenCopied(true);
+                setTimeout(() => setTokenCopied(false), 2000);
+              }}
+              className="shrink-0 border border-border text-sm rounded-pill px-4 py-2 text-ink hover:bg-bg transition-colors"
+            >
+              {tokenCopied ? "Copied ✓" : "Copy"}
+            </button>
+          </div>
+        ) : (
+          <p className="text-xs text-ink-light">Token not available — contact support.</p>
+        )}
       </section>
 
       {/* Beta code */}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
@@ -17,7 +18,7 @@ const navItems = [
   { href: "/dashboard/practice", label: "Practice", icon: "💬" },
   { href: "/dashboard/calendar", label: "Calendar", icon: "📅" },
   { href: "/dashboard/skills", label: "Skills", icon: "✦" },
-  { href: "/dashboard/trusted-people", label: "Trusted People", icon: "◎" },
+  { href: "/dashboard/contacts", label: "Contacts", icon: "◎" },
   { href: "/dashboard/settings", label: "Settings", icon: "⚙" },
 ];
 
@@ -34,6 +35,7 @@ export default function DashboardSidebar({
   const router = useRouter();
   const supabase = createClient();
   const plan = profile?.plan || "free";
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -41,17 +43,25 @@ export default function DashboardSidebar({
     router.refresh();
   }
 
-  return (
-    <aside className="fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-border flex flex-col">
+  const sidebarContent = (
+    <>
       {/* Logo */}
-      <div className="p-6 border-b border-border">
+      <div className="p-6 border-b border-border flex items-center justify-between">
         <Link
           href="/dashboard"
           className="text-xl text-ink"
           style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
+          onClick={() => setMobileOpen(false)}
         >
           Beckett
         </Link>
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden text-ink-light hover:text-ink text-xl leading-none"
+          aria-label="Close menu"
+        >
+          ×
+        </button>
       </div>
 
       {/* Nav */}
@@ -61,8 +71,9 @@ export default function DashboardSidebar({
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => setMobileOpen(false)}
               className={`flex items-center gap-3 px-3 py-2 rounded-sm text-sm transition-colors ${
-                pathname === item.href
+                pathname === item.href || (item.href === "/dashboard/contacts" && pathname.startsWith("/dashboard/trusted-people"))
                   ? "bg-primary-light text-primary font-medium"
                   : "text-ink-mid hover:text-ink hover:bg-bg"
               }`}
@@ -93,6 +104,7 @@ export default function DashboardSidebar({
         <div className="mt-4">
           <Link
             href="/dashboard/about"
+            onClick={() => setMobileOpen(false)}
             className={`flex items-center gap-3 px-3 py-2 rounded-sm text-sm transition-colors ${
               pathname === "/dashboard/about"
                 ? "bg-primary-light text-primary font-medium"
@@ -135,6 +147,37 @@ export default function DashboardSidebar({
           </button>
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Hamburger — mobile only */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="md:hidden fixed top-4 left-4 z-50 w-9 h-9 flex flex-col items-center justify-center gap-1.5 bg-white border border-border rounded-sm shadow-sm"
+        aria-label="Open menu"
+      >
+        <span className="w-4 h-px bg-ink block" />
+        <span className="w-4 h-px bg-ink block" />
+        <span className="w-4 h-px bg-ink block" />
+      </button>
+
+      {/* Backdrop — mobile only */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/40 z-40"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — fixed on desktop, slide-in on mobile */}
+      <aside
+        className={`fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-border flex flex-col z-50 transition-transform duration-200
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   );
 }

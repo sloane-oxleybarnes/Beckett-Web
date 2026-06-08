@@ -19,6 +19,7 @@ export type Profile = {
   stripe_customer_id: string | null;
   created_at: string;
   updated_at: string;
+  extension_token?: string;
 };
 
 export type Team = {
