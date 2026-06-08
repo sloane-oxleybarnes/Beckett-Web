@@ -21,6 +21,8 @@ const steps = [
   "Extension",
 ];
 
+const chromeExtensionUrl = process.env.NEXT_PUBLIC_CHROME_EXTENSION_URL;
+
 function toggleValue(list: string[], value: string, max?: number) {
   if (list.includes(value)) return list.filter((item) => item !== value);
   if (max && list.length >= max) return list;
@@ -332,7 +334,7 @@ export default function ProfileSetupForm() {
             <div>
               <h2 className="text-xl text-ink mb-2 font-serif">Next: connect the extension</h2>
               <p className="text-sm text-ink-mid mb-5">
-                The Beckett extension is where Gmail and Slack coaching happens. You can continue now and connect it from your dashboard.
+                The Beckett extension is where Gmail and Slack coaching happens. Install it now, or continue and connect it from your dashboard.
               </p>
               <div className="rounded-sm border border-primary/20 bg-primary-light p-4">
                 <p className="text-sm font-medium text-ink">Your beta access includes:</p>
@@ -342,6 +344,32 @@ export default function ProfileSetupForm() {
                   <li>Professional mode by default, with Personal available when you need it</li>
                   <li>Interactive workplace courses</li>
                 </ul>
+              </div>
+              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                {chromeExtensionUrl ? (
+                  <a
+                    href={chromeExtensionUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center rounded-pill bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-dark"
+                  >
+                    Open Chrome Web Store
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="inline-flex items-center justify-center rounded-pill bg-ink-light/20 px-5 py-2.5 text-sm font-medium text-ink-mid"
+                  >
+                    Chrome Web Store link coming soon
+                  </button>
+                )}
+                <a
+                  href="/dashboard/settings"
+                  className="inline-flex items-center justify-center rounded-pill border border-border px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:border-primary-mid"
+                >
+                  Connect later
+                </a>
               </div>
             </div>
           )}
