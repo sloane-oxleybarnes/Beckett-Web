@@ -14,7 +14,7 @@ import { getGmailProfile, getGmailThread, parseThreadMessages } from '../utils/g
 
 // Slack OAuth worker — deploy workers/slack-oauth.js to this URL
 const SLACK_OAUTH_WORKER = 'https://lumen-slack.sloane-oxleyhase.workers.dev';
-const BECKETT_SITE = 'https://meetbeckett.co';
+const BECKETT_SITE = 'https://www.meetbeckett.co';
 const BECKETT_API = `${BECKETT_SITE}/api`;
 
 // ── Install / startup ─────────────────────────────────────────

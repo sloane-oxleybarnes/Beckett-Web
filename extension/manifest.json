@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Beckett",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "Real-time communication clarity for neurodivergent professionals.",
   "permissions": [
     "storage",
@@ -15,6 +15,7 @@
     "https://mail.google.com/*",
     "https://app.slack.com/*",
     "https://meetbeckett.co/*",
+    "https://www.meetbeckett.co/*",
     "https://www.linkedin.com/*",
     "https://api.linkedin.com/*",
     "https://gmail.googleapis.com/*",

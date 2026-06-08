@@ -1,7 +1,7 @@
 // Beckett side panel — v4 (Analyze only)
 
 const $ = id => document.getElementById(id);
-const BECKETT_API = 'https://meetbeckett.co/api';
+const BECKETT_API = 'https://www.meetbeckett.co/api';
 
 let state = {
   plan: 'free',
