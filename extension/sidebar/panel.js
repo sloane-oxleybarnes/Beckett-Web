@@ -38,10 +38,11 @@ async function init() {
   applyPlan();
   applyMode(state.mode);
   renderProfile(state.linkedInProfile);
+  renderAuthState();
   updateVoiceBadge();
   setEmptyStateForCurrentTab();
 
-  if (contextRes.context) {
+  if (contextRes.context && state.beckettToken) {
     state.context = contextRes.context;
     $('emptyState').hidden = true;
     $('analyzeBtn').style.display = '';
@@ -134,6 +135,51 @@ function renderProfile(profile) {
   pill.hidden = false;
 }
 
+// ── Beckett auth ───────────────────────────────────────────────
+
+function renderAuthState() {
+  const isLoggedIn = !!state.beckettToken;
+  $('authCard').hidden = isLoggedIn;
+  if (!isLoggedIn) {
+    $('analyzeBtn').style.display = 'none';
+    $('emptyState').hidden = true;
+  }
+}
+
+async function connectBeckettFromPanel() {
+  const btn = $('connectBeckettBtn');
+  const error = $('authError');
+  btn.disabled = true;
+  btn.textContent = 'Connecting...';
+  error.hidden = true;
+
+  const res = await msg('CONNECT_BECKETT');
+  btn.disabled = false;
+  btn.textContent = 'Log in with Beckett';
+
+  if (res.error) {
+    error.textContent = res.error;
+    error.hidden = false;
+    return;
+  }
+
+  const settings = await msg('GET_SETTINGS');
+  state.plan = settings.plan || 'beta';
+  state.beckettToken = settings.beckettToken || null;
+  applyPlan();
+  renderAuthState();
+  setEmptyStateForCurrentTab();
+
+  const contextRes = await msg('GET_CURRENT_CONTEXT');
+  if (contextRes.context) {
+    state.context = contextRes.context;
+    $('emptyState').hidden = true;
+    $('analyzeBtn').style.display = '';
+  }
+}
+
+$('connectBeckettBtn').onclick = connectBeckettFromPanel;
+
 // ── Voice calibration badge ───────────────────────────────────
 
 function updateVoiceBadge() {
@@ -148,6 +194,10 @@ function updateVoiceBadge() {
 }
 
 $('settingsBtn').onclick = () => {
+  if (!state.beckettToken) {
+    connectBeckettFromPanel();
+    return;
+  }
   chrome.runtime.sendMessage({ type: 'OPEN_SETTINGS' });
 };
 
@@ -169,6 +219,11 @@ function logVoiceSample(text) {
 // ── Analyze ───────────────────────────────────────────────────
 
 $('analyzeBtn').onclick = async () => {
+  if (!state.beckettToken) {
+    renderAuthState();
+    return;
+  }
+
   setAnalyzeLoading(true);
   clearResults();
 
@@ -609,8 +664,12 @@ chrome.runtime.onMessage.addListener((message) => {
   switch (message.type) {
     case 'CONTENT_UPDATED':
       state.context = message.context;
-      $('emptyState').hidden = true;
-      $('analyzeBtn').style.display = '';
+      if (state.beckettToken) {
+        $('emptyState').hidden = true;
+        $('analyzeBtn').style.display = '';
+      } else {
+        renderAuthState();
+      }
       $('results').hidden = true;
       $('meetingResults').hidden = true;
       // Auto-analyze on Slack when a new incoming message is detected

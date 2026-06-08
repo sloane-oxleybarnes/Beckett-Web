@@ -112,6 +112,41 @@ body {
 .plan-badge.beta { background: #92400e; }
 .plan-badge.pro  { background: var(--primary); }
 
+/* ── Auth prompt ───────────────────────────────────────────────── */
+
+.auth-card {
+  margin: 14px 14px 0;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--primary-mid);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(28, 18, 8, 0.05);
+}
+
+.auth-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.auth-body {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.auth-btn {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.auth-error {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #b42318;
+}
+
 /* ── Analyze panel ───────────────────────────────────────────── */
 
 #tab-analyze {
