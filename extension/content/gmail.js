@@ -12,6 +12,28 @@
     return match ? match[1] : null;
   }
 
+  function getMessageIdFromContainer(container) {
+    const candidates = [
+      container.getAttribute('data-legacy-message-id'),
+      container.getAttribute('data-message-id'),
+      container.closest('[data-legacy-message-id]')?.getAttribute('data-legacy-message-id'),
+      container.closest('[data-message-id]')?.getAttribute('data-message-id'),
+      container.querySelector('[data-legacy-message-id]')?.getAttribute('data-legacy-message-id'),
+      container.querySelector('[data-message-id]')?.getAttribute('data-message-id'),
+    ].filter(Boolean);
+
+    return candidates.find(id => id && id !== 'undefined') || '';
+  }
+
+  function cleanMessageId(id) {
+    if (!id) return '';
+    return String(id)
+      .replace(/^msg-/, '')
+      .replace(/^#?msg-/, '')
+      .replace(/^#/, '')
+      .trim();
+  }
+
   // ── DOM extraction ─────────────────────────────────────────
 
   function extractThread() {
@@ -27,6 +49,7 @@
         sender: senderEl?.getAttribute('email') || senderEl?.textContent?.trim() || 'Unknown',
         senderEmail: senderEl?.getAttribute('email') || '',
         timestamp: timeEl?.title || timeEl?.textContent?.trim() || '',
+        messageId: cleanMessageId(getMessageIdFromContainer(container)),
         body: bodyEl.innerText.trim(),
       });
     });
@@ -43,6 +66,7 @@
           sender: senderEl?.getAttribute('email') || senderEl?.textContent?.trim() || 'Unknown',
           senderEmail: senderEl?.getAttribute('email') || '',
           timestamp: '',
+          messageId: cleanMessageId(getMessageIdFromContainer(container)),
           body,
         });
       });
@@ -68,6 +92,7 @@
       platform: 'gmail',
       channelType: 'email',
       threadId,
+      messageIds: threadMessages.map(m => m.messageId).filter(Boolean),
       isSafePerson: false, // filled in async below
     };
   }
@@ -90,6 +115,7 @@
       if (latestIncoming) {
         ctx.messageText = latestIncoming.body;
         ctx.sender = latestIncoming.sender;
+        ctx.senderEmail = latestIncoming.senderEmail || ctx.senderEmail;
       }
     }
 

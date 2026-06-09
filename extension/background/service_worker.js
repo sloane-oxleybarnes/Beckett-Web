@@ -10,7 +10,7 @@ import {
 } from '../utils/prompts.js';
 import { connectLinkedIn, buildLinkedInContext } from '../utils/linkedin.js';
 import { fetchUpcomingEvents } from '../utils/calendar.js';
-import { getGmailProfile, getGmailThread, parseThreadMessages } from '../utils/gmail.js';
+import { getGmailMessage, getGmailProfile, getGmailThread, parseThreadMessages, searchGmailMessages } from '../utils/gmail.js';
 
 // Slack OAuth worker — deploy workers/slack-oauth.js to this URL
 const SLACK_OAUTH_WORKER = 'https://lumen-slack.sloane-oxleyhase.workers.dev';
@@ -220,7 +220,7 @@ async function handleTriggerAnalyze(payload, sendResponse) {
 
     // Enrich Gmail thread via API — fetches all messages including collapsed ones
     let thread = ctx.thread || null;
-    if (ctx.platform === 'gmail' && ctx.threadId) {
+    if (ctx.platform === 'gmail' && (ctx.threadId || ctx.subject || ctx.senderEmail)) {
       try {
         // Try silent token first; only prompt if needed to avoid interrupting the user
         let token = null;
@@ -229,7 +229,7 @@ async function handleTriggerAnalyze(payload, sendResponse) {
 
         if (token) {
           const userEmail = await getOrFetchUserEmail(token);
-          const threadData = await getGmailThread(token, ctx.threadId);
+          const threadData = await resolveGmailThread(token, ctx);
           const apiThread = parseThreadMessages(threadData).map(m => ({
             ...m,
             isCurrentUser: userEmail
@@ -589,6 +589,97 @@ async function getOrFetchUserEmail(token) {
   } catch (_) {
     return null;
   }
+}
+
+async function resolveGmailThread(token, ctx) {
+  const attempted = new Set();
+
+  async function tryThread(threadId) {
+    const id = normalizeGmailId(threadId);
+    if (!id || attempted.has(`thread:${id}`)) return null;
+    attempted.add(`thread:${id}`);
+    try {
+      return await getGmailThread(token, id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function tryMessage(messageId) {
+    const id = normalizeGmailId(messageId);
+    if (!id || attempted.has(`message:${id}`)) return null;
+    attempted.add(`message:${id}`);
+    try {
+      const message = await getGmailMessage(token, id);
+      return message?.threadId ? await tryThread(message.threadId) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function trySearch(query) {
+    if (!query || attempted.has(`search:${query}`)) return null;
+    attempted.add(`search:${query}`);
+    try {
+      const messages = await searchGmailMessages(token, query, 10);
+      for (const message of messages) {
+        const thread = await tryThread(message.threadId);
+        if (thread) return thread;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  const direct = await tryThread(ctx.threadId);
+  if (direct) return direct;
+
+  const messageIds = [
+    ...(ctx.messageIds || []),
+    ...(ctx.thread || []).map(m => m.messageId),
+  ].filter(Boolean);
+
+  for (const id of messageIds) {
+    const byMessage = await tryMessage(id);
+    if (byMessage) return byMessage;
+
+    const byRfc822 = await trySearch(`rfc822msgid:${stripRfc822Brackets(id)}`);
+    if (byRfc822) return byRfc822;
+  }
+
+  const subject = (ctx.subject || '').trim();
+  const senderEmail = (ctx.senderEmail || '').trim();
+  if (subject && senderEmail) {
+    const bySubjectAndSender = await trySearch(`subject:"${escapeGmailQuery(subject)}" from:${senderEmail}`);
+    if (bySubjectAndSender) return bySubjectAndSender;
+
+    const bySubjectAndRecipient = await trySearch(`subject:"${escapeGmailQuery(subject)}" to:${senderEmail}`);
+    if (bySubjectAndRecipient) return bySubjectAndRecipient;
+  }
+
+  if (subject) {
+    const bySubject = await trySearch(`subject:"${escapeGmailQuery(subject)}"`);
+    if (bySubject) return bySubject;
+  }
+
+  throw new Error('Could not fetch full Gmail thread.');
+}
+
+function normalizeGmailId(id) {
+  if (!id) return '';
+  return String(id)
+    .replace(/^#?msg-/, '')
+    .replace(/^msg-/, '')
+    .replace(/^thread-/, '')
+    .replace(/^#/, '')
+    .trim();
+}
+
+function stripRfc822Brackets(id) {
+  return normalizeGmailId(id).replace(/^<|>$/g, '');
+}
+
+function escapeGmailQuery(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 async function fetchContactThreads(email, token) {

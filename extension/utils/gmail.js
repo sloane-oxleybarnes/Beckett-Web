@@ -23,6 +23,27 @@ export async function getGmailThread(token, threadId) {
   return res.json();
 }
 
+export async function getGmailMessage(token, messageId) {
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=metadata`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Gmail message error ${res.status}`);
+  return res.json();
+}
+
+export async function searchGmailMessages(token, query, maxResults = 10) {
+  const params = new URLSearchParams({
+    q: query,
+    maxResults: String(maxResults),
+  });
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Gmail search error ${res.status}`);
+  const data = await res.json();
+  return data.messages || [];
+}
+
 export function parseThreadMessages(thread) {
   return (thread.messages || []).map(msg => {
     const headers = msg.payload?.headers || [];
