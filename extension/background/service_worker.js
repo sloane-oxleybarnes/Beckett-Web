@@ -122,7 +122,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'SUBMIT_FEEDBACK':
-      storeFeedback(message.payload).then(() => sendResponse({ ok: true }));
+      storeFeedback(message.payload).then(sendResponse);
       return true;
 
     case 'LOG_VOICE_SAMPLE':
@@ -965,8 +965,30 @@ async function removeSafePerson(index) {
 
 async function storeFeedback(entry) {
   const { lumen_feedback = [] } = await chrome.storage.local.get('lumen_feedback');
-  lumen_feedback.push(entry);
+  const localEntry = { ...entry, synced: false };
+  lumen_feedback.push(localEntry);
   await chrome.storage.local.set({ lumen_feedback });
+
+  const { beckettToken } = await chrome.storage.local.get('beckettToken');
+  if (!beckettToken) return { ok: true, synced: false };
+
+  const response = await fetch(`${BECKETT_API}/extension/feedback`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${beckettToken}`,
+    },
+    body: JSON.stringify(entry),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    return { ok: true, synced: false, error: data.error || `Feedback sync failed ${response.status}` };
+  }
+
+  localEntry.synced = true;
+  await chrome.storage.local.set({ lumen_feedback });
+  return { ok: true, synced: true };
 }
 
 // ── API helpers ───────────────────────────────────────────────

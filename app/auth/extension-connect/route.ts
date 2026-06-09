@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   if (!token) {
     const { data: updated, error: updateError } = await supabaseAdmin
       .from('profiles')
-      .update({ extension_token: crypto.randomUUID() })
+      .update({ extension_token: crypto.randomUUID(), extension_connected_at: new Date().toISOString() })
       .eq('id', session.user.id)
       .select('extension_token')
       .single()
@@ -49,6 +49,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Could not create extension token.' }, { status: 500 })
     }
     token = updated.extension_token
+  } else {
+    await supabaseAdmin
+      .from('profiles')
+      .update({ extension_connected_at: new Date().toISOString() })
+      .eq('id', session.user.id)
   }
 
   const target = new URL(redirectUri)

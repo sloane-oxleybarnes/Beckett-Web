@@ -19,7 +19,7 @@ export async function GET() {
   const [{ data: profile }, { data: integrations }, used] = await Promise.all([
     supabaseAdmin
       .from("profiles")
-      .select("id, email, plan, extension_token, updated_at")
+      .select("id, email, plan, extension_token, extension_connected_at, updated_at")
       .eq("id", userId)
       .single(),
     supabaseAdmin
@@ -41,7 +41,7 @@ export async function GET() {
     },
     extension: {
       tokenIssued: Boolean(profile?.extension_token),
-      lastProfileSyncAt: profile?.updated_at || null,
+      lastProfileSyncAt: profile?.extension_connected_at || profile?.updated_at || null,
     },
     integrations: {
       slack: slack

@@ -687,12 +687,7 @@ document.querySelectorAll('.feedback-btn').forEach(btn => {
     document.querySelectorAll('.feedback-btn').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
     const value = btn.dataset.value;
-    msg('SUBMIT_FEEDBACK', {
-      feedback: value,
-      responseText: state.lastResult?.responses?.[0]?.text || '',
-      mode: state.mode,
-      timestamp: Date.now(),
-    });
+    submitBetaFeedback(value);
     if (value === 'yes') {
       $('feedbackConfirm').hidden = false;
       $('feedbackImprove').hidden = true;
@@ -705,13 +700,26 @@ document.querySelectorAll('.feedback-btn').forEach(btn => {
 
 $('submitFeedbackText').onclick = () => {
   const text = $('feedbackText').value.trim();
-  if (text) msg('SUBMIT_FEEDBACK', { feedback: 'no', improvementNote: text, timestamp: Date.now() });
+  if (text) submitBetaFeedback('no', text);
   $('feedbackImprove').hidden = true;
   $('feedbackConfirm').hidden = false;
   $('feedbackConfirm').textContent = 'Thanks — this helps Beckett improve.';
 };
 
 $('dismissFeedback').onclick = () => { $('feedbackImprove').hidden = true; };
+
+function submitBetaFeedback(feedback, improvementNote = '') {
+  return msg('SUBMIT_FEEDBACK', {
+    feedback,
+    improvementNote,
+    responseText: state.lastResult?.responses?.[0]?.text || '',
+    mode: state.mode,
+    context: state.context,
+    metadata: state.lastAnalysisMetadata || {},
+    result: state.lastResult || {},
+    timestamp: Date.now(),
+  });
+}
 
 // ── Incoming messages from background ────────────────────────
 
