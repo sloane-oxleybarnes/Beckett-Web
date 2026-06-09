@@ -4,6 +4,7 @@ import AdminLoginForm from "./LoginForm";
 import AdminApprovalList from "./ApprovalList";
 import AdminContentEditor from "./ContentEditor";
 import AdminBetaTracker, { type BetaTrackerRow } from "./BetaTracker";
+import AdminFeedbackViewer, { type AdminFeedbackRow } from "./FeedbackViewer";
 import { getSiteContent } from "@/lib/site-content-server";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +52,9 @@ export default async function AdminPage() {
       .select("user_id, course_id, completed_at"),
     supabase
       .from("beta_feedback")
-      .select("user_id, rating, created_at"),
+      .select("id, user_id, rating, comment, platform, mode, source, thread_count, sender, sender_email, response_text, analysis_result, context_snapshot, metadata, created_at")
+      .order("created_at", { ascending: false })
+      .limit(100),
     getSiteContent(),
   ]);
 
@@ -69,6 +72,7 @@ export default async function AdminPage() {
     <div className="min-h-screen bg-bg p-8">
       <AdminApprovalList signups={pendingSignups} />
       <AdminBetaTracker rows={trackerRows} />
+      <AdminFeedbackViewer feedback={(feedback || []) as AdminFeedbackRow[]} profiles={profiles || []} />
       <AdminContentEditor content={content} />
     </div>
   );
