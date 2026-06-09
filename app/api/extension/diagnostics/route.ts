@@ -24,7 +24,7 @@ export async function GET() {
       .single(),
     supabaseAdmin
       .from("user_integrations")
-      .select("provider, external_user_id, external_team_id, external_team_name, connected_at, updated_at")
+      .select("provider, external_user_id, external_team_id, external_team_name, metadata, connected_at, updated_at")
       .eq("user_id", userId),
     getAiUsageToday(userId),
   ]);
@@ -57,6 +57,11 @@ export async function GET() {
       google: google
         ? {
             connected: true,
+            email:
+              google.external_user_id ||
+              (google.metadata && typeof google.metadata === "object" && "email" in google.metadata
+                ? String(google.metadata.email)
+                : null),
             connectedAt: google.connected_at || null,
             updatedAt: google.updated_at || null,
           }

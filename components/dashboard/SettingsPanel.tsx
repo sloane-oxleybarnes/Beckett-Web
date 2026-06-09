@@ -17,11 +17,15 @@ function ConnectRow({
   name,
   description,
   onConnect,
+  connected,
+  detail,
 }: {
   icon: string;
   name: string;
   description: string;
   onConnect?: () => void;
+  connected?: boolean;
+  detail?: string;
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
@@ -29,15 +33,22 @@ function ConnectRow({
         <span className="text-lg mt-0.5">{icon}</span>
         <div>
           <p className="text-sm text-ink font-medium">{name}</p>
-          <p className="text-xs text-ink-light">{description}</p>
+          <p className="text-xs text-ink-light">{connected && detail ? detail : description}</p>
         </div>
       </div>
-      <button
-        onClick={() => onConnect?.()}
-        className="shrink-0 text-xs border border-border rounded-pill px-4 py-1.5 text-ink hover:bg-bg transition-colors"
-      >
-        Connect
-      </button>
+      <div className="flex shrink-0 items-center gap-2">
+        {connected && (
+          <span className="rounded-pill bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
+            Connected
+          </span>
+        )}
+        <button
+          onClick={() => onConnect?.()}
+          className="text-xs border border-border rounded-pill px-4 py-1.5 text-ink hover:bg-bg transition-colors"
+        >
+          {connected ? "Reconnect" : "Connect"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -103,6 +114,7 @@ type Diagnostics = {
     };
     google: {
       connected: boolean;
+      email?: string | null;
       connectedAt?: string | null;
       updatedAt?: string | null;
     };
@@ -588,12 +600,14 @@ export default function SettingsPage() {
             icon="📧"
             name="Google (Gmail + Calendar)"
             description="Email context and upcoming meetings"
+            connected={diagnostics?.integrations.google.connected}
+            detail={diagnostics?.integrations.google.email || "Google account connected"}
             onConnect={async () => {
               await supabase.auth.signInWithOAuth({
                 provider: "google",
                 options: {
                   scopes: "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly",
-                  redirectTo: `${window.location.origin}/dashboard/settings`,
+                  redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/dashboard/settings")}&integration=google`,
                   queryParams: { access_type: "offline", prompt: "consent" },
                 },
               });
@@ -604,6 +618,8 @@ export default function SettingsPage() {
             icon="💬"
             name="Slack"
             description="Message history and contact context"
+            connected={diagnostics?.integrations.slack.connected}
+            detail={diagnostics?.integrations.slack.teamName || "Slack workspace connected"}
             onConnect={() => {
               window.location.href = "/api/slack/connect";
             }}

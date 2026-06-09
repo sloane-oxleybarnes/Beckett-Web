@@ -250,6 +250,7 @@ $('analyzeBtn').onclick = async () => {
 
   if (response.error) { showError($('errorBox'), response.error); return; }
   state.lastAnalysisMetadata = response.metadata || null;
+  if (response.context) state.context = response.context;
   showResults(response.result, response.isSafePerson);
   state.lastResult = response.result;
   state.currentSender = response.sender || null;

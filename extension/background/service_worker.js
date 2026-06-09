@@ -223,6 +223,7 @@ async function handleTriggerAnalyze(payload, sendResponse) {
 
     // Enrich Gmail thread via API — fetches all messages including collapsed ones
     let thread = ctx.thread || null;
+    let enrichedContext = null;
     if (ctx.platform === 'gmail' && (ctx.threadId || ctx.subject || ctx.senderEmail)) {
       try {
         // Try silent token first; only prompt if needed to avoid interrupting the user
@@ -243,6 +244,14 @@ async function handleTriggerAnalyze(payload, sendResponse) {
             thread = apiThread;
             const latestIncoming = [...apiThread].reverse().find(m => !m.isCurrentUser);
             if (latestIncoming) ctx.messageText = latestIncoming.body || ctx.messageText;
+            enrichedContext = {
+              ...ctx,
+              thread: apiThread,
+              messageText: latestIncoming?.body || ctx.messageText,
+              sender: latestIncoming?.sender || ctx.sender,
+              senderEmail: latestIncoming?.senderEmail || ctx.senderEmail || null,
+              source: 'gmail_api',
+            };
           }
         }
       } catch (e) {
@@ -292,6 +301,7 @@ async function handleTriggerAnalyze(payload, sendResponse) {
       sender: ctx.sender,
       senderEmail: ctx.senderEmail || null,
       metadata: analysisMetadata,
+      context: enrichedContext,
     });
   } catch (e) {
     sendResponse({ error: friendlyAnalyzeError(e) });
@@ -629,13 +639,26 @@ async function getOrFetchUserEmail(token) {
 
 async function resolveGmailThread(token, ctx) {
   const attempted = new Set();
+  const candidates = [];
+
+  function addCandidate(thread, source) {
+    if (!thread?.id || !Array.isArray(thread.messages)) return;
+    const existing = candidates.find(item => item.thread.id === thread.id);
+    if (existing) {
+      existing.sources.add(source);
+      return;
+    }
+    candidates.push({ thread, sources: new Set([source]) });
+  }
 
   async function tryThread(threadId) {
     const id = normalizeGmailId(threadId);
     if (!id || attempted.has(`thread:${id}`)) return null;
     attempted.add(`thread:${id}`);
     try {
-      return await getGmailThread(token, id);
+      const thread = await getGmailThread(token, id);
+      addCandidate(thread, 'thread_id');
+      return thread;
     } catch (_) {
       return null;
     }
@@ -659,15 +682,13 @@ async function resolveGmailThread(token, ctx) {
     try {
       const messages = await searchGmailMessages(token, query, 10);
       for (const message of messages) {
-        const thread = await tryThread(message.threadId);
-        if (thread) return thread;
+        await tryThread(message.threadId);
       }
     } catch (_) {}
-    return null;
+    return candidates.length ? candidates[candidates.length - 1].thread : null;
   }
 
-  const direct = await tryThread(ctx.threadId);
-  if (direct) return direct;
+  await tryThread(ctx.threadId);
 
   const messageIds = [
     ...(ctx.messageIds || []),
@@ -675,29 +696,53 @@ async function resolveGmailThread(token, ctx) {
   ].filter(Boolean);
 
   for (const id of messageIds) {
-    const byMessage = await tryMessage(id);
-    if (byMessage) return byMessage;
+    await tryMessage(id);
 
-    const byRfc822 = await trySearch(`rfc822msgid:${stripRfc822Brackets(id)}`);
-    if (byRfc822) return byRfc822;
+    const stripped = stripRfc822Brackets(id);
+    await trySearch(`rfc822msgid:${stripped}`);
+    await trySearch(`rfc822msgid:<${stripped}>`);
   }
 
   const subject = (ctx.subject || '').trim();
   const senderEmail = (ctx.senderEmail || '').trim();
   if (subject && senderEmail) {
-    const bySubjectAndSender = await trySearch(`subject:"${escapeGmailQuery(subject)}" from:${senderEmail}`);
-    if (bySubjectAndSender) return bySubjectAndSender;
-
-    const bySubjectAndRecipient = await trySearch(`subject:"${escapeGmailQuery(subject)}" to:${senderEmail}`);
-    if (bySubjectAndRecipient) return bySubjectAndRecipient;
+    await trySearch(`subject:"${escapeGmailQuery(subject)}" from:${senderEmail}`);
+    await trySearch(`subject:"${escapeGmailQuery(subject)}" to:${senderEmail}`);
   }
 
   if (subject) {
-    const bySubject = await trySearch(`subject:"${escapeGmailQuery(subject)}"`);
-    if (bySubject) return bySubject;
+    await trySearch(`subject:"${escapeGmailQuery(subject)}"`);
+  }
+
+  if (candidates.length) {
+    const visibleCount = Array.isArray(ctx.thread) ? ctx.thread.length : 0;
+    return candidates
+      .sort((a, b) => scoreGmailCandidate(b, ctx, visibleCount) - scoreGmailCandidate(a, ctx, visibleCount))[0]
+      .thread;
   }
 
   throw new Error('Could not fetch full Gmail thread.');
+}
+
+function scoreGmailCandidate(candidate, ctx, visibleCount) {
+  const thread = candidate.thread;
+  const count = thread.messages?.length || 0;
+  let score = count * 10;
+  if (count > visibleCount) score += 80;
+  if (candidate.sources.has('thread_id')) score += 20;
+
+  const visibleIds = new Set([
+    ...(ctx.messageIds || []),
+    ...(ctx.thread || []).map(m => m.messageId),
+  ].filter(Boolean).map(id => stripRfc822Brackets(id).toLowerCase()));
+
+  for (const message of thread.messages || []) {
+    const headers = message.payload?.headers || [];
+    const messageId = headers.find(h => h.name?.toLowerCase() === 'message-id')?.value || '';
+    if (visibleIds.has(stripRfc822Brackets(messageId).toLowerCase())) score += 40;
+  }
+
+  return score;
 }
 
 function normalizeGmailId(id) {

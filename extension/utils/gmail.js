@@ -49,15 +49,18 @@ export function parseThreadMessages(thread) {
     const headers = msg.payload?.headers || [];
     const get = name => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
     const fromRaw = get('From');
+    const messageId = get('Message-Id') || get('Message-ID');
     // Extract email from "Display Name <email>" or plain "email"
     const emailMatch = fromRaw.match(/<([^>]+)>/) || fromRaw.match(/([^\s]+@[^\s]+)/);
     const senderEmail = emailMatch ? emailMatch[1].toLowerCase() : '';
     const senderName = fromRaw.replace(/<[^>]+>/, '').replace(/"/g, '').trim() || fromRaw;
+    const body = extractBody(msg.payload) || msg.snippet || '';
     return {
       sender: senderName || fromRaw,
       senderEmail,
       timestamp: get('Date'),
-      body: extractBody(msg.payload),
+      messageId,
+      body,
     };
   });
 }
