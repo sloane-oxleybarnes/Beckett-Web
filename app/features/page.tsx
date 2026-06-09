@@ -1,6 +1,8 @@
 import Nav from "@/components/marketing/Nav";
 import Footer from "@/components/marketing/Footer";
 import Link from "next/link";
+import { contentValue } from "@/lib/site-content";
+import { getSiteContent } from "@/lib/site-content-server";
 
 const features = [
   {
@@ -101,7 +103,14 @@ const planColor: Record<string, string> = {
   team: "bg-amber-50 text-amber-700 border border-amber-200",
 };
 
-export default function FeaturesPage() {
+export default async function FeaturesPage() {
+  const content = await getSiteContent([
+    "features.hero.title",
+    "features.hero.subtitle",
+    "features.cta.copy",
+    "features.cta.button",
+  ]);
+
   return (
     <div className="min-h-screen bg-bg">
       <Nav />
@@ -112,11 +121,10 @@ export default function FeaturesPage() {
             className="text-4xl sm:text-5xl text-ink mb-4"
             style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
           >
-            Everything Beckett can do
+            {contentValue(content, "features.hero.title")}
           </h1>
           <p className="text-ink-mid max-w-xl mx-auto text-lg">
-            12 features built around one goal: helping you communicate with
-            more clarity and confidence.
+            {contentValue(content, "features.hero.subtitle")}
           </p>
         </div>
 
@@ -149,13 +157,13 @@ export default function FeaturesPage() {
 
         <div className="mt-16 text-center">
           <p className="text-ink-mid mb-6">
-            Want all of it? Join the beta for full Pro access, free.
+            {contentValue(content, "features.cta.copy")}
           </p>
           <Link
             href="/beta"
             className="bg-primary text-white rounded-pill px-8 py-3 text-sm font-medium hover:bg-primary-dark transition-colors inline-block"
           >
-            Join the beta
+            {contentValue(content, "features.cta.button")}
           </Link>
         </div>
       </div>

@@ -1,6 +1,8 @@
 import Nav from "@/components/marketing/Nav";
 import Footer from "@/components/marketing/Footer";
 import BetaSignupForm from "@/components/marketing/BetaSignupForm";
+import { contentValue } from "@/lib/site-content";
+import { getSiteContent } from "@/lib/site-content-server";
 
 const betaPerks = [
   "Full Pro access — every feature, no limits",
@@ -9,7 +11,14 @@ const betaPerks = [
   "Beta pricing locked in when we go paid",
 ];
 
-export default function BetaPage() {
+export default async function BetaPage() {
+  const content = await getSiteContent([
+    "beta.hero.badge",
+    "beta.hero.title",
+    "beta.hero.subtitle",
+    "beta.form.button",
+  ]);
+
   return (
     <div className="min-h-screen bg-bg">
       <Nav />
@@ -18,19 +27,17 @@ export default function BetaPage() {
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 bg-primary-light text-primary text-xs font-medium rounded-pill px-4 py-2 mb-8">
             <span className="w-2 h-2 bg-primary rounded-full inline-block animate-pulse" />
-            Beta spots open
+            {contentValue(content, "beta.hero.badge")}
           </div>
 
           <h1
             className="text-4xl sm:text-5xl text-ink mb-5"
             style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
           >
-            Join the Beckett beta
+            {contentValue(content, "beta.hero.title")}
           </h1>
           <p className="text-ink-mid text-lg max-w-xl mx-auto leading-relaxed">
-            We&apos;re building Beckett with a small group of early members. Beta
-            access is free and includes everything in Pro — no credit card,
-            no commitment.
+            {contentValue(content, "beta.hero.subtitle")}
           </p>
         </div>
 
@@ -62,7 +69,7 @@ export default function BetaPage() {
 
           <BetaSignupForm
             source="beta_page"
-            buttonLabel="Request beta access"
+            buttonLabel={contentValue(content, "beta.form.button")}
             placeholder="your@email.com"
           />
           <p className="text-xs text-ink-light mt-3 text-center">

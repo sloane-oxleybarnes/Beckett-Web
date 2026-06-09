@@ -1,6 +1,8 @@
 import Nav from "@/components/marketing/Nav";
 import Footer from "@/components/marketing/Footer";
 import Link from "next/link";
+import { contentValue } from "@/lib/site-content";
+import { getSiteContent } from "@/lib/site-content-server";
 
 const plans = [
   {
@@ -79,7 +81,13 @@ const xIcon = (
   </svg>
 );
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const content = await getSiteContent([
+    "pricing.hero.title",
+    "pricing.hero.subtitle",
+    "pricing.footer.note",
+  ]);
+
   return (
     <div className="min-h-screen bg-bg">
       <Nav />
@@ -90,11 +98,10 @@ export default function PricingPage() {
             className="text-4xl sm:text-5xl text-ink mb-4"
             style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
           >
-            Simple, honest pricing
+            {contentValue(content, "pricing.hero.title")}
           </h1>
           <p className="text-ink-mid max-w-xl mx-auto text-lg">
-            Start free. Upgrade when you need more. Beta members get Pro free
-            for as long as they&apos;re in the beta.
+            {contentValue(content, "pricing.hero.subtitle")}
           </p>
         </div>
 
@@ -166,8 +173,7 @@ export default function PricingPage() {
         </div>
 
         <p className="text-center text-sm text-ink-light mt-10">
-          All plans include a 14-day free trial. No credit card required to
-          start.
+          {contentValue(content, "pricing.footer.note")}
         </p>
       </div>
 

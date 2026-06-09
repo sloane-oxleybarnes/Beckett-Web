@@ -2,6 +2,8 @@ import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import AdminLoginForm from "./LoginForm";
 import AdminApprovalList from "./ApprovalList";
+import AdminContentEditor from "./ContentEditor";
+import { getSiteContent } from "@/lib/site-content-server";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +21,19 @@ export default async function AdminPage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { data: signups } = await supabase
-    .from("beta_signups")
-    .select("id, email, name, created_at, approved")
-    .eq("approved", false)
-    .order("created_at", { ascending: false });
+  const [{ data: signups }, content] = await Promise.all([
+    supabase
+      .from("beta_signups")
+      .select("id, email, name, created_at, approved")
+      .eq("approved", false)
+      .order("created_at", { ascending: false }),
+    getSiteContent(),
+  ]);
 
-  return <AdminApprovalList signups={signups || []} />;
+  return (
+    <div className="min-h-screen bg-bg p-8">
+      <AdminApprovalList signups={signups || []} />
+      <AdminContentEditor content={content} />
+    </div>
+  );
 }

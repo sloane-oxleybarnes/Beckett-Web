@@ -60,7 +60,7 @@ export default function AdminApprovalList({ signups }: { signups: Signup[] }) {
   }
 
   return (
-    <div className="min-h-screen bg-bg p-8">
+    <div>
       <h1 className="text-xl font-semibold text-ink mb-6">
         Beta signups — pending approval ({list.length})
       </h1>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { SITE_CONTENT_DEFAULTS, contentValue } from "@/lib/site-content";
 import "./home.css";
 
 type Mode = "personal" | "professional";
@@ -12,7 +13,9 @@ export default function HomePage() {
   const [betaStatus, setBetaStatus] = useState<"idle" | "loading" | "done">("idle");
   const [activeSection, setActiveSection] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [siteContent, setSiteContent] = useState<Record<string, string>>(SITE_CONTENT_DEFAULTS);
   const router = useRouter();
+  const copy = (key: string) => contentValue(siteContent, key);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -37,6 +40,19 @@ export default function HomePage() {
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/site-content")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.content) setSiteContent(data.content);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function submitBeta(e: React.FormEvent) {
@@ -147,6 +163,8 @@ export default function HomePage() {
   ];
 
   const scenarios = mode === "personal" ? personalScenarios : professionalScenarios;
+  const heroTitleLines = copy("home.hero.title").split("\n").filter(Boolean);
+  const betaTitleLines = copy("home.beta.title").split("\n").filter(Boolean);
 
   return (
     <div className="lumen-home">
@@ -205,17 +223,22 @@ export default function HomePage() {
       <section className="hero">
         <div className="beta-badge">
           <span className="bb-dot" />
-          Beta · Everything included · No credit card
+          {copy("home.hero.badge")}
         </div>
         <h1>
-          Your brain sees patterns, connections,<br />
-          <em>and details most people miss entirely.</em>
+          {heroTitleLines[0]}
+          {heroTitleLines.slice(1).map((line) => (
+            <span key={line}>
+              <br />
+              <em>{line}</em>
+            </span>
+          ))}
         </h1>
         <p className="hero-sub">
-          It also makes some things — like small talk, reading between the lines, or knowing when someone&apos;s upset — genuinely hard. Beckett handles the hard parts so you can show up as the person you actually are.
+          {copy("home.hero.subtitle")}
         </p>
         <div className="hero-actions">
-          <a href="#beta" className="btn-primary">Join the beta — it&apos;s free</a>
+          <a href="#beta" className="btn-primary">{copy("home.hero.cta")}</a>
         </div>
 
         {/* Hero visual — phone for personal, browser for professional */}
@@ -439,9 +462,17 @@ export default function HomePage() {
       {/* BETA */}
       <div className="beta-wrap" id="beta">
         <div className="container">
-          <div className="sec-label">Beta access</div>
-          <h2>You&apos;re in beta.<br /><em>Everything included. No limits.</em></h2>
-          <p className="sec-sub">Every feature. No credit card. No paywalls. Just full access while we build together.</p>
+          <div className="sec-label">{copy("home.beta.label")}</div>
+          <h2>
+            {betaTitleLines[0]}
+            {betaTitleLines.slice(1).map((line) => (
+              <span key={line}>
+                <br />
+                <em>{line}</em>
+              </span>
+            ))}
+          </h2>
+          <p className="sec-sub">{copy("home.beta.subtitle")}</p>
           {betaStatus === "done" ? (
             <p className="beta-ok">You&apos;re on the list. We&apos;ll be in touch. ✓</p>
           ) : (
@@ -455,11 +486,11 @@ export default function HomePage() {
                 onChange={(e) => setBetaEmail(e.target.value)}
               />
               <button className="beta-btn" type="submit" disabled={betaStatus === "loading"}>
-                {betaStatus === "loading" ? "Sending…" : "Request access"}
+                {betaStatus === "loading" ? "Sending..." : copy("home.beta.button")}
               </button>
             </form>
           )}
-          <p className="beta-note">No credit card required. Full access during beta.</p>
+          <p className="beta-note">{copy("home.beta.note")}</p>
         </div>
       </div>
 

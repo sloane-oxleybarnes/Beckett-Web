@@ -1,6 +1,8 @@
 import Nav from "@/components/marketing/Nav";
 import Footer from "@/components/marketing/Footer";
 import Link from "next/link";
+import { contentValue } from "@/lib/site-content";
+import { getSiteContent } from "@/lib/site-content-server";
 
 const live = [
   { name: "Gmail", icon: "📧", description: "Decode and draft in any Gmail thread." },
@@ -20,7 +22,14 @@ const comingSoon = [
   { name: "Calendar", icon: "📅" },
 ];
 
-export default function IntegrationsPage() {
+export default async function IntegrationsPage() {
+  const content = await getSiteContent([
+    "integrations.hero.title",
+    "integrations.hero.subtitle",
+    "integrations.cta.copy",
+    "integrations.cta.button",
+  ]);
+
   return (
     <div className="min-h-screen bg-bg">
       <Nav />
@@ -31,11 +40,10 @@ export default function IntegrationsPage() {
             className="text-4xl sm:text-5xl text-ink mb-4"
             style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
           >
-            Works where you work
+            {contentValue(content, "integrations.hero.title")}
           </h1>
           <p className="text-ink-mid max-w-xl mx-auto text-lg">
-            Beckett runs in the tools you already use — no new apps, no workflow
-            changes.
+            {contentValue(content, "integrations.hero.subtitle")}
           </p>
         </div>
 
@@ -88,13 +96,13 @@ export default function IntegrationsPage() {
 
         <div className="mt-16 text-center">
           <p className="text-ink-mid mb-6">
-            Want to request an integration? Let us know when you join the beta.
+            {contentValue(content, "integrations.cta.copy")}
           </p>
           <Link
             href="/beta"
             className="bg-primary text-white rounded-pill px-8 py-3 text-sm font-medium hover:bg-primary-dark transition-colors inline-block"
           >
-            Join the beta
+            {contentValue(content, "integrations.cta.button")}
           </Link>
         </div>
       </div>
