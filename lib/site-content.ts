@@ -18,7 +18,7 @@ export const SITE_CONTENT_FIELDS = [
     label: "Homepage headline",
     group: "Homepage",
     defaultValue:
-      "Your brain sees patterns, connections,\nand details most people miss entirely.",
+      "Your workplace communication coach,\nright where the conversation happens.",
     inputType: "textarea",
   },
   {
@@ -26,7 +26,7 @@ export const SITE_CONTENT_FIELDS = [
     label: "Homepage subheadline",
     group: "Homepage",
     defaultValue:
-      "It also makes some things - like small talk, reading between the lines, or knowing when someone's upset - genuinely hard. Beckett handles the hard parts so you can show up as the person you actually are.",
+      "Beckett helps neurodivergent professionals read workplace tone, draft clearer replies, and practice hard conversations in Gmail, Slack, and coached beta courses.",
     inputType: "textarea",
   },
   {

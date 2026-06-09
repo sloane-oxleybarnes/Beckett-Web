@@ -16,23 +16,7 @@ type SkillCard = {
 
 const SECTIONS: { label: string; description: string; cards: SkillCard[] }[] = [
   {
-    label: 'Personal Preview',
-    description: 'A small look at where Beckett will go beyond work later.',
-    cards: [
-      {
-        id: 'ask-someone-out-text',
-        title: 'Asking someone out on a dating app',
-        description: 'Move from chatting to a clear, low-pressure ask with Beckett coaching you through the wording and practice.',
-        href: '/dashboard/courses/ask-someone-out',
-        status: 'live',
-        estimatedMinutes: 30,
-        courseId: 'ask-someone-out',
-        illustration: 'date',
-      },
-    ],
-  },
-  {
-    label: 'Professional Colleague',
+    label: 'Professional - Colleague',
     description: 'Foundational workplace courses we are building for beta.',
     cards: [
       {
@@ -52,6 +36,22 @@ const SECTIONS: { label: string; description: string; cards: SkillCard[] }[] = [
         status: 'planned',
         estimatedMinutes: 30,
         illustration: 'no',
+      },
+    ],
+  },
+  {
+    label: 'Personal Preview',
+    description: 'A small look at where Beckett will go beyond work later.',
+    cards: [
+      {
+        id: 'ask-someone-out-text',
+        title: 'Asking someone out on a dating app',
+        description: 'Move from chatting to a clear, low-pressure ask with Beckett coaching you through the wording and practice.',
+        href: '/dashboard/courses/ask-someone-out',
+        status: 'live',
+        estimatedMinutes: 30,
+        courseId: 'ask-someone-out',
+        illustration: 'date',
       },
     ],
   },
@@ -135,7 +135,7 @@ export default function SkillsPage() {
   }, [])
 
   return (
-    <div className="max-w-3xl">
+    <div className="w-full max-w-5xl">
       <h1 className="mb-2 text-3xl text-ink" style={{ fontFamily: 'var(--font-dm-serif), Georgia, serif' }}>
         Skills and courses
       </h1>

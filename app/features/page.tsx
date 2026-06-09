@@ -41,9 +41,9 @@ const features = [
     icon: "🎯",
   },
   {
-    title: "Meeting guidance",
+    title: "Meeting support",
     description:
-      "Real-time prompts during Google Meet and Zoom calls — when to speak, how to frame your point.",
+      "Google Meet and Zoom coaching are planned after the Gmail and Slack beta flows are stable.",
     plan: "pro",
     icon: "🎥",
   },
@@ -57,7 +57,7 @@ const features = [
   {
     title: "LinkedIn messaging",
     description:
-      "Professional outreach and responses that sound human, not templated.",
+      "Professional outreach coaching is on the roadmap after the workplace beta.",
     plan: "pro",
     icon: "💼",
   },
@@ -69,24 +69,24 @@ const features = [
     icon: "📚",
   },
   {
-    title: "Weekly coaching digest",
+    title: "Course feedback loop",
     description:
-      "A weekly summary of patterns in your communication and concrete things to try.",
+      "Beta course feedback helps Beckett learn which coaching moments are actually useful.",
     plan: "pro",
     icon: "📊",
   },
   {
-    title: "Team insights",
+    title: "Beta feedback",
     description:
-      "Aggregated, anonymised team communication health — for managers who want to support, not surveil.",
-    plan: "team",
-    icon: "👥",
+      "Send course and coaching feedback so Beckett can improve around real beta usage.",
+    plan: "pro",
+    icon: "📝",
   },
   {
-    title: "Admin dashboard",
+    title: "Beta access tracking",
     description:
-      "Manage seats, review team usage, and control data sharing settings across your team.",
-    plan: "team",
+      "Beta administration is focused on access approval, feedback review, and setup tracking.",
+    plan: "pro",
     icon: "⚙️",
   },
 ];

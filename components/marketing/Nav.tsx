@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -20,10 +21,16 @@ export default function Nav() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         <Link
           href="/"
-          className="text-xl text-ink"
-          style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
+          className="relative block h-8 w-32"
         >
-          Beckett
+          <Image
+            src="/brand/beckett-horizontal-logo.png"
+            alt="Beckett"
+            fill
+            sizes="128px"
+            className="object-contain object-left"
+            priority
+          />
         </Link>
 
         {/* Desktop nav */}

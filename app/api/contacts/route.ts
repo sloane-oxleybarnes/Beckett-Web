@@ -34,6 +34,8 @@ export async function POST(req: NextRequest) {
     email?: string
     slack_handle?: string
     phone_number?: string
+    relationship_type?: string
+    relationship_other?: string
     notes?: string
     trusted?: boolean
   }
@@ -51,6 +53,8 @@ export async function POST(req: NextRequest) {
       email: body.email?.toLowerCase().trim() || null,
       slack_handle: body.slack_handle?.trim() || null,
       phone_number: body.phone_number?.trim() || null,
+      relationship_type: body.relationship_type?.trim() || null,
+      relationship_other: body.relationship_other?.trim() || null,
       notes: body.notes?.trim() || null,
       trusted: body.trusted ?? false,
     })

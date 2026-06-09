@@ -347,16 +347,16 @@ const LUMEN_CSS = `
 `;
 
 const MESSAGE_TEMPLATE = `
-<div class="toggle-btn" role="button" aria-label="Open Lumen">
+<div class="toggle-btn" role="button" aria-label="Open Beckett">
   <span class="lumen-logo">☀</span>
-  <span class="lumen-wordmark">Lumen</span>
+  <span class="lumen-wordmark">Beckett</span>
 </div>
 <div class="panel-inner">
   <div class="panel-header">
     <div class="header-top">
       <span class="lumen-logo">☀</span>
-      <span class="lumen-wordmark">Lumen</span>
-      <button class="close-btn" title="Collapse" aria-label="Collapse Lumen">×</button>
+      <span class="lumen-wordmark">Beckett</span>
+      <button class="close-btn" title="Collapse" aria-label="Collapse Beckett">×</button>
     </div>
     <div class="mode-row">
       <button class="mode-btn active" data-mode="personal">Personal</button>
@@ -395,9 +395,9 @@ const MESSAGE_TEMPLATE = `
 `;
 
 const MEETING_TEMPLATE = `
-<div class="toggle-btn" role="button" aria-label="Open Lumen">
+<div class="toggle-btn" role="button" aria-label="Open Beckett">
   <span class="lumen-logo">☀</span>
-  <span class="lumen-wordmark">Lumen</span>
+  <span class="lumen-wordmark">Beckett</span>
 </div>
 <div class="panel-inner">
   <div class="panel-header">
@@ -407,7 +407,7 @@ const MEETING_TEMPLATE = `
         <span class="live-label">LIVE</span>
         <span class="timer">0:00</span>
       </div>
-      <button class="close-btn" title="Collapse" aria-label="Collapse Lumen">×</button>
+      <button class="close-btn" title="Collapse" aria-label="Collapse Beckett">×</button>
     </div>
     <div class="mode-row">
       <button class="mode-btn active" data-mode="personal">Personal</button>
@@ -523,7 +523,7 @@ class LumenSidebar {
   _safeChrome(fn) {
     try { fn(); } catch (e) {
       if (e?.message?.includes('Extension context invalidated')) {
-        this.setError('Lumen was reloaded. Reload this page to reconnect.');
+        this.setError('Beckett was reloaded. Reload this page to reconnect.');
       }
     }
   }

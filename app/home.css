@@ -53,6 +53,18 @@
   justify-self: start;
 }
 .lumen-home .nav-logo span { color: var(--amber); }
+.lumen-home .nav-logo-img {
+  display: block;
+  width: 132px;
+  height: 33px;
+}
+.lumen-home .nav-logo-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: left center;
+  display: block;
+}
 
 /* Mode toggle — center column */
 .lumen-home .mode-toggle {
@@ -691,6 +703,8 @@
 .lumen-home .hn-footer { padding: 2.5rem; display: flex; align-items: center; justify-content: space-between; border-top: 0.5px solid var(--border); flex-wrap: wrap; gap: 1rem; margin-top: 4rem; }
 .lumen-home .f-logo { font-family: var(--serif); font-size: 18px; color: var(--ink); }
 .lumen-home .f-logo span { color: var(--amber); }
+.lumen-home .f-logo-img { width: 118px; height: 30px; }
+.lumen-home .f-logo-img img { width: 100%; height: 100%; object-fit: contain; object-position: left center; display: block; }
 .lumen-home .f-copy { font-size: 13px; color: var(--ink-light); }
 .lumen-home .f-links { display: flex; gap: 1.5rem; }
 .lumen-home .f-links a { font-size: 13px; color: var(--ink-light); text-decoration: none; }

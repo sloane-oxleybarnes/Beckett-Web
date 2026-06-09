@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 type Phase = 'setup' | 'conversation' | 'debrief'
 type Mode = 'personal' | 'professional'
 type ConversationFormat = 'text' | 'in-person' | 'not-sure'
-type TextSubFormat = 'sms' | 'email' | 'slack'
+type TextSubFormat = 'slack' | 'email' | 'sms' | 'not-sure'
 type Message = { role: 'user' | 'assistant'; content: string }
 type TrustedPerson = { id: string; name: string; relationship: string; communication_style: string; notes: string }
 type ContactContext = { name: string; style: string; notes: string }
@@ -19,8 +19,23 @@ type SavedSession = {
   mode: Mode
   conversationFormat: ConversationFormat
   textSubFormat: TextSubFormat
+  relationshipContext?: string
+  personStyle?: string
+  recurringPattern?: string
+  stakes?: string
+  expectedResponse?: string
+  practiceFocus?: string
   messages: Message[]
   savedAt: string
+}
+
+type PracticeContext = {
+  relationshipContext: string
+  personStyle: string
+  recurringPattern: string
+  stakes: string
+  expectedResponse: string
+  practiceFocus: string
 }
 
 function buildSystemPrompt(
@@ -30,7 +45,8 @@ function buildSystemPrompt(
   format: ConversationFormat,
   contact: ContactContext | null | undefined,
   mode: Mode,
-  textSubFormat: TextSubFormat
+  textSubFormat: TextSubFormat,
+  practiceContext: PracticeContext
 ): string {
   let prompt = `You are playing the role of ${person} in a practice conversation.
 The user is preparing to have this real conversation: "${situation}"
@@ -39,6 +55,18 @@ Their goal: "${goal}"`
   if (contact?.style) {
     prompt += `\n\nContext about ${person}: ${contact.style}`
     if (contact.notes) prompt += ` Additional notes: ${contact.notes}`
+  }
+
+  const contextLines = [
+    practiceContext.relationshipContext ? `Relationship/context: ${practiceContext.relationshipContext}` : null,
+    practiceContext.personStyle ? `Their communication style: ${practiceContext.personStyle}` : null,
+    practiceContext.recurringPattern ? `What tends to happen with them: ${practiceContext.recurringPattern}` : null,
+    practiceContext.stakes ? `Stakes/pressure level: ${practiceContext.stakes}` : null,
+    practiceContext.expectedResponse ? `Likely response from them: ${practiceContext.expectedResponse}` : null,
+    practiceContext.practiceFocus ? `What Beckett should help the user practice: ${practiceContext.practiceFocus}` : null,
+  ].filter(Boolean)
+  if (contextLines.length) {
+    prompt += `\n\nAdditional context for roleplay:\n${contextLines.join('\n')}`
   }
 
   if (format === 'in-person') {
@@ -50,6 +78,8 @@ Their goal: "${goal}"`
       prompt += `\n\nThis is an email exchange. Write only the email body — realistic length and tone for the relationship. No stage directions, no action descriptions, no narrative framing. Just the message text.`
     } else if (textSubFormat === 'slack') {
       prompt += `\n\nThis is a Slack DM conversation. Write only the message text — brief and conversational as Slack messages are. No formal greetings, no stage directions, no action descriptions.`
+    } else if (textSubFormat === 'not-sure') {
+      prompt += `\n\nThe user is not sure which channel this should happen in. Keep responses concise and realistic for a workplace practice chat. No stage directions or narrative framing.`
     } else {
       prompt += `\n\nThis is a text message (SMS) conversation. Write only the message text as it would be typed — short, casual, realistic. No stage directions, no descriptions of actions or body language, no narrative framing. Just the words.`
     }
@@ -208,12 +238,16 @@ export default function PracticePage() {
   const [phase, setPhase] = useState<Phase>('setup')
   const [mode, setMode] = useState<Mode>('professional')
   const [conversationFormat, setConversationFormat] = useState<ConversationFormat>('text')
-  const [textSubFormat, setTextSubFormat] = useState<TextSubFormat>('sms')
-  const [formatRecommendation, setFormatRecommendation] = useState<{ format: string; reason: string } | null>(null)
-  const [formatLoading, setFormatLoading] = useState(false)
+  const [textSubFormat, setTextSubFormat] = useState<TextSubFormat>('slack')
   const [person, setPerson] = useState('')
   const [situation, setSituation] = useState('')
   const [goal, setGoal] = useState('')
+  const [relationshipContext, setRelationshipContext] = useState('')
+  const [personStyle, setPersonStyle] = useState('')
+  const [recurringPattern, setRecurringPattern] = useState('')
+  const [stakes, setStakes] = useState('')
+  const [expectedResponse, setExpectedResponse] = useState('')
+  const [practiceFocus, setPracticeFocus] = useState('')
   const [contactContext, setContactContext] = useState<ContactContext | null>(null)
   const [showContactOverlay, setShowContactOverlay] = useState(false)
   const [trustedPeople, setTrustedPeople] = useState<TrustedPerson[]>([])
@@ -273,20 +307,6 @@ export default function PracticePage() {
     } catch { /* non-blocking */ }
   }, [mode, person, situation, goal])
 
-  async function recommendFormat() {
-    if (!person.trim() || !situation.trim()) return
-    setFormatLoading(true)
-    setFormatRecommendation(null)
-    const res = await fetch('/api/practice', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'recommend_format', person, situation, goal }),
-    })
-    const data = await res.json() as { format: string; reason: string }
-    setFormatLoading(false)
-    setFormatRecommendation(data)
-  }
-
   async function getDraftFeedback() {
     if (!input.trim() || draftLoading) return
     setDraftLoading(true)
@@ -324,7 +344,16 @@ export default function PracticePage() {
     setSuggestedPrompts([])
     setSentViaPrompt(false)
     setLoading(true)
-    const system = buildSystemPrompt(person, situation, goal, conversationFormat, contactContext, mode, textSubFormat)
+    const system = buildSystemPrompt(
+      person,
+      situation,
+      goal,
+      conversationFormat,
+      contactContext,
+      mode,
+      textSubFormat,
+      { relationshipContext, personStyle, recurringPattern, stakes, expectedResponse, practiceFocus }
+    )
     const res = await fetch('/api/practice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -390,6 +419,12 @@ export default function PracticePage() {
       mode,
       conversationFormat,
       textSubFormat,
+      relationshipContext,
+      personStyle,
+      recurringPattern,
+      stakes,
+      expectedResponse,
+      practiceFocus,
       messages,
       savedAt: new Date().toISOString(),
     }
@@ -406,6 +441,12 @@ export default function PracticePage() {
     setMode(session.mode)
     setConversationFormat(session.conversationFormat)
     setTextSubFormat(session.textSubFormat)
+    setRelationshipContext(session.relationshipContext || '')
+    setPersonStyle(session.personStyle || '')
+    setRecurringPattern(session.recurringPattern || '')
+    setStakes(session.stakes || '')
+    setExpectedResponse(session.expectedResponse || '')
+    setPracticeFocus(session.practiceFocus || '')
     setMessages(session.messages)
     setInlineFeedback({})
     setSuggestedPrompts([])
@@ -429,20 +470,15 @@ export default function PracticePage() {
   // ── Setup ──────────────────────────────────────────────────────────────────
 
   if (phase === 'setup') {
-    const formatOptions: { value: ConversationFormat; label: string }[] = [
-      { value: 'text', label: 'Text' },
-      { value: 'in-person', label: 'In person' },
+    const textSubFormatOptions: { value: TextSubFormat; label: string }[] = [
+      { value: 'slack', label: 'Slack' },
+      { value: 'email', label: 'Email' },
+      { value: 'sms', label: 'Text message' },
       { value: 'not-sure', label: 'Not sure' },
     ]
 
-    const textSubFormatOptions: { value: TextSubFormat; label: string }[] = [
-      { value: 'sms', label: 'Text message' },
-      { value: 'email', label: 'Email' },
-      { value: 'slack', label: 'Slack' },
-    ]
-
     return (
-      <div className="max-w-lg mx-auto">
+      <div className="w-full max-w-3xl">
         {showContactOverlay && (
           <ContactOverlay
             trustedPeople={trustedPeople}
@@ -459,7 +495,7 @@ export default function PracticePage() {
         {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
         {/* Toggles row */}
-        <div className="flex gap-6 mb-5">
+        <div className="mb-5 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           {/* Mode */}
           <div>
             <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">Mode</p>
@@ -478,30 +514,9 @@ export default function PracticePage() {
             </div>
           </div>
 
-          {/* Format */}
-          <div>
-            <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">Format</p>
-            <div className="flex rounded-pill border border-border overflow-hidden">
-              {formatOptions.map(({ value, label }) => (
-                <button
-                  key={value}
-                  onClick={() => { setConversationFormat(value); setFormatRecommendation(null) }}
-                  className={`px-4 py-2 text-sm font-medium transition-colors ${
-                    conversationFormat === value ? 'bg-primary text-white' : 'text-ink-mid hover:text-ink'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Text sub-format selector */}
-        {conversationFormat === 'text' && (
-          <div className="mb-5">
-            <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">Channel</p>
-            <div className="flex rounded-pill border border-border overflow-hidden w-fit">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">Channel format</p>
+            <div className="flex flex-wrap overflow-hidden rounded-pill border border-border bg-white">
               {textSubFormatOptions.map(({ value, label }) => (
                 <button
                   key={value}
@@ -515,53 +530,9 @@ export default function PracticePage() {
               ))}
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Format sub-messages */}
-        {conversationFormat === 'in-person' && (
-          <p className="text-xs text-ink-light mb-5 -mt-2">
-            In-person video mode is coming soon — your session will run as text for now.
-          </p>
-        )}
-
-        {conversationFormat === 'not-sure' && (
-          <div className="mb-5">
-            <button
-              onClick={recommendFormat}
-              disabled={formatLoading || !person.trim() || !situation.trim()}
-              className="text-xs text-primary border border-primary rounded-pill px-3 py-1.5 hover:bg-primary-light transition-colors disabled:opacity-40"
-            >
-              {formatLoading ? 'Thinking…' : 'Recommend for me →'}
-            </button>
-            {!person.trim() && !situation.trim() && (
-              <p className="text-xs text-ink-light mt-1">Fill in the fields below first.</p>
-            )}
-            {formatRecommendation && (
-              <div className="mt-3 bg-bg border border-border rounded-card p-4">
-                <p className="text-sm font-medium text-ink mb-1">
-                  {formatRecommendation.format === 'in-person' ? 'Better in person' : 'Works well over text'}
-                </p>
-                <p className="text-xs text-ink-mid leading-relaxed mb-3">{formatRecommendation.reason}</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => { setConversationFormat(formatRecommendation.format as ConversationFormat); setFormatRecommendation(null) }}
-                    className="text-xs bg-primary text-white rounded-pill px-3 py-1.5 hover:bg-primary-dark transition-colors"
-                  >
-                    Use this format
-                  </button>
-                  <button
-                    onClick={() => setFormatRecommendation(null)}
-                    className="text-xs text-ink-mid hover:text-ink"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="space-y-5">
+        <div className="grid gap-5 lg:grid-cols-2">
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-medium text-ink">Who is this with?</label>
@@ -587,6 +558,13 @@ export default function PracticePage() {
             )}
           </div>
 
+          <PracticeTextInput
+            label="Relationship/context"
+            value={relationshipContext}
+            onChange={setRelationshipContext}
+            placeholder="e.g. my manager, a cross-functional partner, a teammate I like but find hard to read"
+          />
+
           <div>
             <label className="block text-sm font-medium text-ink mb-1">What is this conversation about?</label>
             <textarea
@@ -598,21 +576,52 @@ export default function PracticePage() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1">What do you want out of it?</label>
-            <input
-              type="text"
-              value={goal}
-              onChange={e => setGoal(e.target.value)}
-              placeholder="e.g. I want them to understand why this matters to me"
-              className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
+          <PracticeTextInput
+            label="Their communication style"
+            value={personStyle}
+            onChange={setPersonStyle}
+            placeholder="e.g. very direct, slow to respond, detail-oriented, gets defensive when surprised"
+          />
+
+          <PracticeTextarea
+            label="What tends to happen with them?"
+            value={recurringPattern}
+            onChange={setRecurringPattern}
+            placeholder="e.g. I over-explain, they interrupt, we both leave unclear on next steps"
+          />
+
+          <PracticeTextInput
+            label="Stakes/pressure level"
+            value={stakes}
+            onChange={setStakes}
+            placeholder="e.g. low stakes but awkward, high stakes for my role, emotionally loaded"
+          />
+
+          <PracticeTextInput
+            label="What response do you expect from them?"
+            value={expectedResponse}
+            onChange={setExpectedResponse}
+            placeholder="e.g. they may push back, ask for specifics, joke to avoid tension"
+          />
+
+          <PracticeTextInput
+            label="What do you want out of it?"
+            value={goal}
+            onChange={setGoal}
+            placeholder="e.g. I want them to understand why this matters to me"
+          />
+
+          <PracticeTextInput
+            label="What do you want Beckett to help you practice?"
+            value={practiceFocus}
+            onChange={setPracticeFocus}
+            placeholder="e.g. staying direct, not apologizing too much, ending with a clear ask"
+          />
 
           <button
             onClick={startPractice}
             disabled={loading}
-            className="w-full bg-primary text-white rounded-pill py-3 text-sm font-medium hover:bg-primary-dark transition-colors disabled:opacity-50"
+            className="w-full bg-primary text-white rounded-pill py-3 text-sm font-medium hover:bg-primary-dark transition-colors disabled:opacity-50 lg:col-span-2"
           >
             {loading ? 'Starting…' : 'Start practice'}
           </button>
@@ -651,7 +660,8 @@ export default function PracticePage() {
     const formatLabel =
       conversationFormat === 'in-person' ? 'In person' :
       textSubFormat === 'sms' ? 'Text message' :
-      textSubFormat === 'email' ? 'Email' : 'Slack'
+      textSubFormat === 'email' ? 'Email' :
+      textSubFormat === 'not-sure' ? 'Not sure' : 'Slack'
 
     const renderMessages = () => {
       if (textSubFormat === 'email' && conversationFormat === 'text') {
@@ -776,7 +786,7 @@ export default function PracticePage() {
     }
 
     return (
-      <div className="max-w-2xl mx-auto flex flex-col" style={{ height: 'calc(100vh - 96px)' }}>
+      <div className="mx-auto flex w-full max-w-3xl flex-col" style={{ height: 'calc(100vh - 96px)' }}>
         {/* Contact header */}
         <div className="flex items-center gap-3 pb-3 mb-3 border-b border-border shrink-0">
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-base shrink-0">
@@ -925,6 +935,56 @@ export default function PracticePage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function PracticeTextInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-ink mb-1">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+      />
+    </div>
+  )
+}
+
+function PracticeTextarea({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-ink mb-1">{label}</label>
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={3}
+        className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+      />
     </div>
   )
 }

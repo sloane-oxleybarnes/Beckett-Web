@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { SITE_CONTENT_DEFAULTS, contentValue } from "@/lib/site-content";
 import "./home.css";
@@ -8,7 +9,7 @@ import "./home.css";
 type Mode = "personal" | "professional";
 
 export default function HomePage() {
-  const [mode, setMode] = useState<Mode>("personal");
+  const [mode, setMode] = useState<Mode>("professional");
   const [betaEmail, setBetaEmail] = useState("");
   const [betaStatus, setBetaStatus] = useState<"idle" | "loading" | "done">("idle");
   const [activeSection, setActiveSection] = useState("");
@@ -92,9 +93,9 @@ export default function HomePage() {
     },
     {
       n: "04",
-      title: "Live meeting guidance",
-      personal: "When you're in a hard conversation and don't know what to say next — Beckett is there. Real-time coaching when you're stuck, overwhelmed, or losing the thread.",
-      professional: "During Google Meet and Zoom calls, Beckett reads live captions and coaches you in real time — what's happening in the room and what to say next.",
+      title: "Coached next steps",
+      personal: "Personal coaching is in preview through practice and the dating course. Phone and social integrations are coming later.",
+      professional: "Beckett helps you decide what to say next in Gmail, Slack, and practice sessions. Meeting support is coming after beta testing.",
       action: "See how it works →",
     },
     {
@@ -150,18 +151,6 @@ export default function HomePage() {
     { av: "qa3", initials: "JT", name: "Jamie T.", role: "Customer Success", quote: "I used to rewrite every work email three times and still wasn't sure it landed. Beckett handles that for me." },
   ];
 
-  const personalApps = [
-    { icon: "💬", name: "iMessage / SMS" },
-    { icon: "🟢", name: "WhatsApp" },
-    { icon: "🔒", name: "Signal" },
-    { icon: "✈️", name: "Telegram" },
-    { icon: "💙", name: "Messenger" },
-    { icon: "🌸", name: "Hinge" },
-    { icon: "🐝", name: "Bumble" },
-    { icon: "🔥", name: "Tinder" },
-    { icon: "📸", name: "Instagram DMs" },
-  ];
-
   const scenarios = mode === "personal" ? personalScenarios : professionalScenarios;
   const heroTitleLines = copy("home.hero.title").split("\n").filter(Boolean);
   const betaTitleLines = copy("home.beta.title").split("\n").filter(Boolean);
@@ -171,7 +160,9 @@ export default function HomePage() {
 
       {/* NAV */}
       <nav className="hn-nav">
-        <a href="#" className="nav-logo">beck<span>ett</span></a>
+        <a href="#" className="nav-logo nav-logo-img">
+          <Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={132} height={33} priority />
+        </a>
         <div className="mode-toggle">
           <button
             className={`mt-btn${mode === "personal" ? " mt-on" : ""}`}
@@ -373,15 +364,20 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* APPS — personal: messaging apps | professional: work platforms */}
+      {/* APPS — personal preview | professional work platforms */}
       {mode === "personal" ? (
         <div className="apps-wrap">
           <div className="container">
-            <div className="sec-label">Where Beckett lives</div>
-            <h2>Not just for work.<br /><em>Wherever you communicate.</em></h2>
-            <p className="sec-sub">Beckett lives in the apps where the most important conversations actually happen — your phone, your DMs, your dating apps.</p>
+            <div className="sec-label">Personal Preview</div>
+            <h2>Personal coaching is<br /><em>coming carefully.</em></h2>
+            <p className="sec-sub">For beta, Beckett is workplace-first. Personal mode stays available for practice and the dating course preview while phone, DM, and dating-app integrations come later.</p>
             <div className="apps-grid">
-              {personalApps.map((a) => (
+              {[
+                { icon: "🎓", name: "Dating course preview" },
+                { icon: "🎭", name: "Personal practice" },
+                { icon: "💬", name: "Phone + DMs coming soon" },
+                { icon: "🌸", name: "Dating app support coming soon" },
+              ].map((a) => (
                 <div key={a.name} className="app-pill">
                   <span className="app-icon">{a.icon}</span>
                   <span className="app-name">{a.name}</span>
@@ -395,19 +391,19 @@ export default function HomePage() {
           <div className="container">
             <div className="sec-label">Platforms</div>
             <h2>Your coach lives<br /><em>inside every app.</em></h2>
-            <p className="sec-sub">Beckett injects directly into Gmail, Slack, and your meeting tools — no copy-pasting, no switching tabs, no extra windows.</p>
+            <p className="sec-sub">For beta, Beckett focuses on Gmail, Slack, the Chrome extension, courses, and practice. Meeting support is next, but not live yet.</p>
             <div className="plat-grid">
               {[
                 { icon: "pi-gmail", letter: "G", name: "Gmail", desc: "Reads full inbox threads. One click to insert a coached reply into your compose window." },
                 { icon: "pi-slack", letter: "S", name: "Slack", desc: "Reads DMs and channels in real time. Inserts coached replies directly into Slack." },
-                { icon: "pi-meet", letter: "M", name: "Google Meet", desc: "Reads live captions. Real-time coaching in a floating sidebar during every call." },
-                { icon: "pi-zoom", letter: "Z", name: "Zoom", desc: "Same real-time coaching for the Zoom web client." },
+                { icon: "pi-meet", letter: "C", name: "Chrome extension", desc: "Brings Beckett into the workplace tools beta users are testing now." },
+                { icon: "pi-zoom", letter: "M", name: "Meetings", desc: "Google Meet and Zoom support are planned after the core beta flows are stable.", soon: true },
               ].map((p) => (
                 <div key={p.name} className="plat-card">
                   <div className={`plat-icon ${p.icon}`}>{p.letter}</div>
                   <div className="plat-name">{p.name}</div>
                   <div className="plat-desc">{p.desc}</div>
-                  <div className="plat-live">Live</div>
+                  <div className="plat-live">{p.soon ? "Coming soon" : "Live"}</div>
                 </div>
               ))}
             </div>
@@ -496,7 +492,9 @@ export default function HomePage() {
 
       {/* FOOTER */}
       <footer className="hn-footer">
-        <div className="f-logo">beck<span>ett</span></div>
+        <div className="f-logo f-logo-img">
+          <Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={118} height={30} />
+        </div>
         <div className="f-copy">© 2026 Beckett. For brains that work differently.</div>
         <div className="f-links">
           <a href="#">Privacy</a>

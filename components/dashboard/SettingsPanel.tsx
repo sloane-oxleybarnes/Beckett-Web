@@ -592,14 +592,14 @@ export default function SettingsPage() {
           Connected accounts
         </h2>
         <p className="text-sm text-ink-mid mb-5">
-          Connect your accounts to unlock email context, calendar briefs, and message history.
+          Connect your accounts to unlock email context and message history.
         </p>
         <div className="space-y-4">
           {/* Google / Gmail */}
           <ConnectRow
             icon="📧"
-            name="Google (Gmail + Calendar)"
-            description="Email context and upcoming meetings"
+            name="Google (Gmail)"
+            description="Email thread context"
             connected={diagnostics?.integrations.google.connected}
             detail={diagnostics?.integrations.google.email || "Google account connected"}
             onConnect={async () => {

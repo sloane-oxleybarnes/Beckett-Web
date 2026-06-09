@@ -7,11 +7,12 @@ import { getSiteContent } from "@/lib/site-content-server";
 const live = [
   { name: "Gmail", icon: "📧", description: "Decode and draft in any Gmail thread." },
   { name: "Slack", icon: "💬", description: "Inline support in channels, DMs, and threads." },
-  { name: "Google Meet", icon: "🎥", description: "Real-time meeting guidance as you speak." },
-  { name: "Zoom", icon: "📹", description: "Prompts and support during Zoom calls." },
+  { name: "Chrome extension", icon: "🧩", description: "Brings Beckett into the browser tools beta users are testing now." },
 ];
 
 const comingSoon = [
+  { name: "Google Meet", icon: "🎥" },
+  { name: "Zoom", icon: "📹" },
   { name: "Microsoft Teams", icon: "🏢" },
   { name: "Outlook", icon: "📨" },
   { name: "LinkedIn Messaging", icon: "💼" },
@@ -19,7 +20,6 @@ const comingSoon = [
   { name: "Loom", icon: "🎬" },
   { name: "Performance reviews", icon: "📋" },
   { name: "Discord", icon: "🎮" },
-  { name: "Calendar", icon: "📅" },
 ];
 
 export default async function IntegrationsPage() {

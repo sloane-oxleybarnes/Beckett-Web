@@ -50,6 +50,85 @@ function OptionButton({
   );
 }
 
+function SummaryChips({ values }: { values: string[] }) {
+  if (values.length === 0) {
+    return <p className="text-sm text-ink-light">Nothing selected yet.</p>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {values.map((value) => (
+        <span key={value} className="rounded-pill bg-bg px-3 py-1 text-xs text-ink-mid">
+          {value}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function SummarySection({
+  title,
+  description,
+  values,
+  editing,
+  onToggle,
+  children,
+}: {
+  title: string;
+  description: string;
+  values: string[];
+  editing: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white border border-border rounded-card p-5">
+      <div className="mb-3 flex items-start justify-between gap-4">
+        <div>
+          <label className="block text-sm font-medium text-ink mb-1">{title}</label>
+          <p className="text-xs text-ink-light">{description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="shrink-0 text-xs text-primary hover:underline"
+        >
+          {editing ? "Done" : "Edit"}
+        </button>
+      </div>
+      {editing ? <div>{children}</div> : <SummaryChips values={values} />}
+    </div>
+  );
+}
+
+function TextAreaCard({
+  title,
+  description,
+  value,
+  onChange,
+  placeholder,
+}: {
+  title: string;
+  description: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="bg-white border border-border rounded-card p-5">
+      <label className="block text-sm font-medium text-ink mb-1">{title}</label>
+      <p className="text-xs text-ink-light mb-3">{description}</p>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={3}
+        className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+      />
+    </div>
+  );
+}
+
 export default function AboutPage() {
   const supabase = createClient();
   const [data, setData] = useState<AboutData>({
@@ -66,6 +145,7 @@ export default function AboutPage() {
   const [coachingTone, setCoachingTone] = useState<CoachingTone>("direct_kind");
   const [neurodivergentContext, setNeurodivergentContext] = useState<string[]>([]);
   const [contextOther, setContextOther] = useState("");
+  const [editingSections, setEditingSections] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function load() {
@@ -128,6 +208,15 @@ export default function AboutPage() {
     setTimeout(() => setSaved(false), 3000);
   }
 
+  function toggleSection(section: string) {
+    setEditingSections((current) => {
+      const next = new Set(current);
+      if (next.has(section)) next.delete(section);
+      else next.add(section);
+      return next;
+    });
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-40">
@@ -137,7 +226,7 @@ export default function AboutPage() {
   }
 
   return (
-    <div className="max-w-3xl">
+    <div className="w-full max-w-5xl">
       <h1
         className="text-3xl text-ink mb-2"
         style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
@@ -150,13 +239,13 @@ export default function AboutPage() {
       </p>
 
       <form onSubmit={save} className="space-y-5">
-        <div className="bg-white border border-border rounded-card p-5">
-          <label className="block text-sm font-medium text-ink mb-1">
-            Communication strengths
-          </label>
-          <p className="text-xs text-ink-light mb-3">
-            Pick up to three. Beckett starts from what already works.
-          </p>
+        <SummarySection
+          title="Communication strengths"
+          description="Pick up to three. Beckett starts from what already works."
+          values={strengths}
+          editing={editingSections.has("strengths")}
+          onToggle={() => toggleSection("strengths")}
+        >
           <div className="grid gap-2 sm:grid-cols-2">
             {strengthOptions.map((option) => (
               <OptionButton
@@ -169,15 +258,23 @@ export default function AboutPage() {
             ))}
           </div>
           <p className="text-xs text-ink-light mt-3">{strengths.length}/3 selected</p>
-        </div>
+        </SummarySection>
 
-        <div className="bg-white border border-border rounded-card p-5">
-          <label className="block text-sm font-medium text-ink mb-1">
-            Workplace triggers and hard moments
-          </label>
-          <p className="text-xs text-ink-light mb-3">
-            Beckett uses this to be more careful around the moments that tend to spike stress or confusion.
-          </p>
+        <TextAreaCard
+          title="How I work best"
+          description="What conditions help you communicate and collaborate well?"
+          value={data.how_i_work_best}
+          onChange={(value) => setData({ ...data, how_i_work_best: value })}
+          placeholder="e.g. I do better with written context before a meeting. I need clear expectations. I work well one-on-one."
+        />
+
+        <SummarySection
+          title="Workplace triggers and hard moments"
+          description="Beckett uses this to be more careful around the moments that tend to spike stress or confusion."
+          values={workplaceTriggers}
+          editing={editingSections.has("triggers")}
+          onToggle={() => toggleSection("triggers")}
+        >
           <div className="grid gap-2 sm:grid-cols-2">
             {workplaceTriggerOptions.map((option) => (
               <OptionButton
@@ -188,15 +285,26 @@ export default function AboutPage() {
               />
             ))}
           </div>
-        </div>
+        </SummarySection>
 
-        <div className="bg-white border border-border rounded-card p-5">
-          <label className="block text-sm font-medium text-ink mb-1">
-            Communication preferences
-          </label>
-          <p className="text-xs text-ink-light mb-3">
-            Choose how you want Beckett to coach, explain, and draft with you.
-          </p>
+        <TextAreaCard
+          title="My triggers"
+          description="What kinds of interactions are hardest for you? What tends to throw you off?"
+          value={data.triggers}
+          onChange={(value) => setData({ ...data, triggers: value })}
+          placeholder="e.g. Being interrupted. Vague feedback. Feeling like I am being judged. Unexpected confrontation."
+        />
+
+        <SummarySection
+          title="Communication preferences"
+          description="Choose how you want Beckett to coach, explain, and draft with you."
+          values={[
+            ...preferences,
+            coachingToneOptions.find((option) => option.value === coachingTone)?.label || "",
+          ].filter(Boolean)}
+          editing={editingSections.has("preferences")}
+          onToggle={() => toggleSection("preferences")}
+        >
           <div className="grid gap-2 sm:grid-cols-2 mb-5">
             {communicationPreferenceOptions.map((option) => (
               <OptionButton
@@ -224,15 +332,26 @@ export default function AboutPage() {
               </button>
             ))}
           </div>
-        </div>
+        </SummarySection>
 
-        <div className="bg-white border border-border rounded-card p-5">
-          <label className="block text-sm font-medium text-ink mb-1">
-            Neurodivergent context
-          </label>
-          <p className="text-xs text-ink-light mb-3">
-            Optional. This is never used to diagnose you; it just gives Beckett background context.
-          </p>
+        <TextAreaCard
+          title="How I communicate"
+          description="How do you naturally communicate? Direct or indirect? Verbose or brief? Comfortable with conflict or avoidant?"
+          value={data.communication_style}
+          onChange={(value) => setData({ ...data, communication_style: value })}
+          placeholder="e.g. I tend to be indirect and avoid conflict. I over-explain when nervous. I need time to process before responding."
+        />
+
+        <SummarySection
+          title="Neurodivergent context"
+          description="Optional. This is never used to diagnose you; it just gives Beckett background context."
+          values={[
+            ...neurodivergentContext.filter((item) => item !== "Something else"),
+            neurodivergentContext.includes("Something else") ? contextOther || "Something else" : "",
+          ].filter(Boolean)}
+          editing={editingSections.has("context")}
+          onToggle={() => toggleSection("context")}
+        >
           <div className="grid gap-2 sm:grid-cols-2">
             {neurodivergentContextOptions.map((option) => (
               <OptionButton
@@ -253,71 +372,7 @@ export default function AboutPage() {
               />
             </div>
           )}
-        </div>
-
-        <div className="bg-white border border-border rounded-card p-5">
-          <label className="block text-sm font-medium text-ink mb-1">
-            How I communicate
-          </label>
-          <p className="text-xs text-ink-light mb-3">
-            How do you naturally communicate? Direct or indirect? Verbose or
-            brief? Comfortable with conflict or avoidant?
-          </p>
-          <textarea
-            value={data.communication_style}
-            onChange={(e) => setData({ ...data, communication_style: e.target.value })}
-            placeholder="e.g. I tend to be indirect and avoid conflict. I over-explain when nervous. I need time to process before responding."
-            rows={3}
-            className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-          />
-        </div>
-
-        <div className="bg-white border border-border rounded-card p-5">
-          <label className="block text-sm font-medium text-ink mb-1">
-            My triggers
-          </label>
-          <p className="text-xs text-ink-light mb-3">
-            What kinds of interactions are hardest for you? What tends to throw
-            you off?
-          </p>
-          <textarea
-            value={data.triggers}
-            onChange={(e) => setData({ ...data, triggers: e.target.value })}
-            placeholder="e.g. Being interrupted. Vague feedback. Feeling like I am being judged. Unexpected confrontation."
-            rows={3}
-            className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-          />
-        </div>
-
-        <div className="bg-white border border-border rounded-card p-5">
-          <label className="block text-sm font-medium text-ink mb-1">
-            How I work best
-          </label>
-          <p className="text-xs text-ink-light mb-3">
-            What conditions help you communicate and collaborate well?
-          </p>
-          <textarea
-            value={data.how_i_work_best}
-            onChange={(e) => setData({ ...data, how_i_work_best: e.target.value })}
-            placeholder="e.g. I do better with written context before a meeting. I need clear expectations. I work well one-on-one."
-            rows={3}
-            className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-          />
-        </div>
-
-        <div className="bg-white border border-border rounded-card p-5 opacity-60">
-          <div className="flex items-center justify-between mb-1">
-            <label className="block text-sm font-medium text-ink">
-              Team dynamics
-            </label>
-            <span className="text-xs bg-ink-light/20 text-ink-mid rounded-pill px-2 py-0.5">
-              Coming soon
-            </span>
-          </div>
-          <p className="text-xs text-ink-light">
-            How you navigate group settings, hierarchies, and team culture.
-          </p>
-        </div>
+        </SummarySection>
 
         <button
           type="submit"

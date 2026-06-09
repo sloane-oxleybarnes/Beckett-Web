@@ -29,7 +29,9 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-bg flex">
       <DashboardSidebar profile={profile} userEmail={session.user.email || ""} />
-      <main className="flex-1 md:ml-64 p-4 md:p-8 pt-16 md:pt-8">{children}</main>
+      <main className="flex-1 md:ml-64 px-4 py-6 pt-16 md:px-8 md:py-8 md:pt-8">
+        {children}
+      </main>
     </div>
   );
 }

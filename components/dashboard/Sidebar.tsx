@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
@@ -16,13 +17,11 @@ const planBadgeColor: Record<string, string> = {
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: "◈" },
   { href: "/dashboard/practice", label: "Practice", icon: "💬" },
-  { href: "/dashboard/calendar", label: "Calendar", icon: "📅" },
   { href: "/dashboard/skills", label: "Skills", icon: "✦" },
   { href: "/dashboard/contacts", label: "Contacts", icon: "◎" },
+  { href: "/dashboard/about", label: "About Me", icon: "◉" },
   { href: "/dashboard/settings", label: "Settings", icon: "⚙" },
 ];
-
-const comingSoonItems = ["Personal dashboard", "Emotional tracking", "Team insights"];
 
 export default function DashboardSidebar({
   profile,
@@ -49,11 +48,18 @@ export default function DashboardSidebar({
       <div className="p-6 border-b border-border flex items-center justify-between">
         <Link
           href="/dashboard"
-          className="text-xl text-ink"
-          style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
+          className="relative block h-9 w-36"
           onClick={() => setMobileOpen(false)}
         >
-          Beckett
+          <Image
+            src="/brand/beckett-horizontal-logo.png"
+            alt="Beckett"
+            fill
+            sizes="144px"
+            className="object-contain object-left"
+            priority
+          />
+          <span className="sr-only">Beckett</span>
         </Link>
         <button
           onClick={() => setMobileOpen(false)}
@@ -84,40 +90,9 @@ export default function DashboardSidebar({
           ))}
         </div>
 
-        {/* Coming Soon */}
-        <div className="mt-6 pt-4 border-t border-border">
-          <p className="text-xs font-medium text-ink-light uppercase tracking-wide px-3 mb-2">
-            Coming Soon
-          </p>
-          {comingSoonItems.map((label) => (
-            <div
-              key={label}
-              className="flex items-center gap-3 px-3 py-1.5 text-sm text-ink-light/50 cursor-default select-none"
-            >
-              <span className="text-base opacity-30">◦</span>
-              {label}
-            </div>
-          ))}
-        </div>
-
-        {/* About Me */}
-        <div className="mt-4">
-          <Link
-            href="/dashboard/about"
-            onClick={() => setMobileOpen(false)}
-            className={`flex items-center gap-3 px-3 py-2 rounded-sm text-sm transition-colors ${
-              pathname === "/dashboard/about"
-                ? "bg-primary-light text-primary font-medium"
-                : "text-ink-mid hover:text-ink hover:bg-bg"
-            }`}
-          >
-            <span className="text-base">◉</span>
-            About Me
-          </Link>
-          <p className="text-xs text-ink-light/70 px-3 pt-0.5 leading-snug">
-            Your profile, triggers, how you work.
-          </p>
-        </div>
+        <p className="mt-5 px-3 text-xs leading-snug text-ink-light/70">
+          Your profile, triggers, and coaching preferences live in About Me.
+        </p>
       </nav>
 
       {/* User footer */}

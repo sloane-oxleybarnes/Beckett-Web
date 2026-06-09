@@ -16,13 +16,17 @@ const dmSerif = DM_Serif_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Beckett — For brains that work differently",
+  title: "Beckett — Your workplace communication coach",
   description:
-    "Beckett decodes what people really mean, helps you practice hard conversations, and meets you in the apps you use — built for brains that work differently.",
+    "Beckett helps neurodivergent professionals decode workplace tone, draft clearer replies, and practice hard conversations.",
+  icons: {
+    icon: "/brand/beckett-favicon.png",
+    apple: "/brand/beckett-favicon.png",
+  },
   openGraph: {
-    title: "Beckett — For brains that work differently",
+    title: "Beckett — Your workplace communication coach",
     description:
-      "Beckett decodes what people really mean, helps you practice hard conversations, and meets you in the apps you use — built for brains that work differently.",
+      "Beckett helps neurodivergent professionals decode workplace tone, draft clearer replies, and practice hard conversations.",
     siteName: "Beckett",
   },
 };

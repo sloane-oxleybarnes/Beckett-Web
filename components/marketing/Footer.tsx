@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export default function Footer() {
@@ -5,12 +6,15 @@ export default function Footer() {
     <footer className="border-t border-border mt-24 py-12">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          <span
-            className="text-lg text-ink"
-            style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-          >
-            Beckett
-          </span>
+          <div className="relative h-8 w-32">
+            <Image
+              src="/brand/beckett-horizontal-logo.png"
+              alt="Beckett"
+              fill
+              sizes="128px"
+              className="object-contain object-left"
+            />
+          </div>
           <div className="flex items-center gap-6 text-sm text-ink-light">
             <Link href="/features" className="hover:text-ink transition-colors">
               Features

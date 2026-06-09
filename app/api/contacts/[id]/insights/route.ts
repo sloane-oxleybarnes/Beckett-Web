@@ -42,7 +42,7 @@ export async function POST(
   // Verify ownership and get contact info
   const { data: contact } = await supabase
     .from('contacts')
-    .select('id, name, email, slack_handle, notes, trusted')
+    .select('id, name, email, slack_handle, relationship_type, relationship_other, notes, trusted')
     .eq('id', params.id)
     .eq('user_id', userId)
     .single()
@@ -54,6 +54,7 @@ export async function POST(
 Contact: ${contact.name}
 Email: ${contact.email || 'not provided'}
 Slack handle: ${contact.slack_handle || 'not provided'}
+Relationship: ${contact.relationship_type === 'Other' ? contact.relationship_other || 'Other' : contact.relationship_type || 'not provided'}
 Trusted contact: ${contact.trusted ? 'yes' : 'no'}
 Notes: ${contact.notes || 'none'}
 

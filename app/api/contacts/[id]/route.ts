@@ -22,6 +22,8 @@ export async function PUT(
     email?: string
     slack_handle?: string
     phone_number?: string
+    relationship_type?: string
+    relationship_other?: string
     notes?: string
     trusted?: boolean
   }
@@ -43,6 +45,8 @@ export async function PUT(
   if (body.email !== undefined) updates.email = body.email?.toLowerCase().trim() || null
   if (body.slack_handle !== undefined) updates.slack_handle = body.slack_handle?.trim() || null
   if (body.phone_number !== undefined) updates.phone_number = body.phone_number?.trim() || null
+  if (body.relationship_type !== undefined) updates.relationship_type = body.relationship_type?.trim() || null
+  if (body.relationship_other !== undefined) updates.relationship_other = body.relationship_other?.trim() || null
   if (body.notes !== undefined) updates.notes = body.notes?.trim() || null
   if (body.trusted !== undefined) updates.trusted = body.trusted
 

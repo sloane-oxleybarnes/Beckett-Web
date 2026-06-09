@@ -9,6 +9,8 @@ type Contact = {
   email: string | null;
   slack_handle: string | null;
   phone_number: string | null;
+  relationship_type: string | null;
+  relationship_other: string | null;
   notes: string | null;
   trusted: boolean;
   created_at: string;
@@ -29,9 +31,27 @@ const emptyForm = () => ({
   email: "",
   slack_handle: "",
   phone_number: "",
+  relationship_type: "",
+  relationship_other: "",
   notes: "",
   trusted: false,
 });
+
+const relationshipOptions = [
+  "Manager",
+  "Direct report",
+  "Teammate",
+  "Cross-functional colleague",
+  "Client/customer",
+  "Vendor/partner",
+  "Friend at work",
+  "Other",
+];
+
+function relationshipLabel(contact: Pick<Contact, "relationship_type" | "relationship_other">) {
+  if (contact.relationship_type === "Other") return contact.relationship_other || "Other";
+  return contact.relationship_type || "";
+}
 
 export default function ContactsPage() {
   const supabase = createClient();
@@ -61,15 +81,15 @@ export default function ContactsPage() {
 
   const filtered = contacts.filter((c) => {
     const q = search.toLowerCase();
+    const relationship = relationshipLabel(c).toLowerCase();
     return (
       !q ||
       c.name.toLowerCase().includes(q) ||
       c.email?.toLowerCase().includes(q) ||
-      c.slack_handle?.toLowerCase().includes(q)
+      c.slack_handle?.toLowerCase().includes(q) ||
+      relationship.includes(q)
     );
   });
-
-  const selected = contacts.find((c) => c.id === selectedId) ?? null;
 
   function openAdd() {
     setForm(emptyForm());
@@ -84,6 +104,8 @@ export default function ContactsPage() {
       email: c.email || "",
       slack_handle: c.slack_handle || "",
       phone_number: c.phone_number || "",
+      relationship_type: c.relationship_type || "",
+      relationship_other: c.relationship_other || "",
       notes: c.notes || "",
       trusted: c.trusted,
     });
@@ -102,6 +124,8 @@ export default function ContactsPage() {
       email: form.email.trim() || null,
       slack_handle: form.slack_handle.trim() || null,
       phone_number: form.phone_number.trim() || null,
+      relationship_type: form.relationship_type || null,
+      relationship_other: form.relationship_type === "Other" ? form.relationship_other.trim() || null : null,
       notes: form.notes.trim() || null,
       trusted: form.trusted,
     };
@@ -160,7 +184,7 @@ export default function ContactsPage() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="w-full max-w-6xl">
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
@@ -241,6 +265,37 @@ export default function ContactsPage() {
                   className="w-full border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">Relationship</label>
+                <select
+                  value={form.relationship_type}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      relationship_type: e.target.value,
+                      relationship_other: e.target.value === "Other" ? form.relationship_other : "",
+                    })
+                  }
+                  className="w-full border border-border rounded-sm bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Choose relationship</option>
+                  {relationshipOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+              {form.relationship_type === "Other" && (
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1">Other relationship</label>
+                  <input
+                    type="text"
+                    value={form.relationship_other}
+                    onChange={(e) => setForm({ ...form, relationship_other: e.target.value })}
+                    placeholder="e.g. mentor, agency partner"
+                    className="w-full border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-ink mb-1">Notes</label>
@@ -281,7 +336,7 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {/* Contact list + detail split */}
+      {/* Contact cards */}
       {filtered.length === 0 && !showForm ? (
         <div className="mt-6 text-center py-16 bg-white border border-border rounded-card">
           <p className="text-ink-mid text-sm">
@@ -294,125 +349,123 @@ export default function ContactsPage() {
           )}
         </div>
       ) : (
-        <div className="flex gap-4">
-          {/* List */}
-          <div className="flex-1 space-y-2 min-w-0">
-            {filtered.map((c) => (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {filtered.map((c) => {
+            const expanded = selectedId === c.id;
+            return (
               <div
                 key={c.id}
-                onClick={() => setSelectedId(selectedId === c.id ? null : c.id)}
+                onClick={() => setSelectedId(expanded ? null : c.id)}
                 className={`bg-white border rounded-card p-4 cursor-pointer transition-colors ${
-                  selectedId === c.id
+                  expanded
                     ? "border-primary ring-1 ring-primary"
                     : "border-border hover:border-ink-light"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-ink">{c.name}</p>
+                      <p className="truncate text-sm font-medium text-ink">{c.name}</p>
                       {c.trusted && <span className="text-base leading-none">💛</span>}
                     </div>
-                    <div className="flex flex-wrap gap-2 mt-1">
+                    {relationshipLabel(c) && (
+                      <p className="mt-1 text-xs text-primary">{relationshipLabel(c)}</p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
                       {c.email && (
-                        <span className="text-xs bg-bg text-ink-light rounded px-2 py-0.5">
+                        <span className="max-w-full truncate rounded bg-bg px-2 py-0.5 text-xs text-ink-light">
                           {c.email}
                         </span>
                       )}
                       {c.slack_handle && (
-                        <span className="text-xs bg-bg text-ink-light rounded px-2 py-0.5">
+                        <span className="max-w-full truncate rounded bg-bg px-2 py-0.5 text-xs text-ink-light">
                           Slack: {c.slack_handle}
                         </span>
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => toggleTrusted(c)}
-                      className="text-xs text-ink-light hover:text-amber-500 transition-colors"
-                      title={c.trusted ? "Remove trusted" : "Mark trusted"}
-                    >
-                      {c.trusted ? "💛" : "♡"}
-                    </button>
-                    <button
-                      onClick={() => openEdit(c)}
-                      className="text-xs text-ink-mid hover:text-ink transition-colors"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => deleteContact(c.id)}
-                      className="text-xs text-red-400 hover:text-red-600 transition-colors"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Detail panel */}
-          {selected && (
-            <div className="w-72 shrink-0 bg-white border border-border rounded-card p-5 self-start sticky top-6">
-              <div className="flex items-center gap-2 mb-4">
-                <h3 className="text-base font-medium text-ink flex-1 truncate">{selected.name}</h3>
-                {selected.trusted && <span>💛</span>}
-              </div>
-
-              {selected.notes && (
-                <div className="mb-4">
-                  <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-1">Notes</p>
-                  <p className="text-xs text-ink-mid leading-relaxed">{selected.notes}</p>
-                </div>
-              )}
-
-              <div className="border-t border-border pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-medium text-ink-light uppercase tracking-wide">
-                    Relationship insights
-                  </p>
                   <button
-                    onClick={() => refreshInsights(selected.id)}
-                    disabled={generatingInsights}
-                    className="text-xs text-primary hover:underline disabled:opacity-50"
+                    onClick={(e) => { e.stopPropagation(); toggleTrusted(c); }}
+                    className="shrink-0 text-xs text-ink-light transition-colors hover:text-amber-500"
+                    title={c.trusted ? "Remove trusted" : "Mark trusted"}
                   >
-                    {generatingInsights ? "Generating…" : selected.contact_insights ? "Refresh" : "Generate"}
+                    {c.trusted ? "💛" : "♡"}
                   </button>
                 </div>
 
-                {selected.contact_insights ? (
-                  <div className="space-y-3">
-                    {[
-                      { label: "Summary", key: "summary" },
-                      { label: "Communication", key: "communication_patterns" },
-                      { label: "Common topics", key: "common_topics" },
-                      { label: "Tone trend", key: "tone_trend" },
-                      { label: "Responsiveness", key: "responsiveness" },
-                    ].map(({ label, key }) => {
-                      const val = selected.contact_insights![key as keyof ContactInsights];
-                      if (!val) return null;
-                      return (
-                        <div key={key}>
-                          <p className="text-xs font-medium text-ink mb-0.5">{label}</p>
-                          <p className="text-xs text-ink-mid leading-relaxed">{val}</p>
-                        </div>
-                      );
-                    })}
-                    {selected.contact_insights.generated_at && (
-                      <p className="text-xs text-ink-light pt-1">
-                        Updated {new Date(selected.contact_insights.generated_at).toLocaleDateString()}
-                      </p>
+                <div className="mt-4 flex gap-3" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => openEdit(c)}
+                    className="text-xs text-ink-mid transition-colors hover:text-ink"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => deleteContact(c.id)}
+                    className="text-xs text-red-400 transition-colors hover:text-red-600"
+                  >
+                    Remove
+                  </button>
+                </div>
+
+                {expanded && (
+                  <div className="mt-4 border-t border-border pt-4">
+                    {c.notes && (
+                      <div className="mb-4">
+                        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-light">Notes</p>
+                        <p className="text-xs leading-relaxed text-ink-mid">{c.notes}</p>
+                      </div>
                     )}
+
+                    <div>
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-ink-light">
+                          Relationship insights
+                        </p>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); refreshInsights(c.id); }}
+                          disabled={generatingInsights}
+                          className="text-xs text-primary hover:underline disabled:opacity-50"
+                        >
+                          {generatingInsights ? "Generating…" : c.contact_insights ? "Refresh" : "Generate"}
+                        </button>
+                      </div>
+
+                      {c.contact_insights ? (
+                        <div className="space-y-3">
+                          {[
+                            { label: "Summary", key: "summary" },
+                            { label: "Communication", key: "communication_patterns" },
+                            { label: "Common topics", key: "common_topics" },
+                            { label: "Tone trend", key: "tone_trend" },
+                            { label: "Responsiveness", key: "responsiveness" },
+                          ].map(({ label, key }) => {
+                            const val = c.contact_insights![key as keyof ContactInsights];
+                            if (!val) return null;
+                            return (
+                              <div key={key}>
+                                <p className="mb-0.5 text-xs font-medium text-ink">{label}</p>
+                                <p className="text-xs leading-relaxed text-ink-mid">{val}</p>
+                              </div>
+                            );
+                          })}
+                          {c.contact_insights.generated_at && (
+                            <p className="pt-1 text-xs text-ink-light">
+                              Updated {new Date(c.contact_insights.generated_at).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-ink-light">
+                          No insights yet. Click Generate to analyse this relationship.
+                        </p>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-xs text-ink-light">
-                    No insights yet. Click Generate to analyse this relationship.
-                  </p>
                 )}
               </div>
-            </div>
-          )}
+            );
+          })}
         </div>
       )}
     </div>
