@@ -27,6 +27,11 @@ export default function SetPasswordPage() {
     setLoading(true)
     const { error } = await supabase.auth.updateUser({ password })
     if (error) { setError(error.message); setLoading(false); return }
+    await fetch('/api/beta-events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventName: 'password_set', source: 'web_app' }),
+    }).catch(() => null)
     router.push('/auth/profile-setup')
   }
 

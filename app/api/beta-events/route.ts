@@ -5,6 +5,7 @@ import { trackBetaEvent } from "@/lib/beta-events";
 const ALLOWED_EVENTS = new Set([
   "course_completed",
   "dashboard_viewed",
+  "password_set",
   "settings_health_check_started",
 ]);
 

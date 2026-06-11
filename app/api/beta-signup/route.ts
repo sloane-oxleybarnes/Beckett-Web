@@ -40,6 +40,12 @@ export async function POST(req: NextRequest) {
     lastname: name?.split(" ").slice(1).join(" "),
     plan: planValue,
     source: sourceValue,
+    properties: {
+      beckett_beta_status: "requested_access",
+      beckett_plan: planValue,
+      beckett_source: sourceValue,
+      beckett_last_active_at: new Date().toISOString(),
+    },
   });
 
   if (hsId) {
