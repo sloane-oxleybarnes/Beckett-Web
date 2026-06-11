@@ -12,27 +12,27 @@ const walkthroughSteps = [
   },
   {
     eyebrow: "Coach hub",
-    title: "Start from your dashboard.",
+    title: "Start from the coach hub.",
     body:
-      "This is where you can check in, see your progress, find recommended skills, and finish any setup steps.",
+      "When you are not sure what to do next, use the Start here card. Practice is for real conversations; Skills are for building a repeatable tool.",
+  },
+  {
+    eyebrow: "Setup",
+    title: "Connect the tools Beckett can coach in.",
+    body:
+      "The setup checklist shows Chrome extension, Gmail, and Slack status. You can finish or reconnect them from Settings whenever you need.",
   },
   {
     eyebrow: "Practice",
-    title: "Rehearse before a real conversation.",
+    title: "Rehearse before the real thing.",
     body:
-      "Use Practice when you have something coming up with a manager, teammate, client, or colleague and want to try the words first.",
+      "Use Practice when something specific is coming up with a manager, teammate, client, or colleague and you want to try the words first.",
   },
   {
     eyebrow: "Skills",
     title: "Build repeatable communication tools.",
     body:
-      "Skills are guided coaching modules for common workplace moments, like asking for clarity, saying no, or working with a new colleague.",
-  },
-  {
-    eyebrow: "Connections",
-    title: "Bring Beckett into your work tools.",
-    body:
-      "When you are ready, connect Gmail, Slack, and the Chrome extension so Beckett can help where your work conversations already happen.",
+      "Skills are short coaching modules for common workplace moments, like working with a new colleague, saying no, or asking for clarity.",
   },
   {
     eyebrow: "Profile",
@@ -99,7 +99,7 @@ export default function CoachWalkthrough({ shouldShow }: CoachWalkthroughProps) 
               onClick={finish}
               className="rounded-pill border border-border px-4 py-2 text-xs font-medium text-ink hover:bg-bg"
             >
-              Finish setup
+              Go to dashboard
             </button>
           </div>
         ) : (
