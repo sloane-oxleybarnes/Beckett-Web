@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import DashboardSidebar from "@/components/dashboard/Sidebar";
+import BetaFeedbackWidget from "@/components/dashboard/BetaFeedbackWidget";
 
 export default async function DashboardLayout({
   children,
@@ -32,6 +33,7 @@ export default async function DashboardLayout({
       <main className="flex-1 md:ml-64 px-4 py-6 pt-16 md:px-8 md:py-8 md:pt-8">
         {children}
       </main>
+      <BetaFeedbackWidget />
     </div>
   );
 }

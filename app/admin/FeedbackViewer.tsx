@@ -25,7 +25,7 @@ type FeedbackWithUser = AdminFeedbackRow & {
   userName: string | null;
 };
 
-type FeedbackFilter = "all" | "needs_work" | "course" | "extension";
+type FeedbackFilter = "all" | "needs_work" | "dashboard" | "course" | "extension";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString("en-US", {
@@ -65,16 +65,18 @@ export default function AdminFeedbackViewer({
 
   const filteredRows = rows.filter((row) => {
     if (filter === "needs_work") return row.rating === "no";
+    if (filter === "dashboard") return row.source === "dashboard" || row.platform === "web";
     if (filter === "course") return row.source === "course" || row.platform === "courses";
-    if (filter === "extension") return row.source !== "course" && row.platform !== "courses";
+    if (filter === "extension") return row.source !== "course" && row.platform !== "courses" && row.source !== "dashboard" && row.platform !== "web";
     return true;
   });
 
   const counts = {
     all: rows.length,
     needs_work: rows.filter((row) => row.rating === "no").length,
+    dashboard: rows.filter((row) => row.source === "dashboard" || row.platform === "web").length,
     course: rows.filter((row) => row.source === "course" || row.platform === "courses").length,
-    extension: rows.filter((row) => row.source !== "course" && row.platform !== "courses").length,
+    extension: rows.filter((row) => row.source !== "course" && row.platform !== "courses" && row.source !== "dashboard" && row.platform !== "web").length,
   };
 
   return (
@@ -83,13 +85,14 @@ export default function AdminFeedbackViewer({
         <div>
           <h2 className="text-lg font-semibold text-ink">Feedback viewer</h2>
           <p className="text-sm text-ink-mid">
-            Review beta feedback from courses and extension analyses, including debug context when available.
+            Review beta feedback from dashboard pages, courses, and extension analyses, including debug context when available.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {[
             { id: "all", label: `All (${counts.all})` },
             { id: "needs_work", label: `Needs work (${counts.needs_work})` },
+            { id: "dashboard", label: `Dashboard (${counts.dashboard})` },
             { id: "course", label: `Courses (${counts.course})` },
             { id: "extension", label: `Extension (${counts.extension})` },
           ].map((item) => (

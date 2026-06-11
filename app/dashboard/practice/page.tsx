@@ -1085,14 +1085,6 @@ export default function PracticePage() {
           </div>
         )}
 
-        <div className="mt-4 shrink-0 border-t border-border pt-3">
-          <a
-            href="mailto:hello@meetbeckett.co?subject=Beckett%20beta%20feedback%20-%20Practice"
-            className="text-xs text-primary hover:underline"
-          >
-            Share beta feedback about practice
-          </a>
-        </div>
       </div>
     )
   }
