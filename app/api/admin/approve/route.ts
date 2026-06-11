@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { triggerLoopsEvent } from "@/lib/loops";
+import { sendBetaInviteEmail } from "@/lib/beta-emails";
 
 export async function POST(req: NextRequest) {
   const cookieStore = cookies();
@@ -22,13 +23,43 @@ export async function POST(req: NextRequest) {
   );
 
   const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://meetbeckett.co'
-  const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(normalizedEmail, {
-    redirectTo: `${origin}/auth/callback`,
-    data: { plan: 'beta' },
-  });
+  const { data: signup } = await supabase
+    .from("beta_signups")
+    .select("name")
+    .eq("id", id)
+    .maybeSingle();
 
-  if (inviteError) {
-    return NextResponse.json({ error: inviteError.message }, { status: 500 });
+  if (process.env.RESEND_API_KEY) {
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: "invite",
+      email: normalizedEmail,
+      options: {
+        redirectTo: `${origin}/auth/callback`,
+        data: { plan: "beta" },
+      },
+    });
+
+    if (linkError || !linkData.properties?.action_link) {
+      return NextResponse.json(
+        { error: linkError?.message || "Could not generate invite link." },
+        { status: 500 }
+      );
+    }
+
+    await sendBetaInviteEmail({
+      email: normalizedEmail,
+      name: signup?.name || null,
+      actionLink: linkData.properties.action_link,
+    });
+  } else {
+    const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(normalizedEmail, {
+      redirectTo: `${origin}/auth/callback`,
+      data: { plan: 'beta' },
+    });
+
+    if (inviteError) {
+      return NextResponse.json({ error: inviteError.message }, { status: 500 });
+    }
   }
 
   await supabase

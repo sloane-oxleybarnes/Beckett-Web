@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getExtensionProfile } from "@/lib/extension-auth";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { trackBetaEvent } from "@/lib/beta-events";
+import { sendFeedbackThankYouIfFirst } from "@/lib/beta-emails";
 
 type FeedbackBody = {
   feedback?: "yes" | "no";
@@ -94,6 +95,11 @@ export async function POST(req: NextRequest) {
       feedbackSource: body.metadata?.source || null,
       threadCount,
     },
+  });
+
+  await sendFeedbackThankYouIfFirst({
+    userId: profile.id,
+    email: profile.email,
   });
 
   return NextResponse.json({ ok: true });

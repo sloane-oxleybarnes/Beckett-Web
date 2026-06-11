@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createOrUpdateHubSpotContact } from "@/lib/hubspot";
 import { addLoopsContact, triggerLoopsEvent } from "@/lib/loops";
 import { trackBetaEvent } from "@/lib/beta-events";
-import { Resend } from "resend";
+import { sendBetaSignupConfirmation } from "@/lib/beta-emails";
 
 export async function POST(req: NextRequest) {
   const { email, name, source, plan } = await req.json();
@@ -75,28 +75,13 @@ export async function POST(req: NextRequest) {
     metadata: { plan: planValue, name: name || null },
   });
 
-  if (process.env.RESEND_API_KEY) {
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    try {
-      await resend.emails.send({
-        from: "Beckett <hello@meetbeckett.co>",
-        to: normalizedEmail,
-        subject: "You're on the Beckett waitlist",
-        html: `<p>Thanks for signing up — we're reviewing applications and will be in touch if you're accepted into the beta.</p><p>— Sloane</p>`,
-      });
-    } catch (e) {
-      console.error("Resend signup confirmation error:", e);
-    }
-    try {
-      await resend.emails.send({
-        from: "Beckett <hello@meetbeckett.co>",
-        to: "hello@meetbeckett.co",
-        subject: "New Beckett beta signup",
-        html: `<p><strong>${name || "Someone"}</strong> just signed up for the beta.</p><p>Email: ${normalizedEmail}</p><p>Source: ${sourceValue}</p>`,
-      });
-    } catch (e) {
-      console.error("Resend notification error:", e);
-    }
+  try {
+    await sendBetaSignupConfirmation({
+      email: normalizedEmail,
+      name,
+    });
+  } catch (e) {
+    console.error("Resend signup confirmation error:", e);
   }
 
   return NextResponse.json({ success: true });

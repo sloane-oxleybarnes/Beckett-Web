@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { trackBetaEvent } from "@/lib/beta-events";
+import { sendFeedbackThankYouIfFirst } from "@/lib/beta-emails";
 
 type DashboardFeedbackBody = {
   rating?: "yes" | "no";
@@ -61,6 +62,11 @@ export async function POST(req: NextRequest) {
       rating: body.rating,
       page,
     },
+  });
+
+  await sendFeedbackThankYouIfFirst({
+    userId: user.id,
+    email: user.email,
   });
 
   return NextResponse.json({ ok: true });

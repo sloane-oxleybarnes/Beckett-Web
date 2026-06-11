@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { trackBetaEvent } from "@/lib/beta-events";
+import { sendFeedbackThankYouIfFirst } from "@/lib/beta-emails";
 
 type CourseFeedbackBody = {
   courseId?: string;
@@ -79,6 +80,11 @@ export async function POST(req: NextRequest) {
       preConfidence: body.preConfidence ?? null,
       postConfidence: body.postConfidence ?? null,
     },
+  });
+
+  await sendFeedbackThankYouIfFirst({
+    userId: user.id,
+    email: user.email,
   });
 
   return NextResponse.json({ ok: true });
