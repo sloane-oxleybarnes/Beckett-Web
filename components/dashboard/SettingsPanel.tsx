@@ -592,14 +592,19 @@ export default function SettingsPage() {
           Connected accounts
         </h2>
         <p className="text-sm text-ink-mid mb-5">
-          Connect your accounts to unlock email context and message history.
+          Connect only the tools you want Beckett to use for coaching. Beckett stores connection
+          status and usage metadata, not full Gmail or Slack message history by default.
         </p>
+        <div className="mb-5 rounded-sm border border-primary/15 bg-primary-light/40 p-3 text-xs leading-relaxed text-ink-mid">
+          Gmail is read-only and Slack is used only for context. Beckett cannot send email, post to
+          Slack, move meetings, or change anything without you taking the final action.
+        </div>
         <div className="space-y-4">
           {/* Google / Gmail */}
           <ConnectRow
             icon="📧"
             name="Google (Gmail)"
-            description="Email thread context"
+            description="Read-only email thread context when you ask Beckett for coaching"
             connected={diagnostics?.integrations.google.connected}
             detail={diagnostics?.integrations.google.email || "Google account connected"}
             onConnect={async () => {
@@ -617,7 +622,7 @@ export default function SettingsPage() {
           <ConnectRow
             icon="💬"
             name="Slack"
-            description="Message history and contact context"
+            description="Recent DM, channel, and thread context when you ask Beckett for coaching"
             connected={diagnostics?.integrations.slack.connected}
             detail={diagnostics?.integrations.slack.teamName || "Slack workspace connected"}
             onConnect={() => {
@@ -736,6 +741,10 @@ export default function SettingsPage() {
         <p className="text-sm text-ink-mid mb-4">
           Beckett for Chrome connects through a secure login flow in the side panel.
         </p>
+        <p className="mb-4 text-xs leading-relaxed text-ink-mid">
+          The extension reads the page context needed for coaching in Gmail and Slack. Analysis
+          requests go through Beckett&apos;s backend so beta access, limits, and safety rules can apply.
+        </p>
         <div className="rounded-sm border border-primary/20 bg-primary-light p-4">
           <p className="text-sm font-medium text-ink">Included in beta access</p>
           <p className="text-xs text-ink-mid mt-1">
@@ -802,6 +811,11 @@ export default function SettingsPage() {
             <p className="text-sm text-ink-mid mb-4">
               During beta, deletion is handled manually so we can remove data across Beckett,
               Supabase, HubSpot, Loops, and related systems.
+            </p>
+            <p className="mb-4 text-xs leading-relaxed text-ink-light">
+              We will mark your account for deletion, stop beta follow-up where possible, and remove
+              personal data from the systems we use to run the beta. We may keep limited records only
+              when needed for security, legal, or abuse-prevention reasons.
             </p>
             <label className="block text-sm font-medium text-ink mb-1">
               Optional note

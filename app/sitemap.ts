@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://meetbeckett.co";
 
-const publicRoutes = ["", "/beta", "/features", "/integrations", "/skills"];
+const publicRoutes = ["", "/beta", "/features", "/integrations", "/skills", "/privacy"];
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();

@@ -497,8 +497,8 @@ export default function HomePage() {
         </div>
         <div className="f-copy">© 2026 Beckett. For brains that work differently.</div>
         <div className="f-links">
-          <a href="#">Privacy</a>
-          <a href="#">Support</a>
+          <a href="/privacy">Privacy</a>
+          <a href="mailto:hello@meetbeckett.co">Support</a>
         </div>
       </footer>
 

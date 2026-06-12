@@ -397,6 +397,13 @@ export default function ProfileSetupForm() {
                 Beckett works best when your coach is connected to the places your work conversations happen.
                 You can skip this for now and finish setup from Settings.
               </p>
+              <div className="mb-4">
+                <TrustNote>
+                  Connecting a tool lets Beckett use that tool only for coaching you request.
+                  Beckett stores connection status, usage counts, and beta debugging metadata, not
+                  full Gmail or Slack message history by default.
+                </TrustNote>
+              </div>
               <div className="space-y-3">
                 <div className="rounded-sm border border-border bg-bg/60 p-4">
                   <div className="flex items-start justify-between gap-4">
@@ -432,7 +439,8 @@ export default function ProfileSetupForm() {
                     <div>
                       <p className="text-sm font-medium text-ink">2. Connect Gmail</p>
                       <p className="mt-1 text-xs text-ink-mid">
-                        Lets Beckett read full email threads when you ask for coaching.
+                        Gives Beckett read-only Gmail access so it can use full email threads when
+                        you ask for coaching. Beckett cannot send emails for you.
                       </p>
                     </div>
                     <button
@@ -451,7 +459,8 @@ export default function ProfileSetupForm() {
                     <div>
                       <p className="text-sm font-medium text-ink">3. Connect Slack</p>
                       <p className="mt-1 text-xs text-ink-mid">
-                        Lets Beckett understand Slack DMs, channels, and recent context.
+                        Lets Beckett use recent Slack DMs, channels, and threads when you ask for
+                        coaching. Beckett cannot post messages for you.
                       </p>
                     </div>
                     <button

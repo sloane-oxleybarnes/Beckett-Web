@@ -1717,7 +1717,10 @@ export default function CoursePage({ params }: { params: { id: string } }) {
           ) : (
             <div>
               <p className="text-sm font-medium text-ink mb-2">How was this course?</p>
-              <p className="text-sm text-ink-mid mb-4 leading-relaxed">A quick note helps Beckett learn which coaching moments are actually useful.</p>
+              <p className="text-sm text-ink-mid mb-2 leading-relaxed">A quick note helps Beckett learn which coaching moments are actually useful.</p>
+              <p className="mb-4 text-xs leading-relaxed text-ink-light">
+                Course feedback is saved for beta review and may include the notes you type here.
+              </p>
 
               <div className="grid grid-cols-2 gap-3 mb-4">
                 {[

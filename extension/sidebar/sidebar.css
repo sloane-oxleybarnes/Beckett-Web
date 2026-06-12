@@ -521,6 +521,12 @@ body {
   height: 60px;
   outline: none;
 }
+.feedback-privacy {
+  margin: 6px 0 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
 
 .feedback-improve-actions { display: flex; gap: 6px; }
 

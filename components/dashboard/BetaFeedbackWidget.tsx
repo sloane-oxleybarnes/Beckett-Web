@@ -57,7 +57,8 @@ export default function BetaFeedbackWidget() {
             <div>
               <p className="text-sm font-semibold text-ink">Beta feedback</p>
               <p className="mt-1 text-xs leading-relaxed text-ink-mid">
-                Tell us what worked or what got confusing on this page.
+                Tell us what worked or what got confusing on this page. Your note is saved for beta
+                review and may include what you type here.
               </p>
             </div>
             <button
