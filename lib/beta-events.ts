@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "./server-admin";
 import { createOrUpdateHubSpotContact } from "./hubspot";
+import { captureProductEvent } from "./product-analytics";
 
 type BetaEventInput = {
   userId?: string | null;
@@ -23,6 +24,14 @@ export async function trackBetaEvent({
       user_id: userId,
       email: normalizedEmail,
       event_name: eventName,
+      source,
+      metadata,
+    });
+
+    await captureProductEvent({
+      eventName,
+      userId,
+      email: normalizedEmail,
       source,
       metadata,
     });
