@@ -130,7 +130,7 @@ body {
   border-color: var(--primary);
 }
 
-/* LinkedIn */
+/* OAuth provider buttons */
 .btn-linkedin {
   display: flex;
   align-items: center;

@@ -8,8 +8,6 @@ import {
   buildPracticeDebriefPrompt,
   buildVoiceContext,
 } from '../utils/prompts.js';
-import { connectLinkedIn, buildLinkedInContext } from '../utils/linkedin.js';
-import { fetchUpcomingEvents } from '../utils/calendar.js';
 import { getGmailMessage, getGmailProfile, getGmailThread, parseThreadMessages, searchGmailMessages } from '../utils/gmail.js';
 
 // Slack OAuth worker — deploy workers/slack-oauth.js to this URL
@@ -79,12 +77,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: true });
       return true;
 
-    case 'CONNECT_LINKEDIN':
-      connectLinkedIn()
-        .then(profile => sendResponse({ profile }))
-        .catch(e => sendResponse({ error: e.message }));
-      return true;
-
     case 'CONNECT_SLACK':
       connectSlack()
         .then(result => sendResponse(result))
@@ -138,11 +130,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'GET_CALENDAR_EVENTS':
-      handleGetCalendarEvents(sendResponse);
+      sendResponse({ error: 'Calendar support is coming after beta.' });
       return true;
 
     case 'CONNECT_CALENDAR':
-      handleConnectCalendar(sendResponse);
+      sendResponse({ error: 'Calendar support is coming after beta.' });
       return true;
 
     case 'GENERATE_MEETING_BRIEF':
@@ -214,8 +206,8 @@ async function handleTriggerAnalyze(payload, sendResponse) {
       return;
     }
 
-    const { linkedInProfile, lumenMode, plan, voice_samples, currentUserEmail, slackUserName, beckettUserName, beckettUserEmail, slackToken, slackUserId } = await chrome.storage.local.get([
-      'linkedInProfile', 'lumenMode', 'plan', 'voice_samples', 'currentUserEmail', 'slackUserName', 'beckettUserName', 'beckettUserEmail', 'slackToken', 'slackUserId',
+    const { lumenMode, plan, voice_samples, currentUserEmail, slackUserName, beckettUserName, beckettUserEmail, slackToken, slackUserId } = await chrome.storage.local.get([
+      'lumenMode', 'plan', 'voice_samples', 'currentUserEmail', 'slackUserName', 'beckettUserName', 'beckettUserEmail', 'slackToken', 'slackUserId',
     ]);
     const mode = payload.mode || lumenMode || 'business';
     const isPro = plan === 'pro' || plan === 'beta';
@@ -261,7 +253,7 @@ async function handleTriggerAnalyze(payload, sendResponse) {
 
     // Resolve user identity so Beckett can speak to the user directly.
     const currentUser = {
-      name: ctx.currentUserName || slackUserName || beckettUserName || linkedInProfile?.name || null,
+      name: ctx.currentUserName || slackUserName || beckettUserName || null,
       email: currentUserEmail || beckettUserEmail || null,
     };
 
@@ -272,7 +264,7 @@ async function handleTriggerAnalyze(payload, sendResponse) {
       platform: ctx.platform,
       channelType: ctx.channelType,
       mode,
-      linkedInContext: mode === 'business' ? buildLinkedInContext(linkedInProfile) : null,
+      linkedInContext: null,
       isSafePerson: ctx.isSafePerson || false,
       voiceContext,
       currentUser,
@@ -362,7 +354,7 @@ function getContentScriptForUrl(url) {
 
 async function handleMeeting(payload, tabId, sendResponse) {
   try {
-    const { linkedInProfile, lumenMode, plan } = await chrome.storage.local.get(['linkedInProfile', 'lumenMode', 'plan']);
+    const { lumenMode, plan } = await chrome.storage.local.get(['lumenMode', 'plan']);
     const isPro = plan === 'pro' || plan === 'beta';
     if (!isPro) { sendResponse({ error: 'Meeting guidance is a Pro feature.' }); return; }
 
@@ -370,7 +362,7 @@ async function handleMeeting(payload, tabId, sendResponse) {
     const prompt = buildMeetingPrompt({
       ...payload,
       mode,
-      linkedInContext: mode === 'business' ? buildLinkedInContext(linkedInProfile) : null,
+      linkedInContext: null,
     });
 
     const result = await callBeckettJson('analyze_message', prompt, 1000, { platform: 'meeting', mode });
@@ -383,8 +375,8 @@ async function handleMeeting(payload, tabId, sendResponse) {
 
 async function handleDraftFromScratch(payload, sendResponse) {
   try {
-    const { linkedInProfile, lumenMode, voice_samples } = await chrome.storage.local.get([
-      'linkedInProfile', 'lumenMode', 'voice_samples',
+    const { lumenMode, voice_samples } = await chrome.storage.local.get([
+      'lumenMode', 'voice_samples',
     ]);
     const mode = payload.mode || lumenMode || 'business';
     const voiceContext = buildVoiceContext(voice_samples, mode);
@@ -392,7 +384,7 @@ async function handleDraftFromScratch(payload, sendResponse) {
     const prompt = buildDraftFromScratchPrompt({
       ...payload,
       mode,
-      linkedInContext: mode === 'business' ? buildLinkedInContext(linkedInProfile) : null,
+      linkedInContext: null,
       voiceContext,
     });
 
@@ -404,36 +396,6 @@ async function handleDraftFromScratch(payload, sendResponse) {
 }
 
 // ── New v3 handlers ───────────────────────────────────────────
-
-async function handleConnectCalendar(sendResponse) {
-  try {
-    const token = await getGoogleToken(true);
-    const events = await fetchUpcomingEvents(token);
-    await chrome.storage.local.set({ upcoming_meetings: events, calendar_cache_ts: Date.now() });
-    sendResponse({ ok: true, eventCount: events.length });
-  } catch (e) {
-    sendResponse({ error: e.message });
-  }
-}
-
-async function handleGetCalendarEvents(sendResponse) {
-  try {
-    const { upcoming_meetings, calendar_cache_ts } = await chrome.storage.local.get([
-      'upcoming_meetings', 'calendar_cache_ts',
-    ]);
-    if (upcoming_meetings && calendar_cache_ts && Date.now() - calendar_cache_ts < 15 * 60 * 1000) {
-      sendResponse({ events: upcoming_meetings });
-      return;
-    }
-
-    const token = await getGoogleToken();
-    const events = await fetchUpcomingEvents(token);
-    await chrome.storage.local.set({ upcoming_meetings: events, calendar_cache_ts: Date.now() });
-    sendResponse({ events });
-  } catch (e) {
-    sendResponse({ error: e.message });
-  }
-}
 
 async function handleMeetingBrief(payload, sendResponse) {
   try {
@@ -902,8 +864,8 @@ async function injectDraft(text) {
 
 async function getSettings() {
   const keys = [
-    'plan', 'lumenMode', 'linkedInProfile',
-    'safe_people', 'betaEmail', 'voice_samples',
+    'plan', 'lumenMode',
+    'safe_people', 'voice_samples',
     'slackToken', 'slackUserId', 'slackUserName', 'currentUserEmail', 'beckettToken', 'beckettUserName', 'beckettUserEmail',
   ];
   const data = await chrome.storage.local.get(keys);
@@ -920,9 +882,7 @@ async function getSettings() {
     apiKey: '',
     plan: data.plan || 'free',
     mode: data.lumenMode || 'business',
-    linkedInProfile: data.linkedInProfile || null,
     safePeople: data.safe_people || [],
-    betaEmail: data.betaEmail || '',
     voiceSampleCounts: {
       personal: samples.filter(s => s.mode === 'personal').length,
       business: samples.filter(s => s.mode === 'business').length,

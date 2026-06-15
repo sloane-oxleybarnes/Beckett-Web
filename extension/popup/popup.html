@@ -45,25 +45,6 @@
       <p class="note">Professional is the default. Use personal for friends or close contacts at work.</p>
     </section>
 
-    <!-- LinkedIn -->
-    <section class="section">
-      <div class="label">LinkedIn profile</div>
-      <div id="linkedInConnected" class="profile-row" hidden>
-        <div class="profile-avatar" id="profileAvatar"></div>
-        <div>
-          <div class="profile-name" id="profileName"></div>
-          <div class="profile-email" id="profileEmail"></div>
-        </div>
-        <button class="btn-text" id="disconnectLinkedIn">Disconnect</button>
-      </div>
-      <button class="btn-linkedin" id="connectLinkedIn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-        Connect LinkedIn
-      </button>
-      <p class="note">Your name and role personalize AI responses. Nothing is stored externally.</p>
-      <p class="linkedin-status" id="linkedInStatus" hidden></p>
-    </section>
-
     <!-- Safe people -->
     <section class="section">
       <div class="label">Safe people</div>
@@ -93,21 +74,6 @@
       <button class="btn-save" id="connectGmail" style="width:100%;background:#EA4335;">Connect Gmail — enables full thread reading</button>
       <p class="note">Required to read collapsed messages in email threads.</p>
       <p class="linkedin-status" id="gmailStatus" hidden></p>
-    </section>
-
-    <!-- Google Calendar -->
-    <section class="section">
-      <div class="label">Google Calendar</div>
-      <div id="calendarConnected" class="profile-row" hidden>
-        <div class="profile-avatar" style="background:#1A73E8;">C</div>
-        <div>
-          <div class="profile-name">Calendar connected</div>
-          <div class="profile-email">Pre-meeting briefs enabled</div>
-        </div>
-      </div>
-      <button class="btn-save" id="connectCalendar" style="width:100%;background:#1A73E8;">Connect Calendar — enables pre-meeting briefs</button>
-      <p class="note">Fetches today and tomorrow&apos;s events to surface briefs before meetings.</p>
-      <p class="linkedin-status" id="calendarStatus" hidden></p>
     </section>
 
     <!-- Slack -->
@@ -145,21 +111,6 @@
         <div class="platform-item"><span class="platform-dot active"></span> Slack</div>
         <div class="platform-item"><span class="platform-dot"></span> Google Meet — coming soon</div>
         <div class="platform-item"><span class="platform-dot"></span> Zoom — coming soon</div>
-      </div>
-    </section>
-
-    <!-- Beta section -->
-    <section class="section" id="betaSection" hidden>
-      <div class="beta-banner">
-        <strong>You're in beta</strong> — thanks for being an early user.
-      </div>
-      <div id="betaEmailRow">
-        <label class="label" for="betaEmail" style="margin-bottom:6px;display:block;">Get release notes</label>
-        <div class="input-row">
-          <input type="email" id="betaEmail" class="input" placeholder="your@email.com">
-          <button class="btn-save" id="saveBetaEmail">Subscribe</button>
-        </div>
-        <p class="field-note" id="betaEmailStatus" hidden></p>
       </div>
     </section>
 

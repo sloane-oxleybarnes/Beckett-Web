@@ -1,5 +1,4 @@
 const $ = id => document.getElementById(id);
-const BETA_WORKER = 'https://lumen-beta.sloane-oxleyhase.workers.dev';
 
 // ── Beckett account ───────────────────────────────────────────────────────────
 
@@ -53,8 +52,6 @@ async function loadPlan() {
     chip.className = `plan-chip ${p}`;
     chip.hidden = false;
   }
-  if (p === 'beta') $('betaSection').hidden = false;
-
 }
 
 // ── Mode toggle ───────────────────────────────────────────────────────────────
@@ -89,50 +86,6 @@ $('modeBusiness').addEventListener('click', async () => {
   $('modeBusiness').classList.add('active');
   $('modePersonal').classList.remove('active');
 });
-
-// ── LinkedIn ──────────────────────────────────────────────────────────────────
-
-async function loadLinkedIn() {
-  const { linkedInProfile } = await chrome.storage.local.get('linkedInProfile');
-  if (linkedInProfile) showLinkedInProfile(linkedInProfile);
-}
-
-function showLinkedInProfile(profile) {
-  const initials = profile.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-  $('profileAvatar').textContent = initials;
-  $('profileName').textContent = profile.name;
-  $('profileEmail').textContent = profile.email || '';
-  $('linkedInConnected').hidden = false;
-  $('connectLinkedIn').hidden = true;
-}
-
-$('connectLinkedIn').addEventListener('click', async () => {
-  const btn = $('connectLinkedIn');
-  btn.disabled = true;
-  btn.textContent = 'Connecting…';
-
-  const response = await sendMessage('CONNECT_LINKEDIN', {});
-  btn.disabled = false;
-  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg> Connect LinkedIn`;
-
-  if (response.error) { showLinkedInStatus(response.error, 'err'); return; }
-  showLinkedInProfile(response.profile);
-  showLinkedInStatus('Connected!', 'ok');
-});
-
-$('disconnectLinkedIn').addEventListener('click', async () => {
-  await chrome.storage.local.remove('linkedInProfile');
-  $('linkedInConnected').hidden = true;
-  $('connectLinkedIn').hidden = false;
-});
-
-function showLinkedInStatus(msg, type) {
-  const el = $('linkedInStatus');
-  el.textContent = msg;
-  el.className = `linkedin-status ${type}`;
-  el.hidden = false;
-  setTimeout(() => { el.hidden = true; }, 3000);
-}
 
 // ── Safe people ───────────────────────────────────────────────────────────────
 
@@ -280,38 +233,6 @@ function showSlackStatus(msg, type) {
   setTimeout(() => { el.hidden = true; }, 3000);
 }
 
-// ── Google Calendar ───────────────────────────────────────────────────────────
-
-async function loadCalendar() {
-  const { calendar_cache_ts } = await chrome.storage.local.get('calendar_cache_ts');
-  if (calendar_cache_ts) showCalendarConnected();
-}
-
-function showCalendarConnected() {
-  $('calendarConnected').hidden = false;
-  $('connectCalendar').hidden = true;
-}
-
-$('connectCalendar').addEventListener('click', async () => {
-  const btn = $('connectCalendar');
-  btn.disabled = true;
-  btn.textContent = 'Connecting…';
-  const response = await sendMessage('CONNECT_CALENDAR', {});
-  btn.disabled = false;
-  btn.textContent = 'Connect Calendar — enables pre-meeting briefs';
-  if (response.error) { showCalendarStatus(response.error, 'err'); return; }
-  showCalendarConnected();
-  showCalendarStatus('Calendar connected!', 'ok');
-});
-
-function showCalendarStatus(msg, type) {
-  const el = $('calendarStatus');
-  el.textContent = msg;
-  el.className = `linkedin-status ${type}`;
-  el.hidden = false;
-  setTimeout(() => { el.hidden = true; }, 3000);
-}
-
 // ── Voice calibration ─────────────────────────────────────────────────────────
 
 async function loadVoiceCalibration() {
@@ -334,39 +255,6 @@ $('resetVoiceBtn').addEventListener('click', async () => {
   await sendMessage('RESET_VOICE', {});
   $('voiceCountNote').textContent = 'Voice profile cleared.';
   showNote($('voiceResetStatus'), 'Voice profile reset.', 'ok');
-});
-
-// ── Beta email ────────────────────────────────────────────────────────────────
-
-async function loadBetaEmail() {
-  const { betaEmail } = await chrome.storage.local.get('betaEmail');
-  if (betaEmail) {
-    $('betaEmail').value = betaEmail;
-    showNote($('betaEmailStatus'), 'Subscribed.', 'ok');
-  }
-}
-
-$('saveBetaEmail').addEventListener('click', async () => {
-  const email = $('betaEmail').value.trim();
-  if (!email || !email.includes('@')) { showNote($('betaEmailStatus'), 'Enter a valid email.', 'warn'); return; }
-
-  $('saveBetaEmail').disabled = true;
-  $('saveBetaEmail').textContent = 'Saving…';
-
-  try {
-    await fetch(BETA_WORKER, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, plan: 'beta', source: 'extension_popup' }),
-    });
-    await chrome.storage.local.set({ betaEmail: email });
-    showNote($('betaEmailStatus'), "You're subscribed.", 'ok');
-  } catch {
-    showNote($('betaEmailStatus'), 'Could not save — try again.', 'warn');
-  }
-
-  $('saveBetaEmail').disabled = false;
-  $('saveBetaEmail').textContent = 'Subscribe';
 });
 
 // ── Collapsibles ──────────────────────────────────────────────────────────────
@@ -409,9 +297,6 @@ loadBeckettAccount();
 loadPlan();
 loadMode();
 loadGmail();
-loadCalendar();
-loadLinkedIn();
 loadSlack();
 loadSafePeople();
 loadVoiceCalibration();
-loadBetaEmail();

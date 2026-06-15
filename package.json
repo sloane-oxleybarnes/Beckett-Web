@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "package:extension": "node scripts/package-extension.js"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.57.0",

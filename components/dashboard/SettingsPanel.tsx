@@ -611,7 +611,7 @@ export default function SettingsPage() {
               await supabase.auth.signInWithOAuth({
                 provider: "google",
                 options: {
-                  scopes: "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly",
+                  scopes: "https://www.googleapis.com/auth/gmail.readonly",
                   redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/dashboard/settings")}&integration=google`,
                   queryParams: { access_type: "offline", prompt: "consent" },
                 },
@@ -627,15 +627,6 @@ export default function SettingsPage() {
             detail={diagnostics?.integrations.slack.teamName || "Slack workspace connected"}
             onConnect={() => {
               window.location.href = "/api/slack/connect";
-            }}
-          />
-          {/* LinkedIn */}
-          <ConnectRow
-            icon="💼"
-            name="LinkedIn"
-            description="Professional context for contacts"
-            onConnect={() => {
-              window.alert("LinkedIn web connection is coming soon. For now, Beckett can use LinkedIn context from the extension.");
             }}
           />
         </div>
