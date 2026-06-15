@@ -73,7 +73,7 @@ export default function HomePage() {
     {
       n: "01",
       title: "Message decoder",
-      personal: "What did they actually mean? Beckett reads ambiguous texts, DMs, and messages and explains what's really going on — the tone, the subtext, what they actually need from you.",
+      personal: "What did they actually mean? In beta, Beckett helps you practice decoding personal messages and dating signals. Mobile text, DM, and dating-app overlays are coming soon.",
       professional: "Beckett reads your Gmail and Slack and explains what's really happening beneath the surface — the subtext, the power dynamics, what the person actually needs from you.",
       action: "Decode this message →",
     },
@@ -94,7 +94,7 @@ export default function HomePage() {
     {
       n: "04",
       title: "Coached next steps",
-      personal: "Personal coaching is in preview through practice and the dating course. Phone and social integrations are coming later.",
+      personal: "Personal coaching is in preview through practice and the dating course. Mobile features are coming soon.",
       professional: "Beckett helps you decide what to say next in Gmail, Slack, and practice sessions. Meeting support is coming after beta testing.",
       action: "See how it works →",
     },
@@ -108,21 +108,14 @@ export default function HomePage() {
   ];
 
   const personalScenarios = [
-    { diff: "d-med", label: "Medium stakes", situation: "You matched with someone on Hinge. They sent a message. You want to respond but have no idea what to say.", action: "Practice this conversation →" },
-    { diff: "d-low", label: "Low stakes", situation: "Someone at a party just walked up to you and you have no idea how to make small talk.", action: "Start this scenario →" },
-    { diff: "d-med", label: "Medium stakes", situation: "Your friend keeps canceling plans and you need to say something without blowing up the friendship.", action: "Practice this conversation →" },
-    { diff: "d-med", label: "Medium stakes", situation: "You like someone and want to ask them out but you don't know how to read the signals.", action: "Decode the signals →" },
-    { diff: "d-high", label: "High stakes", situation: "You need to tell your family you can't make it to the holidays this year.", action: "Practice this conversation →" },
-    { diff: "d-low", label: "Low stakes", situation: "You want to reconnect with an old friend you've lost touch with but don't know how to start.", action: "Start this scenario →" },
+    { diff: "d-med", label: "Personal Preview", situation: "You matched with someone on a dating app and want to ask them out clearly without making it too intense.", action: "Practice this conversation →" },
+    { diff: "d-med", label: "Personal Preview", situation: "You like someone and want to understand whether the signals suggest interest, uncertainty, or a reason to slow down.", action: "Decode the signals →" },
   ];
 
   const professionalScenarios = [
-    { diff: "d-med", label: "Medium stakes", situation: "Your manager gave you vague feedback and you're not sure if you're actually in trouble.", action: "Decode this message →" },
-    { diff: "d-high", label: "High stakes", situation: "A coworker keeps taking credit for your work in meetings and you need to address it.", action: "Practice this conversation →" },
-    { diff: "d-high", label: "High stakes", situation: "You want to ask for a raise but don't know how to start the conversation.", action: "Practice this conversation →" },
-    { diff: "d-med", label: "Medium stakes", situation: "Your team is pushing back on your idea and you need to hold your ground without getting defensive.", action: "Practice this conversation →" },
+    { diff: "d-low", label: "Foundational", situation: "You need to introduce yourself to a new colleague and explain how you work without over-scripting it.", action: "Start this course →" },
+    { diff: "d-med", label: "Foundational", situation: "Your manager gave you a vague task and you need to ask for clarity without over-apologizing.", action: "Start this course →" },
     { diff: "d-med", label: "Medium stakes", situation: "A client sent an email that seems passive-aggressive and you can't tell if you're reading it wrong.", action: "Decode this message →" },
-    { diff: "d-low", label: "Low stakes", situation: "You need to give constructive feedback to a colleague without making it awkward.", action: "Start this scenario →" },
   ];
 
   const triggers = [
@@ -152,7 +145,12 @@ export default function HomePage() {
   ];
 
   const scenarios = mode === "personal" ? personalScenarios : professionalScenarios;
-  const heroTitleLines = copy("home.hero.title").split("\n").filter(Boolean);
+  const professionalHeroTitleLines = copy("home.hero.title").split("\n").filter(Boolean);
+  const personalHeroTitleLines = ["Your daily communication coach,", "right where conversations happen."];
+  const heroTitleLines = mode === "personal" ? personalHeroTitleLines : professionalHeroTitleLines;
+  const heroSubtitle = mode === "personal"
+    ? "Personal coaching is in preview during beta. Beckett can help you practice dating conversations and decode confusing social signals now, with mobile and message integrations coming later."
+    : copy("home.hero.subtitle");
   const betaTitleLines = copy("home.beta.title").split("\n").filter(Boolean);
 
   return (
@@ -228,7 +226,7 @@ export default function HomePage() {
           ))}
         </h1>
         <p className="hero-sub">
-          {copy("home.hero.subtitle")}
+          {heroSubtitle}
         </p>
         <div className="hero-actions">
           <a href="#beta" className="btn-primary">{copy("home.hero.cta")}</a>
@@ -297,32 +295,32 @@ export default function HomePage() {
                 </div>
                 <div className="b-sidebar">
                   <div className="b-header">
-                    <div className="b-logo"><div className="b-dot" />beckett</div>
-                    <div className="m-pills">
-                      <div className="m-pill">Personal</div>
-                      <div className="m-pill on">Work</div>
+                    <div className="b-logo">
+                      <Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={92} height={23} />
                     </div>
+                    <div className="b-status">Connected</div>
+                  </div>
+                  <div className="b-controls">
+                    <button type="button" tabIndex={-1} aria-hidden="true" className="b-control-primary">Analyze email</button>
+                    <button type="button" tabIndex={-1} aria-hidden="true" className="b-control-secondary">Auto off</button>
                   </div>
                   <div className="i-card">
-                    <div className="i-label">What&apos;s really going on</div>
-                    <div className="i-text">Sarah is signaling frustration that you bypassed her — a soft correction, not open conflict.</div>
+                    <div className="i-label">Beckett read</div>
+                    <div className="i-text">Sarah is flagging process frustration, not attacking you. Acknowledge the miss and confirm the next channel.</div>
                   </div>
-                  <div className="i-card">
-                    <div className="i-label">What she needs</div>
-                    <div className="i-text">Calm acknowledgment that you understand the process and won&apos;t bypass it again.</div>
-                  </div>
-                  <div className="r-section-label">Draft responses</div>
+                  <div className="r-section-label">Suggested replies</div>
                   <div className="r-card">
-                    <div className="r-tag t-warm">Warm</div>
-                    <div className="r-text">Appreciate the note, Sarah. Happy to sync before the all-hands — want to make sure we&apos;re fully aligned.</div>
-                    <div className="r-copy"><button type="button" tabIndex={-1} aria-hidden="true">Copy</button></div>
+                    <div className="r-tag t-direct">Direct but kind</div>
+                    <div className="r-text">Thanks for flagging. I&apos;ll route decisions like this through you first going forward.</div>
                   </div>
                   <div className="r-card">
-                    <div className="r-tag t-direct">Direct</div>
-                    <div className="r-text">Thanks for flagging — I&apos;ll loop you in before moving forward on decisions like this.</div>
-                    <div className="r-copy"><button type="button" tabIndex={-1} aria-hidden="true">Copy</button></div>
+                    <div className="r-tag t-warm">Warmer</div>
+                    <div className="r-text">Appreciate the note, Sarah. I understand the process piece and will loop you in earlier next time.</div>
                   </div>
-                  <button className="ins-btn" type="button" tabIndex={-1} aria-hidden="true">↗ Insert into Gmail</button>
+                  <div className="b-draft-box">
+                    <div className="b-draft-label">Draft from scratch</div>
+                    <div className="b-draft-line">Help me respond clearly without sounding defensive...</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -335,7 +333,7 @@ export default function HomePage() {
       <section id="features">
         <div className="container">
           <div className="sec-label">What Beckett does</div>
-          <h2>Five things that actually<br /><em>make a difference.</em></h2>
+          <h2>Things that make<br /><em>communication easier.</em></h2>
           <div className="feat-grid feat-grid-5">
             {features.map((f) => (
               <div key={f.n} className="feat-card">
@@ -354,7 +352,7 @@ export default function HomePage() {
         <div className="container">
           <div className="sec-label">Your brain, your rules</div>
           <h2>Everyone&apos;s brain has<br /><em>its own patterns.</em></h2>
-          <p className="sec-sub">Maybe you overthink every reply. Maybe you miss tone completely. Maybe you go silent when you&apos;re overwhelmed. Beckett doesn&apos;t give you a generic script — it learns what you need and meets you there.</p>
+          <p className="sec-sub">Maybe you overthink replies, miss the tone of text messages, or go silent when you&apos;re overwhelmed. Beckett doesn&apos;t give you a generic script. It learns what you need and meets you there.</p>
           <div className="trigger-grid">
             {(mode === "personal" ? triggers : professionalTriggers).map((t) => (
               <div key={t.label} className="trigger-card">
