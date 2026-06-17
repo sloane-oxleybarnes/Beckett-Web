@@ -126,6 +126,7 @@ export type ReflectionChoiceSlide = {
   prompt: string
   options: string[]
   multi?: boolean
+  allowOther?: boolean
 }
 
 export type GuidedBuilderField = {
@@ -134,6 +135,8 @@ export type GuidedBuilderField = {
   placeholder?: string
   options?: string[]
   multi?: boolean
+  fillBefore?: string
+  fillAfter?: string
 }
 
 export type GuidedBuilderOutput = {
@@ -444,6 +447,7 @@ Never break character. You are Maya, not Beckett.`,
       description: 'Neurodivergent people are often told — implicitly or directly — that the way their brain works is a problem to be managed. At work, that narrative can follow you into every meeting, every email, and every introduction. But this is not true. The traits that have been framed as too much, too intense, too detail-oriented, or too blunt are often exactly what makes neurodivergent people exceptional colleagues. You do not need to hide them or qualify them. Select the strengths that feel true for you.',
       prompt: 'Which strengths do you want a new colleague to understand about you?',
       multi: true,
+      allowOther: true,
       options: ['Organizing messy information', 'Spotting user confusion', 'Deep focus', 'Direct communication', 'Creative problem-solving', 'Careful follow-through', 'Other'],
     },
     {
@@ -489,7 +493,7 @@ Never break character. You are Maya, not Beckett.`,
         { front: 'Tone', back: ['Warm and direct works in most professional contexts.', 'Overly formal can create distance.', 'Overly casual before you know the person can land wrong.'] },
       ],
       fields: [
-        { key: 'role', label: 'Complete your Step 1', placeholder: 'I am working on the onboarding flow with the product team.' },
+        { key: 'role', label: 'Complete your Step 1', fillBefore: 'I am ', placeholder: 'working on the onboarding flow with the product team', fillAfter: '.' },
       ],
       continueLabel: 'Save and continue →',
     },
@@ -505,23 +509,7 @@ Never break character. You are Maya, not Beckett.`,
         { front: 'A note on specificity', back: ['Specificity gives the other person something to respond to.', 'I write the help docs users see when they get stuck is easier to connect with than I work on content.'] },
       ],
       fields: [
-        { key: 'work', label: 'Complete your Step 2', placeholder: 'I work on onboarding content, and right now I am focused on making the first-run flow easier to understand.' },
-      ],
-      continueLabel: 'Save and continue →',
-    },
-    {
-      type: 'guided-builder',
-      title: 'Step 3: How Do You Like To Collaborate',
-      description: 'How you work best with other people is not something you need to hide or apologize for. Neurodivergent people often have very specific and very reasonable preferences around communication — needing things in writing, preferring async over real-time, wanting clear expectations before starting. These are not high-maintenance requests. They are the conditions under which you do your best work.',
-      formulaStep: 3,
-      cards: [
-        { front: 'What to include', back: ['One specific preference around how you communicate best', 'One preference around how you receive information', 'A simple next step if one is relevant', 'A framing that makes the preference sound useful rather than limiting'] },
-        { front: 'What to leave out', back: ['An apology before or after naming the preference', 'An explanation of why the preference exists', 'More than one preference at a time', 'Anything that frames the preference as a problem'] },
-        { front: 'Why it matters', back: ['Naming a preference is an act of clarity, not a request for special treatment.', 'The other person benefits from knowing how to work with you well — and so do you.'] },
-        { front: 'Why it can feel hard', back: ['Worrying that naming a preference will make you seem difficult', 'Not knowing which preference to name first', 'Leaving the other person to figure it out through trial and error', 'Framing the preference around what does not work rather than what does'] },
-      ],
-      fields: [
-        { key: 'preference', label: 'Complete your Step 3', placeholder: 'Written next steps help me stay aligned — I am happy to send a recap after we connect.' },
+        { key: 'work', label: 'Complete your Step 2', fillBefore: 'I work on ', placeholder: 'onboarding content and first-run flow clarity', fillAfter: '.' },
       ],
       continueLabel: 'Save and continue →',
     },
@@ -532,6 +520,8 @@ Never break character. You are Maya, not Beckett.`,
       instruction: 'Tap an initial thought on the left, then tap the work version on the right that says the same thing.',
       leftLabel: 'What I am actually thinking',
       rightLabel: 'What I can say at work',
+      hideCardNames: true,
+      neutralChecked: true,
       pairs: [
         {
           left: { name: 'Processing time', description: 'I freeze when people ask me questions live.', mismatchNote: 'Look for the version that makes processing time sound useful and professional rather than like a limitation.' },
@@ -557,18 +547,33 @@ Never break character. You are Maya, not Beckett.`,
     },
     {
       type: 'guided-builder',
+      title: 'Step 3: How Do You Like To Collaborate',
+      description: 'How you work best with other people is not something you need to hide or apologize for. Neurodivergent people often have very specific and very reasonable preferences around communication — needing things in writing, preferring async over real-time, wanting clear expectations before starting. These are not high-maintenance requests. They are the conditions under which you do your best work.',
+      formulaStep: 3,
+      cards: [
+        { front: 'What to include', back: ['One specific preference around how you communicate best', 'One preference around how you receive information', 'A simple next step if one is relevant', 'A framing that makes the preference sound useful rather than limiting'] },
+        { front: 'What to leave out', back: ['An apology before or after naming the preference', 'An explanation of why the preference exists', 'More than one preference at a time', 'Anything that frames the preference as a problem'] },
+        { front: 'Why it matters', back: ['Naming a preference is an act of clarity, not a request for special treatment.', 'The other person benefits from knowing how to work with you well — and so do you.'] },
+        { front: 'Why it can feel hard', back: ['Worrying that naming a preference will make you seem difficult', 'Not knowing which preference to name first', 'Leaving the other person to figure it out through trial and error', 'Framing the preference around what does not work rather than what does'] },
+      ],
+      fields: [
+        { key: 'preference', label: 'Complete your Step 3', fillBefore: '', placeholder: 'Written next steps help me stay aligned — I am happy to send a recap after we connect', fillAfter: '.' },
+      ],
+      continueLabel: 'Save and continue →',
+    },
+    {
+      type: 'guided-builder',
       title: 'Build Your Intro',
       description: 'You have done the thinking. Now this slide pulls it together. The fields below draw on everything you named in the steps before — your role, what you do, and how you work best. You can keep what you built or create one more version before Beckett saves it to your Communication toolkit.',
       fields: [
-        { key: 'role', label: 'Step 1: who you are', placeholder: 'I am working on the onboarding flow with the product team.' },
-        { key: 'work', label: 'Step 2: what you do', placeholder: 'I work on onboarding content, and right now I am focused on making the first-run flow easier to understand.' },
-        { key: 'preference', label: 'Step 3: how you like to collaborate', placeholder: 'Written next steps help me stay aligned — I am happy to send a recap after we connect.' },
+        { key: 'role', label: 'Step 1: who you are', fillBefore: 'I am ', placeholder: 'working on the onboarding flow with the product team', fillAfter: '.' },
+        { key: 'work', label: 'Step 2: what you do', fillBefore: 'I work on ', placeholder: 'onboarding content and first-run flow clarity', fillAfter: '.' },
+        { key: 'preference', label: 'Step 3: how you like to collaborate', fillBefore: '', placeholder: 'Written next steps help me stay aligned — I am happy to send a recap after we connect', fillAfter: '.' },
         { key: 'strength', label: 'What strength do you want to include?', placeholder: 'organizing messy pieces', options: ['organizing messy pieces', 'spotting user confusion', 'turning ideas into next steps', 'careful follow-through'] },
       ],
       outputs: [
-        { label: 'Direct intro', category: 'new_colleague_intro', template: 'Hi, I am {name}. {role} {work} I am usually helpful with {strength}, and {preference}' },
-        { label: 'Warm intro', category: 'new_colleague_intro', template: 'Hi, nice to meet you. I am {name}. {role} I am excited to work together — I am usually helpful with {strength}.' },
-        { label: 'Collaboration preference', category: 'collaboration_preference', template: 'One thing that helps me collaborate well: {preference}.' },
+        { label: 'Direct intro', category: 'new_colleague_intro', template: 'Hi, I am {name}. I am {role}. I work on {work}. I am usually helpful with {strength}. {preference}.' },
+        { label: 'Warm intro', category: 'new_colleague_intro', template: 'Hi, nice to meet you. I am {name}. I am {role}, and I work on {work}. I am excited to work together — I am usually helpful with {strength}.' },
       ],
       saveLabel: 'Save intro phrases and continue →',
     },

@@ -526,7 +526,12 @@ export default function CoursePage({ params }: { params: { id: string } }) {
   }
 
   function renderTemplate(template: string, values: Record<string, string>) {
-    return template.replace(/\{(\w+)\}/g, (_, key: string) => values[key]?.trim() || `[${key}]`)
+    return template
+      .replace(/\{(\w+)\}/g, (_, key: string) => values[key]?.trim().replace(/[.。]+$/g, '') || `[${key}]`)
+      .replace(/\s+/g, ' ')
+      .replace(/\s+([.,!?])/g, '$1')
+      .replace(/([.!?])\s*([.!?])+/g, '$1')
+      .trim()
   }
 
   function formulaPropsForSlide(formulaStep?: number) {
@@ -988,7 +993,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
   }
 
   function renderConfidenceEnd() {
-    const courseToolkitItems = toolkitItems.filter((item) => item.course_id === course.id)
+    const courseToolkitItems = toolkitItems.filter((item) => item.course_id === course.id && item.category !== 'collaboration_preference')
     const usesToolkit = course.savesToToolkit !== false
     return (
       <div className="max-w-lg mx-auto">
@@ -1785,7 +1790,9 @@ export default function CoursePage({ params }: { params: { id: string } }) {
 
   function renderReflectionChoice(slide: ReflectionChoiceSlide) {
     const selected = choiceSelections[slide.title] || []
-    const canContinue = selected.length > 0
+    const otherKey = fieldKey(slide.title, 'other')
+    const otherSelected = slide.allowOther && selected.includes('Other')
+    const canContinue = selected.length > 0 && (!otherSelected || Boolean(builderText[otherKey]?.trim()))
     return (
       <div>
         <BackButton idx={currentSlideIndex} />
@@ -1818,6 +1825,17 @@ export default function CoursePage({ params }: { params: { id: string } }) {
             )
           })}
         </div>
+        {otherSelected && (
+          <div className="mt-4 rounded-card border border-border bg-white p-4">
+            <label className="mb-2 block text-sm font-medium text-ink">Write in another strength</label>
+            <input
+              value={builderText[otherKey] || ''}
+              onChange={(e) => setBuilderText((current) => ({ ...current, [otherKey]: e.target.value }))}
+              placeholder="Type another strength..."
+              className="w-full rounded-sm border border-border bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+        )}
         <NextButton disabled={!canContinue} />
       </div>
     )
@@ -1901,12 +1919,25 @@ export default function CoursePage({ params }: { params: { id: string } }) {
                     })}
                   </div>
                 )}
-                <input
-                  value={inputValue}
-                  onChange={(e) => setBuilderText((current) => ({ ...current, [key]: e.target.value }))}
-                  placeholder={field.placeholder || 'Type your own...'}
-                  className="w-full border border-border rounded-sm px-3 py-2 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+                {field.fillBefore !== undefined || field.fillAfter !== undefined ? (
+                  <div className="rounded-xl border border-border bg-bg px-4 py-3 text-sm leading-relaxed text-ink">
+                    <span>{field.fillBefore}</span>
+                    <input
+                      value={inputValue}
+                      onChange={(e) => setBuilderText((current) => ({ ...current, [key]: e.target.value }))}
+                      placeholder={field.placeholder || 'type here'}
+                      className="mx-1 min-w-40 border-0 border-b border-primary bg-transparent px-1 py-0.5 text-sm text-ink outline-none placeholder:text-ink-light focus:border-primary-dark"
+                    />
+                    <span>{field.fillAfter}</span>
+                  </div>
+                ) : (
+                  <input
+                    value={inputValue}
+                    onChange={(e) => setBuilderText((current) => ({ ...current, [key]: e.target.value }))}
+                    placeholder={field.placeholder || 'Type your own...'}
+                    className="w-full border border-border rounded-sm px-3 py-2 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                )}
               </div>
             )
           })}
@@ -1960,7 +1991,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
 
   // ── Review mode (read-only slide browser) ─────────────────────────────────
   function renderSlideReview() {
-    const courseToolkitItems = toolkitItems.filter((item) => item.course_id === course.id)
+    const courseToolkitItems = toolkitItems.filter((item) => item.course_id === course.id && item.category !== 'collaboration_preference')
     const usesToolkit = course.savesToToolkit !== false
     return (
       <div className="max-w-lg mx-auto">
