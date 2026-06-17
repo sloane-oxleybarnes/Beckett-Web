@@ -1213,6 +1213,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
             {slide.pairs.map((pair, i) => {
               const color = getLeftColor(i)
               const isPending = pendingLeft === i
+              const isConnected = matchConns.some(c => c.left === i)
               const hasError = matchErrors.has(i)
               const isCorrectChecked = (matchChecked || matchRevealed) && matchConns.some(c => c.left === i && c.left === shuffledRight[c.right])
               return (
@@ -1223,6 +1224,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
                     hasError ? 'border-red-400 bg-red-50' :
                     isCorrectChecked && slide.neutralChecked ? 'border-green-300 bg-green-50' :
                     isPending ? 'border-primary bg-primary/5' :
+                    isConnected && slide.neutralChecked ? 'border-primary/50 bg-primary/5' :
                     color ? `${color.bg} ${color.border}` :
                     'border-border bg-white hover:border-primary'
                   }`}
@@ -1248,6 +1250,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
               const color = getRightColor(visualIdx)
               const conn = matchConns.find(c => c.right === visualIdx)
               const isPending = pendingRight === visualIdx
+              const isConnected = Boolean(conn)
               const hasError = conn ? matchErrors.has(conn.left) : false
               const wrongLeftPair = hasError && conn ? slide.pairs[conn.left] : null
               const isCorrectChecked = (matchChecked || matchRevealed) && conn && conn.left === pairIdx
@@ -1259,6 +1262,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
                       hasError ? 'border-red-400 bg-red-50' :
                       isCorrectChecked && slide.neutralChecked ? 'border-green-300 bg-green-50' :
                       isPending ? 'border-primary bg-primary/5' :
+                      isConnected && slide.neutralChecked ? 'border-primary/50 bg-primary/5' :
                       color ? `${color.bg} ${color.border}` :
                       'border-border bg-white hover:border-primary'
                     }`}
@@ -1419,7 +1423,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
       <div>
         <BackButton idx={currentSlideIndex} />
         <SlideTitle title={slide.title} description={slide.description} />
-        <p className="text-sm text-ink-mid mb-6 leading-relaxed">{slide.scenario}</p>
+        {slide.scenario && <p className="text-sm text-ink-mid mb-6 leading-relaxed">{slide.scenario}</p>}
         <div className="grid grid-cols-2 gap-4 mb-8">
           <div className="border-2 border-red-200 bg-red-50 rounded-xl p-4">
             <p className="text-xs font-medium text-red-600 uppercase tracking-wide mb-3">{slide.bad.label}</p>
