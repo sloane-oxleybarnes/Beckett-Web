@@ -42,6 +42,7 @@ const PAIR_COLORS = [
 ]
 
 const CLARITY_FORMULA_STEPS = ['What I understand', 'What is unclear', 'Specific question', 'Why it helps']
+const INTRO_FORMULA_STEPS = ['Who you are', 'What you do', 'How you collaborate']
 
 async function callAPI(body: Record<string, unknown>): Promise<unknown> {
   const res = await fetch('/api/courses', {
@@ -70,15 +71,17 @@ export default function CoursePage({ params }: { params: { id: string } }) {
   const [planError, setPlanError] = useState<string | null>(null)
   const [isCompleted, setIsCompleted] = useState(false)
   const [completedAt, setCompletedAt] = useState<string | null>(null)
+  const [profileName, setProfileName] = useState('')
   useEffect(() => {
     async function checkAccess() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth/login'); return }
-      const { data: profile } = await supabase.from('profiles').select('plan').eq('id', user.id).single()
+      const { data: profile } = await supabase.from('profiles').select('plan, display_name, first_name, full_name').eq('id', user.id).single()
       if (profile?.plan !== 'pro' && profile?.plan !== 'beta') {
         setPlanError('Courses require a Pro or Beta plan.')
         return
       }
+      setProfileName(profile?.display_name || profile?.first_name || profile?.full_name?.split(' ')[0] || '')
       if (maybeCourse) {
         const { data: completion } = await supabase.from('course_completions')
           .select('completed_at').eq('user_id', user.id).eq('course_id', maybeCourse.id).maybeSingle()
@@ -526,12 +529,29 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     return template.replace(/\{(\w+)\}/g, (_, key: string) => values[key]?.trim() || `[${key}]`)
   }
 
+  function formulaPropsForSlide(formulaStep?: number) {
+    if (!formulaStep) return { activeStep: undefined }
+    if (course.id === 'introducing-new-colleague') {
+      return { activeStep: formulaStep, label: 'Intro formula', steps: INTRO_FORMULA_STEPS }
+    }
+    return { activeStep: formulaStep, label: 'Clarity formula', steps: CLARITY_FORMULA_STEPS }
+  }
+
+  function builderValueFor(slide: GuidedBuilderSlide, key: string) {
+    const currentKey = fieldKey(slide.title, key)
+    if (builderText[currentKey]) return builderText[currentKey]
+    const carried = Object.entries(builderText).find(([entryKey, value]) => entryKey.endsWith(`:${key}`) && value.trim())
+    return carried?.[1] || ''
+  }
+
   function valuesForBuilder(slide: GuidedBuilderSlide) {
-    const values: Record<string, string> = {}
+    const values: Record<string, string> = {
+      name: profileName || 'your name',
+    }
     slide.fields.forEach((field) => {
       const key = fieldKey(slide.title, field.key)
       const selected = builderChoices[key] || []
-      const typed = builderText[key] || ''
+      const typed = builderValueFor(slide, field.key)
       values[field.key] = field.multi ? [...selected, typed].filter(Boolean).join(', ') : typed || selected[0] || ''
     })
     return values
@@ -539,7 +559,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
 
   function outputsForBuilder(slide: GuidedBuilderSlide) {
     const values = valuesForBuilder(slide)
-    return slide.outputs
+    return (slide.outputs || [])
       .map((output) => ({
         courseId: course.id,
         category: output.category,
@@ -791,13 +811,21 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     )
   }
 
-  function FormulaProgress({ activeStep }: { activeStep?: number }) {
+  function FormulaProgress({
+    activeStep,
+    label = 'Clarity formula',
+    steps = CLARITY_FORMULA_STEPS,
+  }: {
+    activeStep?: number
+    label?: string
+    steps?: string[]
+  }) {
     if (!activeStep) return null
     return (
       <div className="mb-6 rounded-card border border-border bg-white p-3">
-        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-ink-light">Clarity formula</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {CLARITY_FORMULA_STEPS.map((step, idx) => {
+        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-ink-light">{label}</p>
+        <div className={`grid gap-2 ${steps.length === 3 ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'}`}>
+          {steps.map((step, idx) => {
             const isActive = activeStep === idx + 1
             const isPast = activeStep > idx + 1
             return (
@@ -1158,6 +1186,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     return (
       <div>
         <BackButton idx={currentSlideIndex} />
+        <FormulaProgress {...formulaPropsForSlide(slide.formulaStep)} />
         <SlideTitle title={slide.title} description={slide.description} />
         <p className="text-xs text-ink-light mb-5">Tap each card to flip it.</p>
         <div className="grid gap-4 mb-6">
@@ -1797,15 +1826,49 @@ export default function CoursePage({ params }: { params: { id: string } }) {
   function renderGuidedBuilder(slide: GuidedBuilderSlide) {
     const values = valuesForBuilder(slide)
     const outputs = outputsForBuilder(slide)
-    const canSave = outputs.length > 0
+    const shouldSave = slide.saveToToolkit !== false && Boolean(slide.outputs?.length)
+    const canSave = shouldSave ? outputs.length > 0 : slide.fields.every((field) => values[field.key]?.trim())
     return (
       <div>
         <BackButton idx={currentSlideIndex} />
+        <FormulaProgress {...formulaPropsForSlide(slide.formulaStep)} />
         <SlideTitle title={slide.title} description={slide.description} />
+        {slide.cards && (
+          <div className="grid gap-3 mb-6 sm:grid-cols-2">
+            {slide.cards.map((card, i) => {
+              const flipped = flippedCards.has(i)
+              return (
+                <button
+                  key={card.front}
+                  type="button"
+                  onClick={() => setFlippedCards(prev => { const s = new Set(prev); s.add(i); return s })}
+                  className={`min-h-28 rounded-card border-2 p-4 text-left transition-colors ${
+                    flipped ? 'border-primary bg-primary-light' : 'border-border bg-white hover:border-primary'
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-ink mb-2">{card.front}</p>
+                  {flipped ? (
+                    <ul className="space-y-1.5">
+                      {card.back.map((line) => (
+                        <li key={line} className="flex gap-2 text-xs leading-relaxed text-ink-mid">
+                          <span className="text-primary">•</span>
+                          <span>{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-ink-light">Tap to open</p>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        )}
         <div className="space-y-5 mb-6">
           {slide.fields.map((field) => {
             const key = fieldKey(slide.title, field.key)
             const selected = builderChoices[key] || []
+            const inputValue = builderText[key] ?? builderValueFor(slide, field.key)
             return (
               <div key={field.key} className="bg-white border border-border rounded-card p-4">
                 <label className="block text-sm font-medium text-ink mb-2">{field.label}</label>
@@ -1839,7 +1902,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
                   </div>
                 )}
                 <input
-                  value={builderText[key] || ''}
+                  value={inputValue}
                   onChange={(e) => setBuilderText((current) => ({ ...current, [key]: e.target.value }))}
                   placeholder={field.placeholder || 'Type your own...'}
                   className="w-full border border-border rounded-sm px-3 py-2 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
@@ -1849,22 +1912,27 @@ export default function CoursePage({ params }: { params: { id: string } }) {
           })}
         </div>
 
-        <div className="bg-primary/5 border border-primary/20 rounded-card p-4 mb-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-primary mb-3">Your saved phrases</p>
-          {slide.outputs.map((output) => (
-            <div key={output.label} className="bg-white border border-border rounded-card p-3 mb-2 last:mb-0">
-              <p className="text-xs font-medium text-ink-light mb-1">{output.label}</p>
-              <p className="text-sm text-ink leading-relaxed">{renderTemplate(output.template, values)}</p>
-            </div>
-          ))}
-        </div>
+        {slide.outputs?.length ? (
+          <div className="bg-primary/5 border border-primary/20 rounded-card p-4 mb-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-primary mb-3">Your saved phrases</p>
+            {slide.outputs.map((output) => (
+              <div key={output.label} className="bg-white border border-border rounded-card p-3 mb-2 last:mb-0">
+                <p className="text-xs font-medium text-ink-light mb-1">{output.label}</p>
+                <p className="text-sm text-ink leading-relaxed">{renderTemplate(output.template, values)}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
         {toolkitError && <p className="text-xs text-red-600 mb-3">{toolkitError}</p>}
         <button
-          onClick={async () => { await saveBuilderOutputs(slide); advanceSlide() }}
+          onClick={async () => {
+            if (shouldSave) await saveBuilderOutputs(slide)
+            advanceSlide()
+          }}
           disabled={!canSave || toolkitSaving}
           className="mt-4 w-full bg-primary text-white rounded-pill py-3 text-sm font-medium hover:bg-primary-dark transition-colors disabled:opacity-40"
         >
-          {toolkitSaving ? 'Saving...' : slide.saveLabel || 'Save to toolkit and continue →'}
+          {toolkitSaving ? 'Saving...' : slide.saveLabel || slide.continueLabel || 'Continue →'}
         </button>
       </div>
     )
@@ -2005,6 +2073,10 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     const { matchName, channel = 'chat' } = course.openPractice
     const canEnd = practiceMessages.length >= 2 && !debriefLoading
     const starterMessages = course.openPractice.starterMessages || []
+    const builtStarterOptions = toolkitItems
+      .filter((item) => item.course_id === course.id && item.category === 'new_colleague_intro')
+      .map((item) => item.content)
+    const starterOptions = builtStarterOptions.length > 0 ? builtStarterOptions : (course.openPractice.starterOptions || [])
     const displayedMessages = practiceMessages.length === 0 ? starterMessages : practiceMessages
 
     return (
@@ -2132,9 +2204,9 @@ export default function CoursePage({ params }: { params: { id: string } }) {
 
         {!ghosted && !hardIntervention && (
           <div className="shrink-0 space-y-2">
-            {course.openPractice.starterOptions && practiceMessages.length === 0 && (
+            {starterOptions.length > 0 && practiceMessages.length === 0 && (
               <div className="flex flex-wrap gap-2">
-                {course.openPractice.starterOptions.map((option) => (
+                {starterOptions.map((option) => (
                   <button
                     key={option}
                     type="button"

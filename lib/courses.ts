@@ -20,6 +20,7 @@ export type FlipCardsSlide = {
   type: 'flip-cards'
   title: string
   description?: string
+  formulaStep?: number
   cards: { front: string; back: string[] }[]
 }
 
@@ -145,9 +146,13 @@ export type GuidedBuilderSlide = {
   type: 'guided-builder'
   title: string
   description?: string
+  formulaStep?: number
+  cards?: { front: string; back: string[] }[]
   fields: GuidedBuilderField[]
-  outputs: GuidedBuilderOutput[]
+  outputs?: GuidedBuilderOutput[]
+  saveToToolkit?: boolean
   saveLabel?: string
+  continueLabel?: string
 }
 
 export type CourseSlide =
@@ -426,10 +431,6 @@ const introducingNewColleague: Course = {
       { role: 'assistant', content: 'Hi! I am Maya - Jordan said we will both be on the beta onboarding work.', timestamp: '9:42 AM' },
       { role: 'assistant', content: 'Wanted to say hi before I jump into the project doc.', timestamp: '9:43 AM' },
     ],
-    starterOptions: [
-      'Hi Maya, I am Sloane. I am working on the onboarding flow and I am usually helpful with organizing messy pieces.',
-      'Hi Maya, nice to meet you. I am on the beta onboarding side and I do best with clear owners and written next steps.',
-    ],
     systemPrompt: `You are Maya, a friendly but busy cross-functional colleague in Slack. You just joined a beta onboarding project.
 
 If the user introduces themselves clearly, respond warmly and ask one practical follow-up. If they are vague, ask what part of the project they own. If they overshare or apologize heavily, stay kind and redirect to collaboration.
@@ -438,75 +439,17 @@ Never break character. You are Maya, not Beckett.`,
   },
   slides: [
     {
-      type: 'accordion',
-      title: 'What A Good Intro Actually Does',
-      description: 'An intro is not a performance. Open each piece to see what it gives the other person.',
-      sections: [
-        { heading: 'Who you are', bullets: ['A name and role gives the other person somewhere to place you.'] },
-        { heading: 'Why you are connected', bullets: ['Name the project, team, or reason you are in the same work world.'] },
-        { heading: 'What you bring', bullets: ['A useful strength or work style helps them collaborate with you.'] },
-        { heading: 'What happens next', bullets: ['A simple next step keeps the intro from becoming awkwardly open-ended.'] },
-      ],
-    },
-    {
-      type: 'side-by-side',
-      title: 'Spot The Difference',
-      scenario: 'You are introducing yourself to Maya, a new colleague on your project.',
-      bad: { label: 'Too little', message: 'Hi, nice to meet you.', note: 'Polite, but it gives almost no work context.' },
-      good: { label: 'Better', message: 'Hi Maya, I am Sloane. I am working on the beta onboarding flow and usually help organize messy pieces into clear next steps.', note: 'Clear identity, context, and useful collaboration signal.' },
-    },
-    {
       type: 'reflection-choice',
       title: 'Strengths You Bring To Work',
-      description: 'Pick what feels true. You can also type your own in the next builder.',
+      description: 'Neurodivergent people are often told — implicitly or directly — that the way their brain works is a problem to be managed. At work, that narrative can follow you into every meeting, every email, and every introduction. But this is not true. The traits that have been framed as too much, too intense, too detail-oriented, or too blunt are often exactly what makes neurodivergent people exceptional colleagues. You do not need to hide them or qualify them. Select the strengths that feel true for you.',
       prompt: 'Which strengths do you want a new colleague to understand about you?',
       multi: true,
-      options: ['Organizing messy information', 'Spotting user confusion', 'Deep focus', 'Direct communication', 'Creative problem-solving', 'Careful follow-through'],
-    },
-    {
-      type: 'sorting',
-      title: 'Warmth Without Overdoing It',
-      instruction: 'Sort each intro line by the signal it sends.',
-      categories: ['Too cold', 'Too much', 'Balanced'],
-      items: [
-        { message: '"I work on onboarding."', correct: 'Too cold', explanation: 'Technically useful, but not very connective.' },
-        { message: '"I promise I am easy to work with once you get to know me!"', correct: 'Too much', explanation: 'It asks the other person to reassure you before they know you.' },
-        { message: '"I am excited to work together and can help with the onboarding flow context."', correct: 'Balanced', explanation: 'Warm and useful without overselling.' },
-      ],
-    },
-    {
-      type: 'reflection-choice',
-      title: 'How Do You Like To Collaborate?',
-      description: 'This replaces a long explanation with practical choices you can use later.',
-      prompt: 'What collaboration preferences would be useful for a colleague to know?',
-      multi: true,
-      options: ['Written context before meetings', 'Clear owners', 'Direct feedback', 'Time to process before responding', 'Shared docs over scattered messages', 'Explicit deadlines'],
-    },
-    {
-      type: 'matching',
-      title: 'Translate The Preference',
-      instruction: 'Match each initial thought with a work-ready version.',
-      leftLabel: 'Initial thought',
-      rightLabel: 'Work version',
-      pairs: [
-        {
-          left: { name: 'Processing time', description: 'I freeze when people ask me questions live.', mismatchNote: 'Look for the version that makes processing time sound useful and professional.' },
-          right: { name: 'Work version', description: 'I usually give better answers when I can think for a few minutes and follow up in writing.' },
-        },
-        {
-          left: { name: 'Directness', description: 'Please do not make me guess what you mean.', mismatchNote: 'Look for the version that asks for direct feedback without sounding annoyed.' },
-          right: { name: 'Work version', description: 'Direct feedback is easiest for me to act on, especially when the priority is clear.' },
-        },
-        {
-          left: { name: 'Context', description: 'I need the whole story or I will miss something.', mismatchNote: 'Look for the version that asks for context before action.' },
-          right: { name: 'Work version', description: 'A little context up front helps me avoid rework and move faster.' },
-        },
-      ],
+      options: ['Organizing messy information', 'Spotting user confusion', 'Deep focus', 'Direct communication', 'Creative problem-solving', 'Careful follow-through', 'Other'],
     },
     {
       type: 'flip-cards',
-      title: 'What Can Go Wrong',
-      description: 'Common intro traps and how Beckett will steer you around them.',
+      title: 'Some Common Mistakes',
+      description: 'Most introduction mistakes do not come from saying the wrong thing — they come from a habit of making yourself smaller before you have even started. Over-explaining, softening, or leaving out the most useful context are all ways of stepping back when stepping forward would serve you better. These cards show the patterns that get in the way most often and what to do instead.',
       cards: [
         { front: 'Too vague', back: ['The other person does not know what you do or why you are reaching out.'] },
         { front: 'Too apologetic', back: ['You spend more time softening yourself than giving useful context.'] },
@@ -514,27 +457,117 @@ Never break character. You are Maya, not Beckett.`,
       ],
     },
     {
+      type: 'sorting',
+      title: 'Warmth Without Overdoing It',
+      instruction: 'Knowing the patterns is different from seeing them. Sort each line below by what it actually signals to the other person — and notice how small differences in wording can change the whole impression.',
+      categories: ['Too vague', 'Too much personal context', 'Balanced'],
+      items: [
+        { message: '"I work on onboarding."', correct: 'Too vague', explanation: 'Technically useful, but not very connective.' },
+        { message: '"I promise I am easy to work with once you get to know me!"', correct: 'Too much personal context', explanation: 'It asks the other person to reassure you before they know you.' },
+        { message: '"I am excited to work together and can help with the onboarding flow context."', correct: 'Balanced', explanation: 'Warm and useful without overselling.' },
+      ],
+    },
+    {
       type: 'visual-formula',
-      title: 'The Intro Formula',
-      description: 'Use this before you build your own versions.',
+      title: 'The Formula To A Good Introduction',
+      description: 'A good introduction does not need to be impressive — it just needs to give the other person enough to work with. When you know what each part is doing and why it is there, the whole thing feels less like a performance and more like a conversation.',
       steps: [
-        { label: 'Name + role', text: 'Say who you are and where you fit.', example: 'I am Sloane, and I am working on the onboarding flow.' },
-        { label: 'Useful strength', text: 'Name one thing you bring to the work.', example: 'I am usually helpful with organizing messy pieces.' },
-        { label: 'Collaboration cue', text: 'Share one preference or next step.', example: 'Written next steps help me stay aligned.' },
+        { label: 'Who you are', text: 'A name and role gives the other person somewhere to place you.', example: 'I am working on the onboarding flow.' },
+        { label: 'What you do', text: 'Name the work you do day to day and how it connects to their world.', example: 'I write the help docs users see when they get stuck.' },
+        { label: 'How you collaborate', text: 'Name one useful preference or next step.', example: 'Written next steps help me stay aligned.' },
+      ],
+    },
+    {
+      type: 'guided-builder',
+      title: 'Step 1: Who You Are',
+      description: 'Most people rush past Step 1 without thinking about what it is actually doing. A name and role is not just a formality — it is the foundation everything else builds on. Without it the other person has no frame of reference for anything you say next. This step is about giving them somewhere to place you before you ask them to take in anything else.',
+      formulaStep: 1,
+      cards: [
+        { front: 'What to include', back: ['Your first name', 'Your role or title, kept simple', 'The team or project you are connected to', 'How long you have been there if it is relevant'] },
+        { front: 'What to leave out', back: ['Your full job history', 'Qualifications unless they directly matter', 'Anything that sounds like you are justifying your presence', 'Over-explaining why you are reaching out before saying who you are'] },
+        { front: 'Why it can feel hard', back: ['A pull to over-explain', 'Uncertainty about formality', 'Not knowing where Step 1 ends', 'Defaulting to credentials instead of connection-relevant information'] },
+        { front: 'Tone', back: ['Warm and direct works in most professional contexts.', 'Overly formal can create distance.', 'Overly casual before you know the person can land wrong.'] },
+      ],
+      fields: [
+        { key: 'role', label: 'Complete your Step 1', placeholder: 'I am working on the onboarding flow with the product team.' },
+      ],
+      continueLabel: 'Save and continue →',
+    },
+    {
+      type: 'guided-builder',
+      title: 'Step 2: What You Do',
+      description: 'Knowing your name and team tells the other person who you are. Knowing what you actually do tells them how you fit into their world and whether your work will intersect with theirs. Without this step the introduction stays surface level — polite but not particularly useful to either person.',
+      formulaStep: 2,
+      cards: [
+        { front: 'What to include', back: ['The kind of work you do day to day', 'The problem your work solves or the thing you move forward', 'How your work connects to theirs if that is already clear', 'One specific current project if it is relevant'] },
+        { front: 'What to leave out', back: ['A full list of responsibilities', 'Technical language or acronyms they may not know yet', 'Anything that sounds like you are proving your value'] },
+        { front: 'Why it can feel hard', back: ['Underselling with something vague', 'Overselling by listing every responsibility', 'Not knowing which part is most relevant', 'Defaulting to a title instead of describing the work'] },
+        { front: 'A note on specificity', back: ['Specificity gives the other person something to respond to.', 'I write the help docs users see when they get stuck is easier to connect with than I work on content.'] },
+      ],
+      fields: [
+        { key: 'work', label: 'Complete your Step 2', placeholder: 'I work on onboarding content, and right now I am focused on making the first-run flow easier to understand.' },
+      ],
+      continueLabel: 'Save and continue →',
+    },
+    {
+      type: 'guided-builder',
+      title: 'Step 3: How Do You Like To Collaborate',
+      description: 'How you work best with other people is not something you need to hide or apologize for. Neurodivergent people often have very specific and very reasonable preferences around communication — needing things in writing, preferring async over real-time, wanting clear expectations before starting. These are not high-maintenance requests. They are the conditions under which you do your best work.',
+      formulaStep: 3,
+      cards: [
+        { front: 'What to include', back: ['One specific preference around how you communicate best', 'One preference around how you receive information', 'A simple next step if one is relevant', 'A framing that makes the preference sound useful rather than limiting'] },
+        { front: 'What to leave out', back: ['An apology before or after naming the preference', 'An explanation of why the preference exists', 'More than one preference at a time', 'Anything that frames the preference as a problem'] },
+        { front: 'Why it matters', back: ['Naming a preference is an act of clarity, not a request for special treatment.', 'The other person benefits from knowing how to work with you well — and so do you.'] },
+        { front: 'Why it can feel hard', back: ['Worrying that naming a preference will make you seem difficult', 'Not knowing which preference to name first', 'Leaving the other person to figure it out through trial and error', 'Framing the preference around what does not work rather than what does'] },
+      ],
+      fields: [
+        { key: 'preference', label: 'Complete your Step 3', placeholder: 'Written next steps help me stay aligned — I am happy to send a recap after we connect.' },
+      ],
+      continueLabel: 'Save and continue →',
+    },
+    {
+      type: 'matching',
+      title: 'Translate The Preference',
+      description: 'There is usually a gap between how you naturally think about your collaboration preferences and how you describe them to someone new. The honest version in your head is real and valid — it just needs a small translation to land well in a work introduction.',
+      instruction: 'Tap an initial thought on the left, then tap the work version on the right that says the same thing.',
+      leftLabel: 'What I am actually thinking',
+      rightLabel: 'What I can say at work',
+      pairs: [
+        {
+          left: { name: 'Processing time', description: 'I freeze when people ask me questions live.', mismatchNote: 'Look for the version that makes processing time sound useful and professional rather than like a limitation.' },
+          right: { name: 'Work version', description: 'I usually give better answers when I have a few minutes to think — I will always follow up in writing.' },
+        },
+        {
+          left: { name: 'Directness', description: 'Please do not make me guess what you mean.', mismatchNote: 'Look for the version that asks for direct feedback without sounding frustrated or demanding.' },
+          right: { name: 'Work version', description: 'Direct feedback is easiest for me to act on, especially when the priority is clear.' },
+        },
+        {
+          left: { name: 'Context', description: 'I need the whole story or I will miss something.', mismatchNote: 'Look for the version that frames the need for context as a benefit to the work rather than a personal requirement.' },
+          right: { name: 'Work version', description: 'A little context up front helps me avoid rework and move faster.' },
+        },
+        {
+          left: { name: 'Interruptions', description: 'I hate being interrupted mid-thought.', mismatchNote: 'Look for the version that names the preference around interruptions without sounding defensive or difficult to work with.' },
+          right: { name: 'Work version', description: 'I tend to do my best thinking when I can finish a thought before we discuss — async works really well for me.' },
+        },
+        {
+          left: { name: 'Written steps', description: 'I need things written down or I will forget.', mismatchNote: 'Look for the version that makes written confirmation sound like something that benefits both people.' },
+          right: { name: 'Work version', description: 'Written next steps help me stay aligned — I am happy to send a recap after we connect.' },
+        },
       ],
     },
     {
       type: 'guided-builder',
       title: 'Build Your Intro',
-      description: 'Create a few versions. Beckett will save them to your Communication toolkit.',
+      description: 'You have done the thinking. Now this slide pulls it together. The fields below draw on everything you named in the steps before — your role, what you do, and how you work best. You can keep what you built or create one more version before Beckett saves it to your Communication toolkit.',
       fields: [
-        { key: 'role', label: 'What is your role or project context?', placeholder: 'working on the beta onboarding flow' },
+        { key: 'role', label: 'Step 1: who you are', placeholder: 'I am working on the onboarding flow with the product team.' },
+        { key: 'work', label: 'Step 2: what you do', placeholder: 'I work on onboarding content, and right now I am focused on making the first-run flow easier to understand.' },
+        { key: 'preference', label: 'Step 3: how you like to collaborate', placeholder: 'Written next steps help me stay aligned — I am happy to send a recap after we connect.' },
         { key: 'strength', label: 'What strength do you want to include?', placeholder: 'organizing messy pieces', options: ['organizing messy pieces', 'spotting user confusion', 'turning ideas into next steps', 'careful follow-through'] },
-        { key: 'preference', label: 'What collaboration preference helps?', placeholder: 'written next steps help me stay aligned', options: ['written next steps help me stay aligned', 'direct feedback is easiest for me', 'I do best when owners are clear'] },
       ],
       outputs: [
-        { label: 'Direct intro', category: 'new_colleague_intro', template: 'Hi, I am Sloane. I am {role}. I am usually helpful with {strength}, and {preference}.' },
-        { label: 'Warm intro', category: 'new_colleague_intro', template: 'Hi, nice to meet you. I am Sloane, and I am {role}. I am excited to work together - I am usually helpful with {strength}.' },
+        { label: 'Direct intro', category: 'new_colleague_intro', template: 'Hi, I am {name}. {role} {work} I am usually helpful with {strength}, and {preference}' },
+        { label: 'Warm intro', category: 'new_colleague_intro', template: 'Hi, nice to meet you. I am {name}. {role} I am excited to work together — I am usually helpful with {strength}.' },
         { label: 'Collaboration preference', category: 'collaboration_preference', template: 'One thing that helps me collaborate well: {preference}.' },
       ],
       saveLabel: 'Save intro phrases and continue →',

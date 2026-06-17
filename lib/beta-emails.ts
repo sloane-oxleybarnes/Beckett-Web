@@ -42,7 +42,7 @@ function renderText(email: BrandedEmail) {
     email.button ? ["", `${email.button.label}: ${email.button.href}`].join("\n") : "",
     email.secondary ? ["", email.secondary].join("\n") : "",
     "",
-    "Questions? Reply to this email and it will go to Sloane.",
+    "Questions? Reply to this email and it will go to the Beckett team.",
     "",
     "Beckett",
   ]
@@ -91,7 +91,7 @@ function renderHtml(email: BrandedEmail) {
                 ${button}
                 ${secondary}
                 <div style="border-top:1px solid #eee7dc;margin-top:24px;padding-top:18px;">
-                  <p style="margin:0;color:#8A8784;font-size:13px;line-height:1.5;">Questions? Reply to this email and it will go to Sloane.</p>
+                  <p style="margin:0;color:#8A8784;font-size:13px;line-height:1.5;">Questions? Reply to this email and it will go to the Beckett team.</p>
                   <p style="margin:12px 0 0;color:#8A8784;font-size:13px;">Beckett</p>
                 </div>
               </td>
@@ -132,7 +132,7 @@ export async function sendBetaSignupConfirmation(params: {
     body: [
       `Hi${params.name ? ` ${params.name.split(" ")[0]}` : ""} - we received your beta request.`,
       "Beckett is currently a small workplace-focused beta for people who want communication coaching in Gmail, Slack, Chrome, practice sessions, and skills.",
-      "Sloane is reviewing requests manually so the first group stays small and useful. If approved, you will get a setup email with a secure link to create your password.",
+      "We are reviewing requests manually so the first group stays small and useful. If approved, you will get a setup email with a secure link to create your password.",
     ],
   });
 }
