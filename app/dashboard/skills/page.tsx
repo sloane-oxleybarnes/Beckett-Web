@@ -33,7 +33,7 @@ const SECTIONS: { label: string; description: string; cards: SkillCard[] }[] = [
       },
       {
         id: 'asking-for-clarity',
-        title: 'Asking for clarity without feeling uncomfortable',
+        title: 'Asking for Clarity at Work',
         description: 'Ask specific follow-up questions at work without over-apologizing or pretending you understand.',
         href: '/dashboard/courses/asking-for-clarity',
         status: 'live',

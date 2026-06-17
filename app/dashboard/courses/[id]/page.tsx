@@ -151,6 +151,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
   // ── Multi-select quiz ────────────────────────────────────────────────────
   const [msRound, setMsRound] = useState(0)
   const [msSelections, setMsSelections] = useState<Record<number, number[]>>({})
+  const [msOptionOrder, setMsOptionOrder] = useState<Record<number, number[]>>({})
   const [msChecked, setMsChecked] = useState(false)
   const [msHasError, setMsHasError] = useState(false)
 
@@ -206,6 +207,20 @@ export default function CoursePage({ params }: { params: { id: string } }) {
         setMatchErrors(new Set())
         setMatchAttemptCount(0)
         setMatchRevealed(false)
+      }
+      if (slide.type === 'multi-select-quiz') {
+        const orders: Record<number, number[]> = {}
+        slide.rounds.forEach((round, roundIdx) => {
+          const order = round.options.map((_, i) => i)
+          if (slide.shuffleOptions) {
+            for (let i = order.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [order[i], order[j]] = [order[j], order[i]]
+            }
+          }
+          orders[roundIdx] = order
+        })
+        setMsOptionOrder(orders)
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -265,6 +280,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     setMcIsWrong(false)
     setMsRound(0)
     setMsSelections({})
+    setMsOptionOrder({})
     setMsChecked(false)
     setMsHasError(false)
     setCheckedItems(new Set())
@@ -359,6 +375,10 @@ export default function CoursePage({ params }: { params: { id: string } }) {
       setMcShowFeedback(false)
       setMcIsWrong(false)
     } else {
+      if (slide.suppressDoneScreen) {
+        advanceSlide()
+        return
+      }
       setMcRound(slide.rounds.length)
     }
   }
@@ -402,6 +422,10 @@ export default function CoursePage({ params }: { params: { id: string } }) {
       setMsChecked(false)
       setMsHasError(false)
     } else {
+      if (slide.suppressDoneScreen) {
+        advanceSlide()
+        return
+      }
       setMsRound(slide.rounds.length)
     }
   }
@@ -452,11 +476,15 @@ export default function CoursePage({ params }: { params: { id: string } }) {
   }
 
   function getLeftColor(leftIdx: number): (typeof PAIR_COLORS)[0] | null {
+    const slide = course.slides[currentSlideIndex]
+    if (slide.type === 'matching' && slide.neutralChecked) return null
     const conn = matchConns.find(c => c.left === leftIdx)
     if (!conn) return null
     return PAIR_COLORS[leftIdx % PAIR_COLORS.length]
   }
   function getRightColor(rightVisualIdx: number): (typeof PAIR_COLORS)[0] | null {
+    const slide = course.slides[currentSlideIndex]
+    if (slide.type === 'matching' && slide.neutralChecked) return null
     const conn = matchConns.find(c => c.right === rightVisualIdx)
     if (!conn) return null
     if (matchErrors.has(conn.left)) return null
@@ -788,6 +816,33 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     )
   }
 
+  function CompactTips({ items }: { items?: string[] }) {
+    if (!items?.length) return null
+    return (
+      <div className="relative group ml-auto w-fit">
+        <button
+          type="button"
+          aria-label="Show clarity checklist"
+          className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[11px] font-semibold text-white"
+        >
+          ?
+        </button>
+        <div className="pointer-events-none absolute right-0 z-20 mt-2 hidden w-72 rounded-card border border-amber-200 bg-white p-3 text-left shadow-lg group-hover:block group-focus-within:block">
+          <p className="mb-2 text-xs font-medium text-ink">Clarity Checklist</p>
+          <p className="mb-2 text-xs text-ink-light">Use this to evaluate each response before selecting.</p>
+          <ul className="space-y-1.5">
+            {items.map((item) => (
+              <li key={item} className="flex gap-2 text-xs leading-relaxed text-ink-mid">
+                <span className="text-amber-600">□</span>
+                <span>{item}.</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    )
+  }
+
   function formulaStepFromTitle(title: string) {
     const match = title.match(/^Step\s+(\d+)/i)
     if (!match) return undefined
@@ -800,7 +855,11 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     if (apiError.status === 401) return 'Please log back in to keep practicing with Beckett.'
     if (apiError.status === 403) return apiError.message || 'This course needs beta access.'
     if (apiError.status === 429) return apiError.message || 'You reached today\'s course practice limit.'
-    if (apiError.status && apiError.status >= 500) return 'Beckett had trouble responding. Your message is still here, and you can try again.'
+    if (apiError.status && apiError.status >= 500) {
+      return apiError.message
+        ? `Beckett could not reply yet: ${apiError.message}`
+        : 'Beckett had trouble responding. Your message is still here, and you can try again.'
+    }
     return apiError.message || 'Beckett had trouble responding. Please try again.'
   }
 
@@ -1040,7 +1099,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     return (
       <div>
         <BackButton idx={currentSlideIndex} />
-        <SlideTitle title={slide.title} />
+        <SlideTitle title={slide.title} description={slide.description} />
         {slide.intro && <p className="text-sm text-ink-mid mb-6 leading-relaxed">{slide.intro}</p>}
         {slide.bullets && (
           <ul className="space-y-3 mb-8">
@@ -1131,20 +1190,23 @@ export default function CoursePage({ params }: { params: { id: string } }) {
               const color = getLeftColor(i)
               const isPending = pendingLeft === i
               const hasError = matchErrors.has(i)
+              const isCorrectChecked = (matchChecked || matchRevealed) && matchConns.some(c => c.left === i && c.left === shuffledRight[c.right])
               return (
                 <button
                   key={i}
                   onClick={() => clickLeft(i)}
                   className={`w-full text-left rounded-xl p-3 border-2 transition-all text-sm ${
                     hasError ? 'border-red-400 bg-red-50' :
+                    isCorrectChecked && slide.neutralChecked ? 'border-green-300 bg-green-50' :
                     isPending ? 'border-primary bg-primary/5' :
                     color ? `${color.bg} ${color.border}` :
                     'border-border bg-white hover:border-primary'
                   }`}
                 >
-                  <p className="font-medium text-ink text-xs mb-1">{pair.left.name}</p>
+                  {!slide.hideCardNames && <p className="font-medium text-ink text-xs mb-1">{pair.left.name}</p>}
                   <p className="text-ink-mid" style={{ fontSize: '11px', lineHeight: '1.4' }}>{pair.left.description}</p>
-                  {color && !hasError && (
+                  {isCorrectChecked && slide.neutralChecked && <span className="mt-2 inline-flex text-xs text-green-700">✓ Correct</span>}
+                  {color && !hasError && !slide.neutralChecked && (
                     <span className={`inline-flex mt-1.5 h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] text-white ${color.bg.replace('100', '400')}`}>
                       {matchChecked || matchRevealed ? '✓' : ''}
                     </span>
@@ -1163,19 +1225,22 @@ export default function CoursePage({ params }: { params: { id: string } }) {
               const conn = matchConns.find(c => c.right === visualIdx)
               const hasError = conn ? matchErrors.has(conn.left) : false
               const wrongLeftPair = hasError && conn ? slide.pairs[conn.left] : null
+              const isCorrectChecked = (matchChecked || matchRevealed) && conn && conn.left === pairIdx
               return (
                 <div key={visualIdx} className="space-y-1">
                   <button
                     onClick={() => clickRight(visualIdx)}
                     className={`w-full text-left rounded-xl p-3 border-2 transition-all text-sm ${
                       hasError ? 'border-red-400 bg-red-50' :
+                      isCorrectChecked && slide.neutralChecked ? 'border-green-300 bg-green-50' :
                       color ? `${color.bg} ${color.border}` :
                       'border-border bg-white hover:border-primary'
                     }`}
                   >
-                    <p className="font-medium text-ink text-xs mb-1">{pair.right.name}</p>
+                    {!slide.hideCardNames && <p className="font-medium text-ink text-xs mb-1">{pair.right.name}</p>}
                     <p className="text-ink-mid" style={{ fontSize: '11px', lineHeight: '1.4' }}>{pair.right.description}</p>
-                    {color && !hasError && (
+                    {isCorrectChecked && slide.neutralChecked && <span className="mt-2 inline-flex text-xs text-green-700">✓ Correct</span>}
+                    {color && !hasError && !slide.neutralChecked && (
                       <span className={`inline-flex mt-1.5 h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] text-white ${color.bg.replace('100', '400')}`}>
                         {matchChecked || matchRevealed ? '✓' : ''}
                       </span>
@@ -1190,7 +1255,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
           </div>
         </div>
 
-        {pendingLeft !== null && !matchChecked && (
+        {pendingLeft !== null && !matchChecked && !slide.hideCardNames && (
           <p className="text-xs text-primary text-center mb-3">
             {slide.pairs[pendingLeft].left.name} selected — now tap their match →
           </p>
@@ -1356,8 +1421,8 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     return (
       <div>
         <BackButton idx={currentSlideIndex} />
-        <SlideTitle title={slide.title} />
         <FormulaProgress activeStep={formulaStepFromTitle(slide.title)} />
+        <SlideTitle title={slide.title} description={slide.description} />
         <p className="text-sm text-ink-mid mb-5">{slide.instruction}</p>
         <div className="space-y-3 mb-6">
           {slide.items.map((item, i) => {
@@ -1421,8 +1486,8 @@ export default function CoursePage({ params }: { params: { id: string } }) {
       return (
         <div>
           <BackButton idx={currentSlideIndex} />
-          <SlideTitle title={slide.title} />
           <FormulaProgress activeStep={formulaStepFromTitle(slide.title)} />
+          <SlideTitle title={slide.title} />
           <div className="text-center py-12">
             <p className="text-3xl mb-3">✓</p>
             <p className="text-ink font-medium">All done</p>
@@ -1435,15 +1500,14 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     return (
       <div>
         <BackButton idx={currentSlideIndex} />
-        <SlideTitle title={slide.title} description={slide.description} />
         <FormulaProgress activeStep={formulaStepFromTitle(slide.title)} />
-        <HelperChecklist items={slide.helperChecklist} />
-        <div className="mb-2 flex gap-1">
-          {slide.rounds.map((_, i) => (
-            <div key={i} className={`flex-1 h-1 rounded-full ${i < mcRound ? 'bg-primary' : i === mcRound ? 'bg-primary/40' : 'bg-gray-200'}`} />
-          ))}
+        <div className="flex items-start gap-3">
+          <div className="flex-1">
+            <SlideTitle title={slide.title} description={slide.description} />
+          </div>
+          {slide.compactHelper && <CompactTips items={slide.helperChecklist} />}
         </div>
-        <p className="text-xs text-ink-light mb-5">Round {mcRound + 1} of {slide.rounds.length}</p>
+        {!slide.compactHelper && <HelperChecklist items={slide.helperChecklist} />}
         <div className="bg-bg border border-border rounded-card p-4 mb-5">
           <p className="text-sm text-ink leading-relaxed">{round.scenario}</p>
         </div>
@@ -1483,6 +1547,14 @@ export default function CoursePage({ params }: { params: { id: string } }) {
           })}
         </div>
         {!mcShowFeedback && <p className="text-xs text-ink-light text-center">Choose the best option.</p>}
+        <div className="mt-5">
+          <div className="mb-2 flex gap-1">
+            {slide.rounds.map((_, i) => (
+              <div key={i} className={`flex-1 h-1 rounded-full ${i < mcRound ? 'bg-primary' : i === mcRound ? 'bg-primary/40' : 'bg-gray-200'}`} />
+            ))}
+          </div>
+          <p className="text-center text-xs text-ink-light">Round {mcRound + 1} of {slide.rounds.length}</p>
+        </div>
         {mcShowFeedback && !mcIsWrong && (
           <button
             onClick={advanceMCRound}
@@ -1501,8 +1573,8 @@ export default function CoursePage({ params }: { params: { id: string } }) {
       return (
         <div>
           <BackButton idx={currentSlideIndex} />
-          <SlideTitle title={slide.title} description={slide.description} />
           <FormulaProgress activeStep={slide.formulaStep} />
+          <SlideTitle title={slide.title} description={slide.description} />
           <div className="text-center py-12">
             <p className="text-3xl mb-3">✓</p>
             <p className="text-ink font-medium">All done</p>
@@ -1515,23 +1587,19 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     const round = slide.rounds[msRound]
     const selected = new Set(msSelections[msRound] || [])
     const canCheck = selected.size > 0 && !msChecked
+    const optionOrder = msOptionOrder[msRound] || round.options.map((_, idx) => idx)
     return (
       <div>
         <BackButton idx={currentSlideIndex} />
-        <SlideTitle title={slide.title} description={slide.description} />
         <FormulaProgress activeStep={slide.formulaStep} />
-        <div className="mb-2 flex gap-1">
-          {slide.rounds.map((_, i) => (
-            <div key={i} className={`flex-1 h-1 rounded-full ${i < msRound ? 'bg-primary' : i === msRound ? 'bg-primary/40' : 'bg-gray-200'}`} />
-          ))}
-        </div>
-        <p className="text-xs text-ink-light mb-5">Round {msRound + 1} of {slide.rounds.length}</p>
+        <SlideTitle title={slide.title} description={slide.description} />
         <div className="bg-bg border border-border rounded-card p-4 mb-5">
           <p className="text-sm text-ink leading-relaxed mb-3">{round.scenario}</p>
           <p className="text-xs font-medium text-ink-light uppercase tracking-wide">{round.question}</p>
         </div>
         <div className="space-y-2 mb-5">
-          {round.options.map((option, idx) => {
+          {optionOrder.map((idx) => {
+            const option = round.options[idx]
             const isSelected = selected.has(idx)
             const showCorrect = msChecked && option.correct
             const showWrong = msChecked && isSelected && !option.correct
@@ -1562,6 +1630,14 @@ export default function CoursePage({ params }: { params: { id: string } }) {
             </p>
           </div>
         )}
+        <div className="mb-5">
+          <div className="mb-2 flex gap-1">
+            {slide.rounds.map((_, i) => (
+              <div key={i} className={`flex-1 h-1 rounded-full ${i < msRound ? 'bg-primary' : i === msRound ? 'bg-primary/40' : 'bg-gray-200'}`} />
+            ))}
+          </div>
+          <p className="text-center text-xs text-ink-light">Round {msRound + 1} of {slide.rounds.length}</p>
+        </div>
         {!msChecked ? (
           <button
             onClick={checkMSRound}
@@ -1619,8 +1695,8 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     return (
       <div>
         <BackButton idx={currentSlideIndex} />
-        <SlideTitle title={slide.title} description={slide.description} />
         <FormulaProgress activeStep={slide.activeStep} />
+        <SlideTitle title={slide.title} description={slide.description} />
         <div className="grid gap-3 mb-6">
           {slide.steps.map((step, i) => (
             <div key={step.label} className="bg-white border border-border rounded-xl p-4">
@@ -1913,10 +1989,20 @@ export default function CoursePage({ params }: { params: { id: string } }) {
             {debriefLoading ? '…' : 'End + review'}
           </button>
         </div>
-        <FormulaProgress activeStep={course.openPractice.helperChecklist ? 3 : undefined} />
-        <HelperChecklist items={course.openPractice.helperChecklist} />
-
         <div className="flex-1 overflow-y-auto space-y-2 mb-3">
+          {course.openPractice.contextPanel && practiceMessages.length === 0 && (
+            <div className="rounded-card border border-amber-200 bg-amber-50 p-4 mb-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-amber-800 mb-2">{course.openPractice.contextPanel.title}</p>
+              <ul className="space-y-1.5">
+                {course.openPractice.contextPanel.items.map((item) => (
+                  <li key={item} className="flex gap-2 text-sm text-ink-mid leading-relaxed">
+                    <span className="text-amber-600">·</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {practiceMessages.length === 0 && starterMessages.length === 0 && (
             <div className="text-center py-8">
               <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-2">Your goal</p>
@@ -1990,7 +2076,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
           {practiceError && (
             <div className="rounded-card border border-amber-200 bg-amber-50 p-4 space-y-3">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-amber-800 mb-1">Beckett had trouble responding</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-amber-800 mb-1">Reply did not come through</p>
                 <p className="text-sm text-ink-mid leading-relaxed">{practiceError}</p>
               </div>
               {retryMessages && (

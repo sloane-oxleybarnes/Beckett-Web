@@ -10,6 +10,7 @@ export type AccordionSlide = {
 export type ReadThroughSlide = {
   type: 'read-through'
   title: string
+  description?: string
   intro?: string
   bullets?: string[]
   stats?: string[]
@@ -34,6 +35,8 @@ export type MatchingSlide = {
   instruction: string
   leftLabel?: string
   rightLabel?: string
+  hideCardNames?: boolean
+  neutralChecked?: boolean
   pairs: MatchingPair[]
 }
 
@@ -61,6 +64,7 @@ export type DraftPracticeSlide = {
 export type SideBySideSlide = {
   type: 'side-by-side'
   title: string
+  description?: string
   scenario: string
   good: { label: string; message: string; note: string }
   bad: { label: string; message: string; note: string }
@@ -70,6 +74,7 @@ export type SortingItem = { message: string; correct: string; explanation: strin
 export type SortingSlide = {
   type: 'sorting'
   title: string
+  description?: string
   instruction: string
   categories: string[]
   items: SortingItem[]
@@ -82,6 +87,8 @@ export type MultipleChoiceSlide = {
   title: string
   description?: string
   helperChecklist?: string[]
+  compactHelper?: boolean
+  suppressDoneScreen?: boolean
   rounds: MCRound[]
 }
 
@@ -92,6 +99,8 @@ export type MultiSelectQuizSlide = {
   title: string
   description?: string
   formulaStep?: number
+  shuffleOptions?: boolean
+  suppressDoneScreen?: boolean
   rounds: MultiSelectRound[]
 }
 
@@ -166,6 +175,7 @@ export type OpenPracticeConfig = {
   subtitle?: string
   goal: string
   helperChecklist?: string[]
+  contextPanel?: { title: string; items: string[] }
   starterMessages?: { role: 'user' | 'assistant'; content: string; timestamp?: string }[]
   starterOptions?: string[]
   userStarts?: boolean
@@ -569,21 +579,19 @@ const askingForClarity: Course = {
     channel: 'slack',
     subtitle: 'Slack DM - vague work request',
     goal: 'Ask Jordan for the missing information you need before you start the work.',
-    helperChecklist: [
-      'Name what is already understood',
-      'Identify the specific unclear part',
-      'Ask one specific answerable question',
-      'Give options if that makes answering easier',
-      'Leave out the apology',
-    ],
+    contextPanel: {
+      title: 'What you already know',
+      items: [
+        'Jordan is your manager.',
+        'The task is the onboarding flow.',
+        'The team review is coming up.',
+        'Jordan wants it in "better shape."',
+        'The unclear part is what "clean up" means and what level of polish or scope is expected.',
+      ],
+    },
     starterMessages: [
       { role: 'assistant', content: 'Can you clean up the onboarding flow before the team review?', timestamp: '10:12 AM' },
       { role: 'assistant', content: 'Mainly just make sure it is in better shape.', timestamp: '10:12 AM' },
-    ],
-    starterOptions: [
-      'Quick clarification: when you say clean up, do you mean copy edits, structure, or both?',
-      'I can do that. Do you need a rough pass today or something ready for the team review?',
-      'To prioritize correctly, which part matters most: the signup steps, the copy, or the handoff notes?',
     ],
     systemPrompt: `You are Jordan, a busy but reasonable workplace manager in Slack. You gave the user a vague task: "Can you clean up the onboarding flow before the team review?"
 
@@ -595,17 +603,10 @@ Never break character. You are Jordan, not Beckett.`,
     {
       type: 'accordion',
       title: 'What Clarity Actually Is',
-      description: 'Clarity is shared alignment, not needing extra help.',
+      description: 'Clarity is shared alignment, not needing extra help.\n\nAsking for clarity at work should be simple. But, for many neurodivergent people it is not — and there are very specific reasons why. This course covers what makes clarifying questions feel so loaded, how to identify exactly what information you are missing, how to ask in a way that is direct and confident, and how to leave the apology out of it entirely.',
       sections: [
-        {
-          heading: 'Why this can feel loaded',
-          bullets: [
-            'Asking for clarity at work should be simple, but for many neurodivergent people it is not.',
-            'This course covers what makes clarification feel loaded, how to identify the missing information, and how to ask directly without apologizing.',
-          ],
-        },
         { heading: 'The goal', bullets: ['Make sure you are solving the right problem before you spend energy on it.'] },
-        { heading: 'What can be unclear', bullets: ['Timeline, priority, definition of done, audience, and who the decision maker is.'] },
+        { heading: 'What can be unclear', bullets: ['Timeline (deadline & priority), definition of done, the audience and who the decision maker is.'] },
         { heading: 'The reframe', bullets: ['You are not bothering someone; you are preventing avoidable rework.'] },
       ],
     },
@@ -627,9 +628,10 @@ Never break character. You are Jordan, not Beckett.`,
     {
       type: 'side-by-side',
       title: 'Asking Without Over-Apologizing',
+      description: 'Many neurodivergent people grow up feeling like their questions are a burden — being told to stop asking, to just figure it out, or that they should already know. If that sounds familiar, it makes sense that asking for help now feels like something you need to apologize for. It is not. Asking clarifying questions is not a weakness. It is one of the clearest, most direct ways to communicate — and that is something to be proud of. This section will help you notice when you are over-apologizing and give you tools to ask for what you need without shrinking yourself to do it.',
       scenario: 'You need to ask what "clean this up" means.',
-      bad: { label: 'Weaker version', message: 'Sorry, this is probably annoying, but can you explain what you meant by clean this up?', note: 'The apology makes the question feel heavier than it needs to be.' },
-      good: { label: 'Stronger version', message: 'Quick clarification: when you say clean this up, do you mean copy edits, structure, or both?', note: 'Specific, neutral, and easy to answer.' },
+      bad: { label: 'Original version', message: 'Sorry, this is probably annoying, but can you explain what you meant by clean this up?', note: 'The apology makes the question feel heavier than it needs to be.' },
+      good: { label: 'Improved version', message: 'Quick clarification: when you say clean this up, do you mean copy edits, structure, or both?', note: 'Specific, neutral, and easy to answer.' },
     },
     {
       type: 'matching',
@@ -638,6 +640,8 @@ Never break character. You are Jordan, not Beckett.`,
       instruction: 'Tap an original, then tap the improved version.',
       leftLabel: 'Original',
       rightLabel: 'Improved',
+      hideCardNames: true,
+      neutralChecked: true,
       pairs: [
         { left: { name: 'Clean up', description: 'Sorry, this is probably annoying, but can you explain what you meant?', mismatchNote: 'Look for the version that asks what clean up means.' }, right: { name: 'Improved', description: 'Quick clarification: do you mean copy edits, structure, or both?' } },
         { left: { name: 'Deadline', description: 'Sorry if this is obvious, but when is this due?', mismatchNote: 'Look for the version that confirms deadline before prioritizing.' }, right: { name: 'Improved', description: 'I want to confirm the deadline before I prioritize this. Do you need it today or later this week?' } },
@@ -649,7 +653,7 @@ Never break character. You are Jordan, not Beckett.`,
     {
       type: 'visual-formula',
       title: 'The Clarity Formula',
-      description: 'Knowing you need clarification and knowing how to ask for it are two different things. This formula gives your brain a clear structure to work from.',
+      description: 'Knowing you need clarification and knowing how to ask for it are two different things. This formula bridges that gap — giving your brain a clear structure to work from so the question feels less overwhelming and more like a tool you actually want to use.',
       steps: [
         { label: 'What I understand', text: 'Start with what you think is true.', example: 'I understand the goal is to clean up onboarding before review.' },
         { label: 'What is unclear', text: 'Name the missing piece.', example: 'I am not sure whether clean up means copy, structure, or both.' },
@@ -662,17 +666,19 @@ Never break character. You are Jordan, not Beckett.`,
       title: 'What Kind Of Clarity Do You Need?',
       description: 'Tap each card to see what the question is really asking for.',
       cards: [
-        { front: 'Timeline', back: ['When is this task due and how should I prioritize it?', 'Question: Do you need this today or before Friday?'] },
-        { front: 'Definition of done', back: ['What does finished mean?', 'Questions: Do you mean copy edits, structure, or both? Should this be rough, clean, or ready to send?'] },
-        { front: 'Audience', back: ['Who is this for: internal team, leadership, or beta users?', 'Question: Will this be an internal or external-facing document?'] },
-        { front: 'Decision maker', back: ['Who needs to approve the final version?', 'Question: Will this be reviewed by the team or should I send it to someone specific?'] },
+        { front: 'Timeline', back: ['When is this task due and how should I prioritize it?', 'Example: Do you need this today or before Friday?'] },
+        { front: 'Definition of done', back: ['What does finished mean?', 'Examples: Do you mean copy edits, structure, or both? Should this be rough, clean, or ready to send?'] },
+        { front: 'Audience', back: ['Who is this for: internal team, leadership, or beta users?', 'Example: Will this be an internal or external-facing document?'] },
+        { front: 'Decision maker', back: ['Who needs to approve the final version?', 'Example: Will this be reviewed by the team or should I send it to someone specific?'] },
       ],
     },
     {
       type: 'multi-select-quiz',
       title: 'Step 1 - What Do I Know?',
-      description: 'Identify what you already know. It anchors the question, shows you have been listening, and gives the other person a clear starting point to correct or confirm.',
+      description: 'The first step in the Clarity Formula is identifying what you already know. Say what you think is true. It anchors the question, shows you have been listening, and gives the other person a clear starting point to correct or confirm.',
       formulaStep: 1,
+      shuffleOptions: true,
+      suppressDoneScreen: true,
       rounds: [
         {
           scenario: 'Message from Jordan, your manager: "Hey - can you take a look at the onboarding doc and clean it up before the team review on Thursday?"',
@@ -721,11 +727,11 @@ Never break character. You are Jordan, not Beckett.`,
     {
       type: 'multiple-choice',
       title: 'Step 2 - What Information Is Missing?',
-      description: 'Not everything that feels unclear actually is. Usually one specific missing piece is creating the confusion.',
-      helperChecklist: ['What I understand', 'What is unclear'],
+      description: 'Step 2 of the Clarity formula is to identify the missing information. Not everything that feels unclear actually is — usually there is one specific piece of missing information that is creating the confusion. Name that, and the question almost writes itself.',
+      suppressDoneScreen: true,
       rounds: [
         {
-          scenario: 'Your manager says, "Can you clean up the onboarding doc?" What information is most missing?',
+          scenario: 'Your manager says, "Can you clean up the onboarding doc?" What important information is missing?',
           options: [
             { text: 'Definition of done: what clean up means', correct: true, explanation: 'You need to know whether this means copy, structure, polish, or all of it.' },
             { text: 'The order you should tackle each section', correct: false, explanation: 'Order may matter later, but first you need to know what clean up means.' },
@@ -753,6 +759,7 @@ Never break character. You are Jordan, not Beckett.`,
     {
       type: 'sorting',
       title: 'Step 3 - Asking Specific Questions',
+      description: 'The third step in the Clarity Formula is making sure the questions you ask are specific and not vague. A question like "can you clarify?" puts the work back on them. A question like "do you mean copy edits, structure, or both?" gives them something to respond to immediately — and gets you what you need faster.',
       instruction: 'Sort each message by what kind of clarity question it is.',
       categories: ['Strong clarity question', 'Too vague', 'Too apologetic'],
       items: [
@@ -765,6 +772,7 @@ Never break character. You are Jordan, not Beckett.`,
     {
       type: 'sorting',
       title: 'Step 4 - Why This Helps You',
+      description: 'The last step in the Clarity Formula is explaining why this information is important. Explaining why the information matters — even in one sentence — turns a question into a reason. It signals that you are not asking for the sake of asking. You are asking because it will make the outcome better. That changes how it lands.',
       instruction: 'Choose whether each closing line connects the question to the work.',
       categories: ['Connects to the work', 'Does not connect to the work'],
       items: [
@@ -781,14 +789,16 @@ Never break character. You are Jordan, not Beckett.`,
     {
       type: 'multiple-choice',
       title: 'Put It All Together',
-      description: 'Each round shows a real workplace message and three possible responses. Only one response puts the full Clarity Formula together correctly.',
+      description: 'You have learned what clarity is, why asking for it feels hard, and how to build a question that actually works. Now it is time to use everything at once. Each round below shows a real workplace message and three possible responses. Only one response puts the full Clarity Formula together correctly — it grounds itself in what is already known, names the specific gap, asks an answerable question, and connects it to the work. The other two are close but fall short in ways that matter. Read carefully before you choose.',
       helperChecklist: [
-        'Names what is already understood',
-        'Identifies the specific unclear part',
-        'Asks one specific answerable question',
-        'Gives options where helpful',
-        'Does not include an apology',
+        'The response names what is already understood',
+        'The response identifies the specific unclear part',
+        'The response asks one specific answerable question',
+        'The response gives options where that makes answering easier',
+        'The response does not include an apology for needing the information',
       ],
+      compactHelper: true,
+      suppressDoneScreen: true,
       rounds: [
         {
           scenario: 'Message from your manager, sent Monday morning: "Hey - before you start on the homepage copy, just make sure it matches the new direction we talked about."',
@@ -822,17 +832,6 @@ Never break character. You are Jordan, not Beckett.`,
             { text: 'I know leadership updates usually go out Wednesday. Is this the same format as last quarter or is there a new template I should use?', correct: false, explanation: 'This may be useful, but it assumes facts and focuses on template before scope.' },
           ],
         },
-      ],
-    },
-    {
-      type: 'checklist',
-      title: 'Clarity Checklist',
-      items: [
-        'I named what I understand',
-        'I named the unclear part',
-        'I asked one specific question',
-        'I gave options if that makes the answer easier',
-        'I did not apologize for needing the information',
       ],
     },
   ],

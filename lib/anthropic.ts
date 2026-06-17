@@ -8,7 +8,7 @@ export async function callAnthropic(system: string | null, messages: AnthropicMe
   if (!apiKey) throw new Error('Anthropic API key not configured.')
 
   const body: Record<string, unknown> = {
-    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+    model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-latest',
     max_tokens: maxTokens,
     messages,
   }
@@ -32,4 +32,3 @@ export async function callAnthropic(system: string | null, messages: AnthropicMe
   const data = await res.json() as { content: { text?: string }[] }
   return data.content.map((block) => block.text || '').join('')
 }
-
