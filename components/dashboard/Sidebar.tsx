@@ -15,12 +15,12 @@ const planBadgeColor: Record<string, string> = {
 };
 
 const navItems = [
-  { href: "/dashboard", label: "Overview", icon: "◈" },
-  { href: "/dashboard/practice", label: "Practice", icon: "💬" },
-  { href: "/dashboard/skills", label: "Skills", icon: "✦" },
-  { href: "/dashboard/contacts", label: "Contacts", icon: "◎" },
-  { href: "/dashboard/about", label: "About Me", icon: "◉" },
-  { href: "/dashboard/settings", label: "Settings", icon: "⚙" },
+  { href: "/dashboard", label: "Overview" },
+  { href: "/dashboard/practice", label: "Practice" },
+  { href: "/dashboard/skills", label: "Skills" },
+  { href: "/dashboard/contacts", label: "Contacts" },
+  { href: "/dashboard/about", label: "About Me" },
+  { href: "/dashboard/settings", label: "Settings" },
 ];
 
 export default function DashboardSidebar({
@@ -78,13 +78,12 @@ export default function DashboardSidebar({
               key={item.href}
               href={item.href}
               onClick={() => setMobileOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2 rounded-sm text-sm transition-colors ${
+              className={`flex items-center px-3 py-2 rounded-sm text-sm transition-colors ${
                 pathname === item.href || (item.href === "/dashboard/contacts" && pathname.startsWith("/dashboard/trusted-people"))
                   ? "bg-primary-light text-primary font-medium"
                   : "text-ink-mid hover:text-ink hover:bg-bg"
               }`}
             >
-              <span className="text-base">{item.icon}</span>
               {item.label}
             </Link>
           ))}

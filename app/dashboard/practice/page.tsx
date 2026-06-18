@@ -679,13 +679,6 @@ export default function PracticePage() {
                 <p className="mt-1 text-xs text-ink-light">Name the real conversation and what you want to be true by the end.</p>
               </div>
 
-              <PracticeTextInput
-                label="What outcome do you want?"
-                value={goal}
-                onChange={setGoal}
-                placeholder="e.g. I want them to respect the boundary and help me reprioritize"
-              />
-
               <div>
                 <p className="mb-2 text-sm font-medium text-ink">How high-pressure does this feel?</p>
                 <div className="flex flex-wrap gap-2">
@@ -740,22 +733,15 @@ export default function PracticePage() {
 
               <div className="rounded-card border border-border bg-bg p-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-ink-light mb-3">Practice preview</p>
-                <dl className="space-y-2">
-                  {[
-                    ['Channel', textSubFormatOptions.find(option => option.value === textSubFormat)?.label || 'Slack'],
-                    ['Person', person.trim() || 'Not added yet'],
-                    ['How you know them', relationshipContext.trim() || 'Not added yet'],
-                    ['Collaboration style', personStyle.trim() || 'Not selected yet'],
-                    ['Conversation', situation.trim() || 'Not added yet'],
-                    ['Pressure level', stakes.trim() || 'Not selected yet'],
-                    ['Coaching target', practiceFocus.trim() || 'Not selected yet'],
-                  ].map(([label, value]) => (
-                    <div key={label} className="grid gap-1 sm:grid-cols-[140px_1fr]">
-                      <dt className="text-xs font-medium uppercase tracking-wide text-ink-light">{label}</dt>
-                      <dd className="text-sm text-ink leading-relaxed">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
+                <p className="text-sm leading-relaxed text-ink">
+                  Beckett will practice this as a {textSubFormatOptions.find(option => option.value === textSubFormat)?.label || 'Slack'} conversation with{' '}
+                  {person.trim() || 'the other person'}
+                  {relationshipContext.trim() ? `, who you know as ${relationshipContext.trim()}` : ''}
+                  {personStyle.trim() ? ` and who tends to collaborate in a ${personStyle.trim().toLowerCase()} way` : ''}.{' '}
+                  You want to practice: {situation.trim() || 'the conversation you describe'}
+                  {stakes.trim() ? ` This feels ${stakes.trim().toLowerCase()}.` : '.'}
+                  {practiceFocus.trim() ? ` Beckett will focus on helping you ${practiceFocus.trim().toLowerCase()}.` : ''}
+                </p>
               </div>
             </div>
           )}
