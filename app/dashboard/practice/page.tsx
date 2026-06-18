@@ -43,8 +43,6 @@ const communicationStyleSuggestions = [
   'Warm and collaborative',
   'Detailed and analytical',
   'Fast-paced and reactive',
-  'Avoids conflict',
-  'Gets defensive when surprised',
 ]
 
 const stakesOptions = [
@@ -81,8 +79,8 @@ Their goal: "${goal}"`
   }
 
   const contextLines = [
-    practiceContext.relationshipContext ? `Relationship/context: ${practiceContext.relationshipContext}` : null,
-    practiceContext.personStyle ? `Their communication style: ${practiceContext.personStyle}` : null,
+    practiceContext.relationshipContext ? `How the user knows them: ${practiceContext.relationshipContext}` : null,
+    practiceContext.personStyle ? `Their collaboration style: ${practiceContext.personStyle}` : null,
     practiceContext.recurringPattern ? `What tends to happen with them: ${practiceContext.recurringPattern}` : null,
     practiceContext.stakes ? `Stakes/pressure level: ${practiceContext.stakes}` : null,
     practiceContext.expectedResponse ? `Likely response from them: ${practiceContext.expectedResponse}` : null,
@@ -175,7 +173,7 @@ function ContactOverlay({
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto p-6 shadow-xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-medium text-ink">Connect a contact</h2>
+          <h2 className="text-base font-medium text-ink">Contact context</h2>
           <button onClick={onClose} className="text-ink-light hover:text-ink text-xl leading-none">×</button>
         </div>
 
@@ -322,10 +320,11 @@ export default function PracticePage() {
 
   const loadSuggestedPrompts = useCallback(async (lastAIMessage?: string, msgCount = 0) => {
     try {
+      const effectiveGoal = goal || situation
       const res = await fetch('/api/practice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'suggested_prompts', mode, person, situation, goal, messageCount: msgCount, lastAIMessage }),
+        body: JSON.stringify({ action: 'suggested_prompts', mode, person, situation, goal: effectiveGoal, messageCount: msgCount, lastAIMessage }),
       })
       const data = await res.json() as { prompts?: string[]; error?: string }
       if (!res.ok) {
@@ -386,10 +385,11 @@ export default function PracticePage() {
     setSentViaPrompt(false)
     setLoading(true)
     setLimitNotice(null)
+    const effectiveGoal = goal || situation
     const system = buildSystemPrompt(
       person,
       situation,
-      goal,
+      effectiveGoal,
       conversationFormat,
       contactContext,
       mode,
@@ -399,7 +399,7 @@ export default function PracticePage() {
     const res = await fetch('/api/practice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'turn', mode, system, messages: next, messageCount: next.length }),
+        body: JSON.stringify({ action: 'turn', mode, system, messages: next, messageCount: next.length }),
     })
     const data = await res.json() as { text?: string; error?: string }
     setLoading(false)
@@ -445,10 +445,11 @@ export default function PracticePage() {
   async function endAndDebrief() {
     setLoading(true)
     const history = messages.map(m => `[${m.role === 'user' ? 'You' : person}]: ${m.content}`).join('\n')
+    const effectiveGoal = goal || situation
     const res = await fetch('/api/practice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'debrief', mode, personDescription: person, situation, goal, conversationHistory: history }),
+      body: JSON.stringify({ action: 'debrief', mode, personDescription: person, situation, goal: effectiveGoal, conversationHistory: history }),
     })
     const result = await res.json() as DebriefData & { error?: string }
     setLoading(false)
@@ -517,24 +518,23 @@ export default function PracticePage() {
     const textSubFormatOptions: { value: TextSubFormat; label: string }[] = [
       { value: 'slack', label: 'Slack' },
       { value: 'email', label: 'Email' },
-      { value: 'sms', label: 'Text message' },
-      { value: 'not-sure', label: 'Not sure' },
+      { value: 'sms', label: 'Text' },
     ]
     const setupSlides = [
       {
         eyebrow: 'Step 1 of 3',
-        title: 'Set the scene',
+        title: 'About Them',
         description: 'Tell Beckett who you are talking to and what kind of conversation this should feel like.',
       },
       {
         eyebrow: 'Step 2 of 3',
-        title: 'Name what is hard',
-        description: 'Describe the conversation, the pattern that usually shows up, and how much pressure this carries.',
+        title: 'The Conversation',
+        description: 'Describe the conversation, your goal, and how much pressure this carries.',
       },
       {
         eyebrow: 'Step 3 of 3',
-        title: 'Choose the coaching target',
-        description: 'Give Beckett the outcome you want and the skill you want to practice most.',
+        title: 'Coaching Target',
+        description: 'Choose what you want Beckett to watch for while you practice.',
       },
     ]
     const currentSlide = setupSlides[setupStep]
@@ -616,17 +616,7 @@ export default function PracticePage() {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-sm font-medium text-ink">Person&apos;s name</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowContactOverlay(true)}
-                    className="text-xs text-primary hover:underline"
-                    aria-label={contactContext ? `Change connected contact, currently using ${contactContext.name}` : "Connect a contact for this practice session"}
-                  >
-                    {contactContext ? `Using: ${contactContext.name}` : '+ Connect a contact'}
-                  </button>
-                </div>
+                <label className="mb-1 block text-sm font-medium text-ink">Who are you talking to?</label>
                 <input
                   type="text"
                   value={person}
@@ -653,14 +643,8 @@ export default function PracticePage() {
               />
 
               <div>
-                <PracticeTextInput
-                  label="Their communication style"
-                  value={personStyle}
-                  onChange={setPersonStyle}
-                  placeholder="e.g. Friendly, but avoids direct criticism and gets tense when surprised"
-                  helperText="Pick one of these if it helps you get started."
-                />
-                <div className="mt-2 flex flex-wrap gap-2">
+                <p className="mb-2 text-sm font-medium text-ink">Their collaboration style</p>
+                <div className="grid gap-2 sm:grid-cols-2">
                   {communicationStyleSuggestions.map((suggestion) => (
                     <button
                       key={suggestion}
@@ -670,7 +654,7 @@ export default function PracticePage() {
                       className={`rounded-pill border px-3 py-1 text-xs transition-colors ${
                         personStyle === suggestion
                           ? 'border-primary bg-primary-light text-primary'
-                          : 'border-border text-ink-mid hover:border-primary hover:text-ink'
+                          : 'border-border bg-white text-ink-mid hover:border-primary hover:text-ink'
                       }`}
                     >
                       {suggestion}
@@ -684,7 +668,7 @@ export default function PracticePage() {
           {setupStep === 1 && (
             <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-ink mb-1">What conversation do you want to practice?</label>
+                <label className="block text-sm font-medium text-ink mb-1">What conversation do you want to practice and what is the goal?</label>
                 <textarea
                   value={situation}
                   onChange={e => setSituation(e.target.value)}
@@ -692,26 +676,19 @@ export default function PracticePage() {
                   rows={4}
                   className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary resize-none"
                 />
-                <p className="mt-1 text-xs text-ink-light">What is the real conversation, and what feels hard about starting it?</p>
+                <p className="mt-1 text-xs text-ink-light">Name the real conversation and what you want to be true by the end.</p>
               </div>
 
-              <PracticeTextarea
-                label="What usually gets hard in this dynamic?"
-                value={recurringPattern}
-                onChange={setRecurringPattern}
-                placeholder="e.g. I over-explain, they stay vague, and we leave without a clear next step"
-                helperText="This is the pattern Beckett should watch for while you practice."
+              <PracticeTextInput
+                label="What outcome do you want?"
+                value={goal}
+                onChange={setGoal}
+                placeholder="e.g. I want them to respect the boundary and help me reprioritize"
               />
 
               <div>
-                <PracticeTextInput
-                  label="How high-pressure does this feel?"
-                  value={stakes}
-                  onChange={setStakes}
-                  placeholder="e.g. High stakes for my role"
-                  helperText="Choose a quick option or write your own."
-                />
-                <div className="mt-2 flex flex-wrap gap-2">
+                <p className="mb-2 text-sm font-medium text-ink">How high-pressure does this feel?</p>
+                <div className="flex flex-wrap gap-2">
                   {stakesOptions.map((option) => (
                     <button
                       key={option}
@@ -729,26 +706,11 @@ export default function PracticePage() {
                   ))}
                 </div>
               </div>
-
-              <PracticeTextInput
-                label="What response do you expect from them?"
-                value={expectedResponse}
-                onChange={setExpectedResponse}
-                placeholder="e.g. They may push back at first, then ask me to prioritize"
-                helperText="If you are not sure, add your best guess."
-              />
             </div>
           )}
 
           {setupStep === 2 && (
             <div className="space-y-5">
-              <PracticeTextInput
-                label="What outcome do you want?"
-                value={goal}
-                onChange={setGoal}
-                placeholder="e.g. I want them to respect the boundary and help me reprioritize"
-              />
-
               <div>
                 <PracticeTextInput
                   label="What do you want Beckett to help you practice?"
@@ -777,12 +739,23 @@ export default function PracticePage() {
               </div>
 
               <div className="rounded-card border border-border bg-bg p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light mb-2">Practice preview</p>
-                <p className="text-sm text-ink leading-relaxed">
-                  Beckett will practice as {person.trim() || 'the other person'} in{' '}
-                  {textSubFormatOptions.find(option => option.value === textSubFormat)?.label || 'this channel'}
-                  {practiceFocus.trim() ? `, with a focus on: ${practiceFocus.trim()}.` : '.'}
-                </p>
+                <p className="text-xs font-medium uppercase tracking-wide text-ink-light mb-3">Practice preview</p>
+                <dl className="space-y-2">
+                  {[
+                    ['Channel', textSubFormatOptions.find(option => option.value === textSubFormat)?.label || 'Slack'],
+                    ['Person', person.trim() || 'Not added yet'],
+                    ['How you know them', relationshipContext.trim() || 'Not added yet'],
+                    ['Collaboration style', personStyle.trim() || 'Not selected yet'],
+                    ['Conversation', situation.trim() || 'Not added yet'],
+                    ['Pressure level', stakes.trim() || 'Not selected yet'],
+                    ['Coaching target', practiceFocus.trim() || 'Not selected yet'],
+                  ].map(([label, value]) => (
+                    <div key={label} className="grid gap-1 sm:grid-cols-[140px_1fr]">
+                      <dt className="text-xs font-medium uppercase tracking-wide text-ink-light">{label}</dt>
+                      <dd className="text-sm text-ink leading-relaxed">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
               </div>
             </div>
           )}
@@ -850,9 +823,9 @@ export default function PracticePage() {
   if (phase === 'conversation') {
     const formatLabel =
       conversationFormat === 'in-person' ? 'In person' :
-      textSubFormat === 'sms' ? 'Text message' :
+      textSubFormat === 'sms' ? 'Text' :
       textSubFormat === 'email' ? 'Email' :
-      textSubFormat === 'not-sure' ? 'Not sure' : 'Slack'
+      'Slack'
 
     const renderMessages = () => {
       if (textSubFormat === 'email' && conversationFormat === 'text') {
@@ -1168,34 +1141,6 @@ function PracticeTextInput({
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-      />
-      {helperText && <p className="mt-1 text-xs text-ink-light">{helperText}</p>}
-    </div>
-  )
-}
-
-function PracticeTextarea({
-  label,
-  value,
-  onChange,
-  placeholder,
-  helperText,
-}: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  placeholder: string
-  helperText?: string
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-ink mb-1">{label}</label>
-      <textarea
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        rows={3}
-        className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary resize-none"
       />
       {helperText && <p className="mt-1 text-xs text-ink-light">{helperText}</p>}
     </div>
