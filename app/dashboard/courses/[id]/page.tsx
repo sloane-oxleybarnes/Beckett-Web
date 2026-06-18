@@ -43,6 +43,7 @@ const PAIR_COLORS = [
 
 const CLARITY_FORMULA_STEPS = ['What I understand', 'What is unclear', 'Specific question', 'Why it helps']
 const INTRO_FORMULA_STEPS = ['Who you are', 'What you do', 'How you collaborate']
+const DATING_FORMULA_STEPS = ['Warm signal', 'Specific plan', 'Easy out']
 
 async function callAPI(body: Record<string, unknown>): Promise<unknown> {
   const res = await fetch('/api/courses', {
@@ -580,6 +581,9 @@ export default function CoursePage({ params }: { params: { id: string } }) {
 
   function formulaPropsForSlide(formulaStep?: number) {
     if (!formulaStep) return { activeStep: undefined }
+    if (course.id === 'ask-someone-out') {
+      return { activeStep: formulaStep, label: 'Clear ask formula', steps: DATING_FORMULA_STEPS }
+    }
     if (course.id === 'introducing-new-colleague') {
       return { activeStep: formulaStep, label: 'Intro formula', steps: INTRO_FORMULA_STEPS }
     }
@@ -600,8 +604,13 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     slide.fields.forEach((field) => {
       const key = fieldKey(slide.title, field.key)
       const selected = builderChoices[key] || []
+      const otherKey = fieldKey(slide.title, `${field.key}:other`)
+      const other = field.allowOther ? builderText[otherKey]?.trim() : ''
       const typed = builderValueFor(slide, field.key)
-      values[field.key] = field.multi ? [...selected, typed].filter(Boolean).join(', ') : typed || selected[0] || ''
+      const selectedWithoutOther = selected.filter((item) => item !== 'Other')
+      values[field.key] = field.multi
+        ? [...selectedWithoutOther, other, typed].filter(Boolean).join(', ')
+        : other || typed || selectedWithoutOther[0] || ''
     })
     return values
   }
@@ -979,7 +988,8 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     const match = title.match(/^Step\s+(\d+)/i)
     if (!match) return undefined
     const step = Number(match[1])
-    return step >= 1 && step <= 4 ? step : undefined
+    const maxStep = course.id === 'ask-someone-out' || course.id === 'introducing-new-colleague' ? 3 : 4
+    return step >= 1 && step <= maxStep ? step : undefined
   }
 
   function formatCourseApiError(error: unknown) {
@@ -1561,11 +1571,18 @@ export default function CoursePage({ params }: { params: { id: string } }) {
   function renderSorting(slide: SortingSlide) {
     const allSorted = Object.keys(sortedItems).length === slide.items.length
     const allCorrect = sortingChecked && sortingErrors.size === 0 && allSorted
+    const formulaProps = formulaPropsForSlide(slide.formulaStep || formulaStepFromTitle(slide.title))
     return (
       <div>
         <BackButton idx={currentSlideIndex} />
-        <FormulaProgress activeStep={formulaStepFromTitle(slide.title)} />
-        <SlideTitle title={slide.title} description={slide.description} />
+        <FormulaProgress {...formulaProps} />
+        <div className="flex items-start gap-3">
+          <div className="flex-1">
+            <SlideTitle title={slide.title} description={slide.description} />
+          </div>
+          {slide.compactHelper && <CompactTips items={slide.helperChecklist} />}
+        </div>
+        {!slide.compactHelper && <HelperChecklist items={slide.helperChecklist} />}
         <p className="text-sm text-ink-mid mb-5">{slide.instruction}</p>
         <div className="space-y-3 mb-6">
           {slide.items.map((item, i) => {
@@ -1625,11 +1642,22 @@ export default function CoursePage({ params }: { params: { id: string } }) {
 
   function renderMultipleChoice(slide: MultipleChoiceSlide) {
     const allDone = mcRound >= slide.rounds.length
+    const formulaProps = formulaPropsForSlide(formulaStepFromTitle(slide.title))
     if (allDone) {
+      if (slide.suppressDoneScreen) {
+        return (
+          <div>
+            <BackButton idx={currentSlideIndex} />
+            <FormulaProgress {...formulaProps} />
+            <SlideTitle title={slide.title} description={slide.description} />
+            <NextButton label="Continue →" />
+          </div>
+        )
+      }
       return (
         <div>
           <BackButton idx={currentSlideIndex} />
-          <FormulaProgress activeStep={formulaStepFromTitle(slide.title)} />
+          <FormulaProgress {...formulaProps} />
           <SlideTitle title={slide.title} />
           <div className="text-center py-12">
             <p className="text-3xl mb-3">✓</p>
@@ -1643,7 +1671,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     return (
       <div>
         <BackButton idx={currentSlideIndex} />
-        <FormulaProgress activeStep={formulaStepFromTitle(slide.title)} />
+        <FormulaProgress {...formulaProps} />
         <div className="flex items-start gap-3">
           <div className="flex-1">
             <SlideTitle title={slide.title} description={slide.description} />
@@ -1925,7 +1953,14 @@ export default function CoursePage({ params }: { params: { id: string } }) {
       <div>
         <BackButton idx={currentSlideIndex} />
         <FormulaProgress {...formulaPropsForSlide(slide.formulaStep)} />
-        <SlideTitle title={slide.title} description={slide.description} />
+        <div className="flex items-start gap-3">
+          <div className="flex-1">
+            <SlideTitle title={slide.title} description={slide.description} />
+          </div>
+          {course.id === 'ask-someone-out' && slide.title === 'Build Your Ask' && (
+            <CompactTips items={course.openPractice.helperChecklist} />
+          )}
+        </div>
         {slide.cards && (
           <div className="grid gap-3 mb-6 sm:grid-cols-2">
             {slide.cards.map((card, i) => {
@@ -1963,12 +1998,15 @@ export default function CoursePage({ params }: { params: { id: string } }) {
             const selected = builderChoices[key] || []
             const inputValue = builderText[key] ?? builderValueFor(slide, field.key)
             const fieldOptions = field.key === 'strength' ? selectedStrengthOptions() : (field.options || [])
+            const optionsWithOther = field.allowOther ? [...fieldOptions, 'Other'] : fieldOptions
+            const otherKey = fieldKey(slide.title, `${field.key}:other`)
+            const otherSelected = selected.includes('Other')
             return (
               <div key={field.key} className="bg-white border border-border rounded-card p-4">
                 <label className="block text-sm font-medium text-ink mb-2">{field.label}</label>
-                {fieldOptions.length > 0 && (
+                {optionsWithOther.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {fieldOptions.map((option) => {
+                    {optionsWithOther.map((option) => {
                       const isSelected = selected.includes(option)
                       return (
                         <button
@@ -1994,6 +2032,14 @@ export default function CoursePage({ params }: { params: { id: string } }) {
                       )
                     })}
                   </div>
+                )}
+                {otherSelected && (
+                  <input
+                    value={builderText[otherKey] || ''}
+                    onChange={(e) => setBuilderText((current) => ({ ...current, [otherKey]: e.target.value }))}
+                    placeholder="Type your own..."
+                    className="mb-3 w-full border border-border rounded-sm px-3 py-2 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
                 )}
                 {field.fillBefore !== undefined || field.fillAfter !== undefined ? (
                   <div className="rounded-xl border border-border bg-bg px-4 py-3 text-sm leading-relaxed text-ink">
@@ -2223,9 +2269,11 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     const { matchName, channel = 'chat' } = course.openPractice
     const canEnd = practiceMessages.length >= 2 && !debriefLoading
     const starterMessages = course.openPractice.starterMessages || []
+    const starterCategory = course.id === 'ask-someone-out' ? 'dating_ask' : 'new_colleague_intro'
     const builtStarterOptions = toolkitItems
-      .filter((item) => item.course_id === course.id && item.category === 'new_colleague_intro')
+      .filter((item) => item.course_id === course.id && item.category === starterCategory)
       .map((item) => item.content)
+      .filter((content) => course.id !== 'ask-someone-out' || /\bcoffee|cafe|shop\b/i.test(content))
     const starterOptions = builtStarterOptions.length > 0 ? builtStarterOptions : (course.openPractice.starterOptions || [])
     const displayedMessages = practiceMessages.length === 0 ? starterMessages : practiceMessages
 
@@ -2246,6 +2294,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
           >
             {debriefLoading ? '…' : 'End + review'}
           </button>
+          {course.openPractice.helperChecklist && <CompactTips items={course.openPractice.helperChecklist} />}
         </div>
         <div className="flex-1 overflow-y-auto space-y-2 mb-3">
           {course.openPractice.contextPanel && practiceMessages.length === 0 && (

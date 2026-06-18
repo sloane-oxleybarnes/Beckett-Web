@@ -17,7 +17,7 @@ type SkillCard = {
 
 const SECTIONS: { label: string; description: string; cards: SkillCard[] }[] = [
   {
-    label: 'Professional - Colleague',
+    label: 'Professional',
     description: 'Foundational workplace courses we are building for beta.',
     cards: [
       {
@@ -45,7 +45,7 @@ const SECTIONS: { label: string; description: string; cards: SkillCard[] }[] = [
     ],
   },
   {
-    label: 'Personal Preview',
+    label: 'Personal',
     description: 'A small look at where Beckett will go beyond work later.',
     cards: [
       {

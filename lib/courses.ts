@@ -76,6 +76,9 @@ export type SortingSlide = {
   type: 'sorting'
   title: string
   description?: string
+  formulaStep?: number
+  helperChecklist?: string[]
+  compactHelper?: boolean
   instruction: string
   categories: string[]
   items: SortingItem[]
@@ -135,6 +138,7 @@ export type GuidedBuilderField = {
   placeholder?: string
   options?: string[]
   multi?: boolean
+  allowOther?: boolean
   fillBefore?: string
   fillAfter?: string
 }
@@ -229,16 +233,16 @@ const askSomeoneOut: Course = {
     channel: 'dating',
     subtitle: 'Dating app match - chatted yesterday',
     goal: 'Use one of your saved ask styles or draft your own. The goal is a clear, low-pressure first-date ask.',
+    helperChecklist: [
+      'Warm signal: name the connection or thing you enjoyed',
+      'Specific plan: suggest one concrete public plan',
+      'Easy out: make it clear they can say no',
+    ],
     starterMessages: [
       { role: 'assistant', content: 'Still laughing that you had a whole ranking system for coffee shops.', timestamp: 'Yesterday' },
       { role: 'user', content: 'It is extremely scientific. Vibes, noise level, and whether the chairs are hostile.', timestamp: 'Yesterday' },
       { role: 'assistant', content: 'Hostile chairs is so real. I respect the research.', timestamp: 'Yesterday' },
       { role: 'assistant', content: 'Anyway, hope your day is less chaotic than mine was.', timestamp: 'Today' },
-    ],
-    starterOptions: [
-      'I have a very low-hostility coffee shop in mind if you want to test the ranking this weekend.',
-      'I like talking with you. Would you want to grab coffee this weekend? No pressure if not.',
-      'Would you want to do a quick video call first and see if meeting up feels good?',
     ],
     systemPrompt: `You are Jamie, chatting on a dating app. You talked yesterday about music, weekend plans, and coffee shops. You are interested but cautious.
 
@@ -250,85 +254,31 @@ Never break character. You are Jamie, not Beckett.`,
     {
       type: 'interactive-read',
       title: 'Asking Someone Out on a Date',
-      description: 'This course is about moving from interest to one respectful next step.',
+      description: 'Dating can be especially challenging when you are neurodivergent. Many common dating expectations rely on reading subtle social cues, interpreting ambiguity, and knowing unwritten rules that are rarely explained directly.\n\nThis course is about moving from interest to a respectful next step.\n\nYou are not learning how to impress someone, say the perfect thing, or guarantee a "yes." You are practicing how to communicate interest clearly, respectfully, and in a way that gives the other person an easy choice.',
       sections: [
         {
           heading: 'What you are practicing',
           bullets: [
-            'Not becoming smoother or more charming.',
-            'Not forcing certainty from a vague conversation.',
+            'Not becoming smoother, more charming, or more persuasive.',
+            'Not trying to force certainty from an unclear situation.',
+            'Recognizing when there is enough interest to make an invitation.',
             'Asking someone you are interested in for a specific, low-pressure first meetup.',
           ],
         },
         {
           heading: 'The goal',
           bullets: [
-            'Figure out whether this person seems like a good fit to ask.',
-            'Choose a first-date option that feels safe and realistic.',
-            'Write an ask that is clear enough to answer.',
+            'Decide whether someone seems like a reasonable person to ask.',
+            'Choose a first-date option that feels comfortable, safe, and realistic.',
+            'Write an invitation that is clear, direct, and easy to answer.',
           ],
-        },
-      ],
-    },
-    {
-      type: 'flip-cards',
-      title: 'Dating Strengths Neurodivergent People May Bring',
-      description: 'These are general strengths, not Beckett assuming they are all true for you.',
-      cards: [
-        { front: 'Honesty', back: ['Saying what you mean can build trust.', 'Clear interest is often kinder than vague hints.'] },
-        { front: 'Depth', back: ['You may be good at real conversation once the surface layer passes.', 'Depth is a strength when it is paced.'] },
-        { front: 'Pattern noticing', back: ['You may notice consistency, effort, or mismatch over time.', 'Beckett helps you sort signal from anxiety.'] },
-        { front: 'Loyalty', back: ['Strong care can be beautiful.', 'The skill is pacing care before there is mutual trust.'] },
-      ],
-    },
-    {
-      type: 'accordion',
-      title: 'Why Dating Can Feel Hard',
-      description: 'Open each pattern. Beckett will use these later when you practice.',
-      sections: [
-        { heading: 'Unclear signals', bullets: ['Text removes tone, facial expression, and timing context.', 'Slow replies can mean many things, not just rejection.'] },
-        { heading: 'Rejection sensitivity', bullets: ['A simple ask can feel like a whole verdict on your worth.', 'The course treats a no as information, not proof that you failed.'] },
-        { heading: 'Pacing new interest', bullets: ['Real excitement can become too much too fast.', 'The goal is warm interest plus one next step.'] },
-        { heading: 'Masking and over-editing', bullets: ['Trying to sound effortless can drain you.', 'Prepared language is not fake; it is support.'] },
-        { heading: 'Safety and sensory load', bullets: ['First meetups work better in public, lower-pressure places.', 'Choose a setting where you can hear, regulate, and leave easily.'] },
-      ],
-    },
-    {
-      type: 'flip-cards',
-      title: 'Is This Person A Good Fit To Ask Out?',
-      description: 'Before wording the ask, check whether the connection seems worth moving forward.',
-      cards: [
-        { front: 'Green flags', back: ['They make consistent effort.', 'They ask questions back.', 'They respect pacing.', 'They make concrete plans easier, not harder.'] },
-        { front: 'Compatibility signs', back: ['Some overlap in routines or interests.', 'A communication style that does not make you feel constantly unsafe.', 'Similar availability for dating right now.'] },
-        { front: 'Reasons to pause', back: ['They pressure you for photos or private information.', 'They ignore boundaries.', 'They leave you carrying the entire conversation.'] },
-      ],
-    },
-    {
-      type: 'matching',
-      title: 'Reading Compatibility In Practice',
-      description: 'These are intentionally simpler than a real person. Look for the clearest fit.',
-      instruction: 'Match each person to the best fit.',
-      leftLabel: 'Person',
-      rightLabel: 'Best fit',
-      pairs: [
-        {
-          left: { name: 'Maya', description: 'Quiet, likes slow plans, prefers text first.', mismatchNote: 'Maya needs someone patient and low-pressure.' },
-          right: { name: 'Alex', description: 'Also quiet, likes simple coffee plans, does not need constant texting.' },
-        },
-        {
-          left: { name: 'Jordan', description: 'Direct, busy schedule, wants someone emotionally clear.', mismatchNote: 'Jordan needs direct communication and flexibility.' },
-          right: { name: 'Sam', description: 'Direct, flexible, comfortable planning around work schedules.' },
-        },
-        {
-          left: { name: 'Dani', description: 'Values family, stability, and clear intentions.', mismatchNote: 'Dani needs someone who wants the same kind of steadiness.' },
-          right: { name: 'Priya', description: 'Close to family, clear about dating seriously, likes stable routines.' },
         },
       ],
     },
     {
       type: 'read-through',
       title: 'Online Dating Reality Checks',
-      intro: 'A few basics make the rest of this course safer and less confusing.',
+      intro: 'Before we get into asking people out, it is worth spending a few minutes on online dating.\n\nMeeting someone through an app is now common, but it works differently from meeting someone through friends, work, school, hobbies, or everyday life. Text-based conversations create different challenges: it is harder to read tone, easier to misunderstand intent, and more important to think about safety and boundaries.\n\nThe same principles from this course still apply — clear communication, low pressure, and respect for the other person\'s choices — but there are a few extra considerations that can make online dating safer and less confusing.',
       bullets: [
         'Tone is harder to read over text, so clear words matter.',
         'You never owe photos, private information, or a fast meetup.',
@@ -340,18 +290,63 @@ Never break character. You are Jamie, not Beckett.`,
     },
     {
       type: 'flip-cards',
-      title: 'What Tends To Go Wrong',
+      title: 'Neurodivergent Dating Strengths',
+      description: 'A lot of dating advice focuses on fixing weaknesses. This course takes a different approach.\n\nMany neurodivergent people bring strengths to dating that are genuinely valuable in relationships: honesty, curiosity, loyalty, depth, and the ability to notice patterns that others miss. These strengths do not guarantee success, and they may not describe you personally. But they are common enough to be worth recognizing.\n\nThe goal is not to change who you are. The goal is to use your strengths in ways that help connection grow while avoiding the situations where those same strengths can accidentally create pressure, confusion, or overwhelm.',
       cards: [
-        { front: 'Too vague', back: ['"We should hang out sometime" gives them nothing concrete to answer.', 'Clear is kinder than making them guess.'] },
-        { front: 'Too intense', back: ['Heavy feelings too early can make the other person responsible for reassuring you.', 'Pacing protects both people.'] },
-        { front: 'Too unsafe or stressful', back: ['A home invite is too much for a first app meetup.', 'Loud or crowded settings can make connection harder.'] },
-        { front: 'Too much pressure', back: ['Guilt, urgency, or fear-of-loss language makes a yes less freely given.', 'No pressure should be real, not just a phrase.'] },
+        { front: 'Honesty', back: ['Saying what you mean can build trust.', 'Clear interest is often kinder than vague hints.'] },
+        { front: 'Depth', back: ['You may be good at real conversation once the surface layer passes.', 'Depth is a strength when it is paced.'] },
+        { front: 'Pattern noticing', back: ['You may notice consistency, effort, or mismatch over time.', 'Beckett helps you sort signal from anxiety.'] },
+        { front: 'Loyalty', back: ['Strong care can be beautiful.', 'The skill is pacing care before there is mutual trust.'] },
+      ],
+    },
+    {
+      type: 'accordion',
+      title: 'Why Dating Can Feel Hard',
+      description: 'Dating can be difficult for anyone, but some challenges show up more often for neurodivergent people.\n\nMany dating norms rely on ambiguity, unwritten rules, and interpreting subtle social signals. At the same time, strong interest, rejection sensitivity, masking, sensory needs, and concerns about safety can add extra layers of complexity.\n\nNone of these challenges mean you are bad at dating. They simply mean you may need a clearer process than the one most dating advice assumes. This course focuses on making dating more understandable: noticing real signals, pacing connection, communicating directly, and choosing situations that support both comfort and safety.',
+      sections: [
+        { heading: 'Unclear signals', bullets: ['Text removes tone, facial expression, and timing context.', 'Slow replies can mean many things, not just rejection.'] },
+        { heading: 'Rejection sensitivity', bullets: ['A simple ask can feel like a whole verdict on your worth.', 'The course treats a no as information, not proof that you failed.'] },
+        { heading: 'Pacing new interest', bullets: ['Real excitement can become too much too fast.', 'The goal is warm interest plus one next step.'] },
+        { heading: 'Masking and over-editing', bullets: ['Trying to sound effortless can drain you.', 'Prepared language is not fake; it is support.'] },
+        { heading: 'Safety and sensory load', bullets: ['First meetups work better in public, lower-pressure places.', 'Choose a setting where you can hear, regulate, and leave easily.'] },
+      ],
+    },
+    {
+      type: 'flip-cards',
+      title: 'Is This Person A Good Fit To Ask Out?',
+      description: 'Before you think about how to ask someone out, it helps to ask a different question first: does this connection seem worth moving forward?\n\nInterest alone is not always enough. A good first date is more likely when there are signs of mutual effort, basic compatibility, and respect for boundaries. You are not trying to predict the future or guarantee a yes. You are simply looking for enough evidence that asking is reasonable and that spending more time together could be worthwhile.\n\nThis section will help you look for signs of interest, compatibility, and safety before taking the next step.',
+      cards: [
+        { front: 'Green flags', back: ['They make consistent effort.', 'They ask questions back.', 'They respect pacing.', 'They make concrete plans easier, not harder.'] },
+        { front: 'Compatibility signs', back: ['Some overlap in routines or interests.', 'A communication style that does not make you feel constantly unsafe.', 'Similar availability for dating right now.'] },
+        { front: 'Reasons to pause', back: ['They pressure you for photos or private information.', 'They ignore boundaries.', 'They leave you carrying the entire conversation.'] },
+      ],
+    },
+    {
+      type: 'matching',
+      title: 'Reading Compatibility In Practice',
+      description: 'This activity gives you a low-stakes way to practice reading compatibility.\n\nReal people are complex, and no short description can tell you everything you need to know. These examples are intentionally simpler than real dating situations so you can focus on the clearest signals: pacing, communication style, availability, values, and what each person needs to feel comfortable.\n\nYour job is not to find a perfect match. It is to notice which pairing seems most likely to feel respectful, realistic, and easy enough to try.',
+      instruction: 'Match each person to the best fit.',
+      leftLabel: 'Person',
+      rightLabel: 'Best fit',
+      pairs: [
+        {
+          left: { name: 'Maya', description: 'Prefers texting before phone or video calls.\nEnjoys quieter activities and planning ahead.\nValues consistency and low-pressure communication.', mismatchNote: 'Maya needs someone patient and low-pressure.' },
+          right: { name: 'Alex', description: 'Likes simple, low-key first dates.\nCommunicates reliably without needing constant contact.\nComfortable letting relationships develop gradually.' },
+        },
+        {
+          left: { name: 'Jordan', description: 'Has a busy, sometimes unpredictable work schedule.\nPrefers direct communication over guessing games.\nNeeds flexibility around planning and availability.', mismatchNote: 'Jordan needs direct communication and flexibility.' },
+          right: { name: 'Sam', description: 'Clear and straightforward about interest and availability.\nComfortable adjusting plans when schedules change.\nDoes not interpret delayed responses as rejection.' },
+        },
+        {
+          left: { name: 'Dani', description: 'Looking for a serious, long-term relationship.\nValues family, stability, and follow-through.\nAppreciates people who communicate intentions clearly.', mismatchNote: 'Dani needs someone who wants the same kind of steadiness.' },
+          right: { name: 'Priya', description: 'Close with family and long-term friends.\nInterested in a committed relationship.\nValues routine, reliability, and consistency.' },
+        },
       ],
     },
     {
       type: 'visual-formula',
       title: 'The Clear Ask Formula',
-      description: 'Use this when you want to ask for a first date.',
+      description: 'Asking someone out can feel intimidating, especially when you are trying to figure out the "right" thing to say.\n\nThe good news is that a first-date invitation does not need to be clever, perfect, or highly romantic. In most cases, it only needs three things: a genuine signal of interest, a specific suggestion, and room for the other person to choose freely.\n\nThis formula gives you a simple structure you can use when your brain is overthinking, anxious, or getting stuck on wording. The goal is not to guarantee a yes. The goal is to make your interest clear and make it easy for the other person to respond honestly.',
       steps: [
         { label: 'Warm signal', text: 'Name the connection or thing you enjoyed.', example: 'I have liked talking with you about music.' },
         { label: 'Specific plan', text: 'Suggest one concrete public plan.', example: 'Would you want to grab coffee Saturday afternoon?' },
@@ -360,47 +355,118 @@ Never break character. You are Jamie, not Beckett.`,
     },
     {
       type: 'multiple-choice',
-      title: 'Pick The Clear Ask',
+      title: 'Step 1: Finding the Warm Signal',
+      description: 'A warm signal is not a confession of deep feelings. It is simply a brief, genuine reason for asking someone out.\n\nFor each example, choose whether the warm signal is Too Cold, Too Intense, or Just Right.',
+      suppressDoneScreen: true,
       rounds: [
         {
-          scenario: 'You have been chatting for a few days about music. Which is the clearest first-date ask?',
+          scenario: 'You have been talking with someone after a weekly hobby group for a few weeks.',
           options: [
-            { text: '"We should hang sometime if you ever want."', correct: false, explanation: 'Too vague; there is no concrete plan.' },
-            { text: '"I have liked talking music with you. Want to grab coffee Saturday afternoon? No pressure if not."', correct: true, explanation: 'Warm, specific, and low-pressure.' },
-            { text: '"I feel like this could be something really rare and I need to know if you feel that too."', correct: false, explanation: 'Too intense for an early app conversation.' },
+            { text: 'A: "Want to get coffee Saturday?"', correct: false, explanation: 'Too cold. It is specific, but it does not name any connection or warmth.' },
+            { text: 'B: "I think you are one of the most interesting people I have met in years and I cannot stop thinking about you."', correct: false, explanation: 'Too intense. It puts a lot of emotional weight on an early ask.' },
+            { text: 'C: "I have enjoyed our conversations after the group. Would you want to grab coffee Saturday?"', correct: true, explanation: 'Just right. It names the connection without making it too heavy.' },
           ],
         },
         {
-          scenario: 'You want a lower-pressure first step than meeting in person.',
+          scenario: 'You matched on a dating app and have exchanged messages for about a week.',
           options: [
-            { text: '"Would you want to do a quick video call first and see if meeting up feels good?"', correct: true, explanation: 'Specific and paced.' },
-            { text: '"You probably do not want to meet anyway, right?"', correct: false, explanation: 'This asks them to manage your anxiety.' },
-            { text: '"Let me know what you want to do."', correct: false, explanation: 'Too vague and puts all planning on them.' },
+            { text: 'A: "You seem amazing. I feel like we have a special connection already."', correct: false, explanation: 'Too intense. It assumes a lot before there is much shared context.' },
+            { text: 'B: "I have enjoyed chatting with you about books. Want to meet for coffee sometime this week?"', correct: true, explanation: 'Just right. It is warm, specific enough, and easy to answer.' },
+            { text: 'C: "Meet up?"', correct: false, explanation: 'Too cold. It gives almost no context or warmth.' },
+          ],
+        },
+        {
+          scenario: 'You know someone casually through friends.',
+          options: [
+            { text: 'A: "I like how easy you are to talk to. Would you want to get lunch sometime?"', correct: true, explanation: 'Just right. It gives a genuine warm signal and a concrete next step.' },
+            { text: 'B: "I have been waiting for the perfect moment to tell you that I really, really like you."', correct: false, explanation: 'Too intense. It makes the ask feel much heavier.' },
+            { text: 'C: "Lunch?"', correct: false, explanation: 'Too cold. It is too abrupt and unclear.' },
           ],
         },
       ],
     },
     {
       type: 'sorting',
-      title: 'Sort These First-Date Asks',
+      title: 'Step 2: A Specific Plan',
+      formulaStep: 2,
       instruction: 'Context: you matched on a dating app, chatted for three days, and this would be your first meetup.',
       categories: ['Too vague', 'Too intense', 'Balanced'],
       items: [
-        { message: '"We should hang out sometime."', correct: 'Too vague', explanation: 'No plan, time, or clear next step.' },
-        { message: '"Would you want to grab coffee this Saturday at the quiet place near the park?"', correct: 'Balanced', explanation: 'Specific and realistic for a first meetup.' },
-        { message: '"You should come over and I will cook."', correct: 'Too intense', explanation: 'Too private for a first app meetup.' },
-        { message: '"I like talking with you. Want to do a short video call before we plan anything?"', correct: 'Balanced', explanation: 'Clear, paced, and safe.' },
-        { message: '"I would hate for this to fade, so can we please meet?"', correct: 'Too intense', explanation: 'Fear-of-loss language adds pressure.' },
+        { message: '"We should do something sometime."', correct: 'Too vague', explanation: 'There is no specific activity or next step to respond to.' },
+        { message: '"Would you want to grab coffee Saturday afternoon at the cafe near the park?"', correct: 'Balanced', explanation: 'The plan is specific, public, and easy to accept or decline.' },
+        { message: '"Want to spend the day together and see where things go?"', correct: 'Too intense', explanation: 'Too much time and commitment for a first meetup with someone you barely know.' },
+        { message: '"Would you be up for a 20-minute video call this week?"', correct: 'Balanced', explanation: 'Low-pressure, specific, and a reasonable first step before meeting.' },
+        { message: '"Come over to my apartment and we will watch movies."', correct: 'Too intense', explanation: 'A private-home invitation is usually too much for a first app meetup.' },
+        { message: '"Maybe we could get food or something?"', correct: 'Too vague', explanation: 'The activity is unclear and there is no concrete plan.' },
+        { message: '"Would you like to meet for a short walk and coffee Sunday morning?"', correct: 'Balanced', explanation: 'Public, time-limited, and easy to leave if either person is uncomfortable.' },
+      ],
+    },
+    {
+      type: 'sorting',
+      title: 'Step 3: The Easy Out',
+      formulaStep: 3,
+      description: 'A good easy out does two things at the same time:\n\n- It makes it clear that the other person can say no.\n- It makes it clear that you genuinely want to go on the date.\n\nToo much pressure makes a yes feel less voluntary. Too much hedging can make it sound like you do not really want to ask in the first place. The goal is to land in the middle.\n\nA quick note on confidence: Confidence is not acting like you will get a yes. Confidence is being clear about what you want while being okay with either answer.',
+      instruction: 'Context: You have already made your ask. Sort each response.',
+      categories: ['Too much pressure', 'Too much hedging', 'Just right'],
+      items: [
+        { message: '"No pressure if not."', correct: 'Just right', explanation: 'Short, clear, and genuinely gives them room to decide.' },
+        { message: '"I really hope you will say yes."', correct: 'Too much pressure', explanation: 'The focus shifts to managing your feelings rather than making a free choice.' },
+        { message: '"You probably are not interested, but I thought I would ask."', correct: 'Too much hedging', explanation: 'Sounds apologetic and assumes rejection before they have answered.' },
+        { message: '"No worries if you are not interested."', correct: 'Just right', explanation: 'Respects their choice without minimizing your own interest.' },
+        { message: '"I would be pretty disappointed if you said no."', correct: 'Too much pressure', explanation: 'Creates guilt and makes a no harder to give honestly.' },
+        { message: '"Sorry, this is probably a weird question."', correct: 'Too much hedging', explanation: 'Apologizes for expressing interest instead of asking clearly.' },
+        { message: '"Feel free to say no if it is not your thing."', correct: 'Just right', explanation: 'Direct, respectful, and low-pressure.' },
+        { message: '"I know you are busy, probably not interested, and it is completely okay if this is a bad idea."', correct: 'Too much hedging', explanation: 'So many disclaimers that the invitation becomes unclear.' },
+        { message: '"I have really been hoping you would say yes to this."', correct: 'Too much pressure', explanation: 'Adds emotional weight that can make the other person feel responsible for your reaction.' },
+      ],
+    },
+    {
+      type: 'multiple-choice',
+      title: 'Pick The Clear Ask',
+      description: 'Now let\'s put all three steps together:\n\nA warm signal that names the connection.\nA specific first-date plan.\nAn easy out that respects the other person\'s choice.\n\nThe best asks are usually clear, specific, and low-pressure. They do not hide your interest, but they also do not require the other person to manage your feelings.',
+      helperChecklist: [
+        'Warm signal: name the connection or thing you enjoyed',
+        'Specific plan: suggest one concrete public plan',
+        'Easy out: make it clear they can say no',
+      ],
+      compactHelper: true,
+      suppressDoneScreen: true,
+      rounds: [
+        {
+          scenario: 'You have been talking after a weekly hobby group.',
+          options: [
+            { text: 'A: "Want to hang out sometime?"', correct: false, explanation: 'Too vague. It does not include a warm signal or a specific plan.' },
+            { text: 'B: "I have really enjoyed talking with you after group. Would you want to grab coffee Saturday afternoon? No pressure if not."', correct: true, explanation: 'B includes a warm signal, a specific plan, and a genuine easy out.' },
+            { text: 'C: "I think you are amazing and I have been wanting to ask you out for weeks. Please say yes."', correct: false, explanation: 'Too intense and pressuring.' },
+          ],
+        },
+        {
+          scenario: 'You matched on a dating app and have been chatting for a week.',
+          options: [
+            { text: 'A: "I have enjoyed talking with you about books. Would you want to meet for coffee this weekend? No worries if you are not interested."', correct: true, explanation: 'A is clear and balanced.' },
+            { text: 'B: "Maybe we could do something if you want, but no worries if not, and sorry if this is weird."', correct: false, explanation: 'B hedges too much.' },
+            { text: 'C: "We need to meet before this connection disappears."', correct: false, explanation: 'C creates pressure.' },
+          ],
+        },
+        {
+          scenario: 'You know someone casually through mutual friends.',
+          options: [
+            { text: 'A: "I like how easy you are to talk to. Would you want to get lunch this week? Feel free to say no."', correct: true, explanation: 'A clearly includes all three parts of the formula.' },
+            { text: 'B: "Lunch?"', correct: false, explanation: 'B is too vague.' },
+            { text: 'C: "I know you are probably not interested, but I was wondering if maybe you would want to do something sometime."', correct: false, explanation: 'C hides the ask behind assumptions and hedging.' },
+          ],
+        },
       ],
     },
     {
       type: 'guided-builder',
       title: 'Build Your Ask',
       description: 'Create a few versions you could actually use. Beckett will save them to your Communication toolkit.',
+      formulaStep: 3,
       fields: [
-        { key: 'connection', label: 'What have you enjoyed?', placeholder: 'talking with you about music', options: ['talking with you', 'our coffee shop debate', 'your sense of humor', 'how easy this conversation has felt'] },
-        { key: 'plan', label: 'What kind of first step feels right?', placeholder: 'grab coffee Saturday afternoon', options: ['grab coffee this weekend', 'go for a walk Saturday', 'try a low-key bookstore cafe', 'do a quick video call first'] },
-        { key: 'pressure', label: 'How do you want to keep it low pressure?', placeholder: 'No pressure if not', options: ['No pressure if not', 'Totally okay if you would rather keep chatting', 'Only if that feels good to you'] },
+        { key: 'connection', label: 'What have you enjoyed?', placeholder: 'talking with you about music', options: ['talking with you', 'our coffee shop debate', 'your sense of humor', 'how easy this conversation has felt'], allowOther: true },
+        { key: 'plan', label: 'What kind of first step feels right?', placeholder: 'grab coffee Saturday afternoon', options: ['grab coffee this weekend', 'go for a walk Saturday', 'try a low-key bookstore cafe', 'do a quick video call first'], allowOther: true },
+        { key: 'pressure', label: 'How do you want to keep it low pressure?', placeholder: 'No pressure if not', options: ['No pressure if not', 'Totally okay if you would rather keep chatting', 'Only if that feels good to you'], allowOther: true },
       ],
       outputs: [
         { label: 'Direct ask', category: 'dating_ask', template: 'I have liked {connection}. Would you want to {plan}? {pressure}.' },
