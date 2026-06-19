@@ -347,7 +347,9 @@ function gmailReasonLabel(reason) {
   if (reason === 'gmail_token_expired') return 'Reconnect Gmail for full threads';
   if (reason === 'thread_not_found') return 'Full thread not found';
   if (reason === 'beckett_not_connected') return 'Beckett login unavailable';
-  return 'Full thread unavailable';
+  if (reason?.startsWith('gmail_api_error')) return `Gmail API error (${reason})`;
+  if (reason?.startsWith('gmail_backend_error')) return `Gmail backend error (${reason})`;
+  return `Full thread unavailable (${reason || 'unknown'})`;
 }
 
 // ── Contacts lookup ───────────────────────────────────────────

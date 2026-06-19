@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getExtensionProfile } from "@/lib/extension-auth";
 import { supabaseAdmin } from "@/lib/server-admin";
 
+export const runtime = "nodejs";
+
 type GmailHeader = { name: string; value: string };
 type GmailPart = {
   mimeType?: string;
@@ -256,6 +258,10 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "gmail_api_error";
+    console.error("Extension Gmail thread lookup failed", {
+      userId: profile.id,
+      error: message,
+    });
     if (message === "gmail_token_expired") return jsonError("gmail_token_expired", 401);
     return jsonError(message.startsWith("gmail_api_error") ? message : "gmail_api_error", 500);
   }
