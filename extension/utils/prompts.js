@@ -72,7 +72,7 @@ export function buildMessagePrompt({ messageText, thread, sender, platform, chan
 
   const userLabel = userIdentifier ? `${userIdentifier} (you)` : 'you';
   const contextBlock = thread?.length > 1
-    ? `Full conversation thread:\n${thread.map(m => `[${m.sender}]${m.isCurrentUser ? ` (${userLabel})` : ''}: ${m.body || m.text}`).join('\n\n')}`
+    ? `Full conversation thread (${thread.length} messages, oldest to newest):\n${thread.map(m => `[${m.sender}]${m.isCurrentUser ? ` (${userLabel})` : ''}: ${m.body || m.text}`).join('\n\n')}`
     : `Message received:\n"${messageText}"`;
 
   const anchor = userIdentifier
@@ -83,15 +83,18 @@ export function buildMessagePrompt({ messageText, thread, sender, platform, chan
 
 ${anchor}${contextBlock}
 
+Use the full thread when it is present. If the answer depends on earlier messages, look there before saying you cannot tell.
+Keep every section concise and scannable.
+
 Respond ONLY with valid JSON, no markdown:
 {
-  "intent": "1-2 sentences: what ${participantList} likely means or wants — address this directly to you",
-  "tone": "1-2 sentences: the emotional tone of what ${participantList} sent you — frustration, urgency, passive aggression, warmth, neutrality, etc.",
-  "want": "1-2 sentences: what ${participantList} probably wants you to do or say next",
+  "intent": "- 1 bullet, max 16 words: what ${participantList} likely means or wants — address this directly to you",
+  "tone": "- 1 bullet, max 16 words: the emotional tone — frustration, urgency, passive aggression, warmth, neutrality, etc.",
+  "want": "- 1 bullet, max 16 words: what ${participantList} probably wants you to do or say next",
   "responses": [
-    { "label": "Direct and clear", "tag": "direct", "text": "ready-to-send reply written as if you are sending it" },
-    { "label": "Warm and collaborative", "tag": "warm", "text": "ready-to-send reply written as if you are sending it" },
-    { "label": "Sets a gentle limit", "tag": "boundary", "text": "ready-to-send reply written as if you are sending it" }
+    { "label": "Direct and clear", "tag": "direct", "text": "ready-to-send reply, max 35 words" },
+    { "label": "Warm and collaborative", "tag": "warm", "text": "ready-to-send reply, max 35 words" },
+    { "label": "Sets a gentle limit", "tag": "boundary", "text": "ready-to-send reply, max 35 words" }
   ]
 }`;
 

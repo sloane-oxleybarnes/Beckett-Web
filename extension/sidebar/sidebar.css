@@ -423,6 +423,22 @@ body {
   color: var(--text);
 }
 
+.beckett-bullets {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.beckett-bullets li {
+  margin: 0 0 3px;
+}
+
+.beckett-bullets li:last-child {
+  margin-bottom: 0;
+}
+
 /* ── Responses ───────────────────────────────────────────────── */
 
 .response-item {

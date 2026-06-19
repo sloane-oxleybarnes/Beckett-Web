@@ -493,7 +493,7 @@ Previous analysis:
 
 User's question: "${question}"
 
-Answer in 2-4 sentences. Be specific to the actual conversation above.`;
+Answer as 1-3 short bullets. Be specific to the actual conversation above. If the full thread is visible, use it.`;
 
     const answer = await callBeckettText('ask_about_context', { system, user }, 800, { mode: mode || null });
     sendResponse({ answer: answer.trim() });
@@ -650,7 +650,15 @@ async function resolveGmailThread(token, ctx) {
     return candidates.length ? candidates[candidates.length - 1].thread : null;
   }
 
-  await tryThread(ctx.threadId);
+  const threadIds = [
+    ctx.threadId,
+    ...(ctx.threadIds || []),
+    ...(ctx.thread || []).map(m => m.threadId),
+  ].filter(Boolean);
+
+  for (const id of threadIds) {
+    await tryThread(id);
+  }
 
   const messageIds = [
     ...(ctx.messageIds || []),
@@ -674,6 +682,16 @@ async function resolveGmailThread(token, ctx) {
 
   if (subject) {
     await trySearch(`subject:"${escapeGmailQuery(subject)}"`);
+  }
+
+  const visibleBodies = (ctx.thread || [])
+    .map(m => m.body || m.text || '')
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+
+  for (const body of visibleBodies.slice(0, 2)) {
+    const phrase = extractSearchPhrase(body);
+    if (phrase) await trySearch(`"${escapeGmailQuery(phrase)}"`);
   }
 
   if (candidates.length) {
@@ -723,6 +741,17 @@ function stripRfc822Brackets(id) {
 
 function escapeGmailQuery(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function extractSearchPhrase(text) {
+  const cleaned = String(text || '')
+    .replace(/\s+/g, ' ')
+    .replace(/On .+ wrote:.*/i, '')
+    .trim();
+  const sentence = cleaned
+    .split(/(?<=[.!?])\s+/)
+    .find(part => part.length >= 18 && part.length <= 120);
+  return (sentence || cleaned.slice(0, 90)).trim();
 }
 
 async function fetchContactThreads(email, token) {

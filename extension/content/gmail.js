@@ -8,8 +8,21 @@
 
   function getThreadIdFromUrl() {
     // Matches URLs like /mail/u/0/#inbox/FMfcgzQbgXNbwtNqMtGPKVvJpjclZnFl
-    const match = location.hash.match(/[#/]([A-Za-z0-9]{8,})(?:\?.*)?$/);
+    const match = location.hash.match(/[#/]([A-Za-z0-9:_-]{8,})(?:\?.*)?$/);
     return match ? match[1] : null;
+  }
+
+  function getThreadIdFromContainer(container) {
+    const candidates = [
+      container.getAttribute('data-legacy-thread-id'),
+      container.getAttribute('data-thread-id'),
+      container.closest('[data-legacy-thread-id]')?.getAttribute('data-legacy-thread-id'),
+      container.closest('[data-thread-id]')?.getAttribute('data-thread-id'),
+      container.querySelector('[data-legacy-thread-id]')?.getAttribute('data-legacy-thread-id'),
+      container.querySelector('[data-thread-id]')?.getAttribute('data-thread-id'),
+    ].filter(Boolean);
+
+    return candidates.find(id => id && id !== 'undefined') || '';
   }
 
   function getMessageIdFromContainer(container) {
@@ -49,6 +62,7 @@
         sender: senderEl?.getAttribute('email') || senderEl?.textContent?.trim() || 'Unknown',
         senderEmail: senderEl?.getAttribute('email') || '',
         timestamp: timeEl?.title || timeEl?.textContent?.trim() || '',
+        threadId: cleanMessageId(getThreadIdFromContainer(container)),
         messageId: cleanMessageId(getMessageIdFromContainer(container)),
         body: bodyEl.innerText.trim(),
       });
@@ -66,6 +80,7 @@
           sender: senderEl?.getAttribute('email') || senderEl?.textContent?.trim() || 'Unknown',
           senderEmail: senderEl?.getAttribute('email') || '',
           timestamp: '',
+          threadId: cleanMessageId(getThreadIdFromContainer(container)),
           messageId: cleanMessageId(getMessageIdFromContainer(container)),
           body,
         });
@@ -92,6 +107,7 @@
       platform: 'gmail',
       channelType: 'email',
       threadId,
+      threadIds: [...new Set(threadMessages.map(m => m.threadId).filter(Boolean))],
       messageIds: threadMessages.map(m => m.messageId).filter(Boolean),
       isSafePerson: false, // filled in async below
     };

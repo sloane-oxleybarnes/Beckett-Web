@@ -292,9 +292,9 @@ function showResults(data, isSafePerson) {
   if (!data) return;
   $('safeBadge').hidden = !isSafePerson;
   renderAnalysisMetadata(state.lastAnalysisMetadata);
-  $('rIntent').textContent = data.intent || '—';
-  $('rTone').textContent = data.tone || '—';
-  $('rWant').textContent = data.want || '—';
+  renderBulletText($('rIntent'), data.intent || '—');
+  renderBulletText($('rTone'), data.tone || '—');
+  renderBulletText($('rWant'), data.want || '—');
 
   const container = $('responses');
   container.innerHTML = (data.responses || []).map(r => `
@@ -439,7 +439,7 @@ $('askBtn').onclick = async () => {
   $('askBtn').disabled = false;
 
   if (response.error) { showError($('errorBox'), response.error); return; }
-  $('askAnswer').textContent = response.answer;
+  renderBulletText($('askAnswer'), response.answer);
   $('askAnswerCard').hidden = false;
 };
 
@@ -772,6 +772,26 @@ function msg(type, payload = {}) {
 function showError(el, text) {
   el.textContent = text;
   el.hidden = false;
+}
+
+function renderBulletText(el, value) {
+  const text = String(value || '').trim();
+  if (!text || text === '—') {
+    el.textContent = text || '—';
+    return;
+  }
+
+  const bullets = text
+    .split(/\n+/)
+    .map(line => line.trim().replace(/^[-•]\s*/, ''))
+    .filter(Boolean);
+
+  if (bullets.length <= 1 && !/^[-•]\s*/.test(text)) {
+    el.innerHTML = `<ul class="beckett-bullets"><li>${escHtml(text)}</li></ul>`;
+    return;
+  }
+
+  el.innerHTML = `<ul class="beckett-bullets">${bullets.map(item => `<li>${escHtml(item)}</li>`).join('')}</ul>`;
 }
 
 function escHtml(str) {
