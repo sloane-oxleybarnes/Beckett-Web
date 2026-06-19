@@ -303,11 +303,17 @@ const LUMEN_CSS = `
   font-size: 10px;
   font-weight: 700;
   width: fit-content;
+  background: #FAEEDA;
+  color: #854F0B;
+  border: 1px solid #EF9F27;
 }
 
-.response-tag.direct   { background: #DBEAFE; color: #1E40AF; }
-.response-tag.warm     { background: #D1FAE5; color: #065F46; }
-.response-tag.boundary { background: #FEF3C7; color: #92400E; }
+.response-tag.direct,
+.response-tag.warm,
+.response-tag.boundary {
+  background: #FAEEDA;
+  color: #854F0B;
+}
 
 .response-text {
   font-size: 12px;
