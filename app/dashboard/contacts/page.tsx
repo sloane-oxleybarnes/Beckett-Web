@@ -94,6 +94,9 @@ export default function ContactsPage() {
       relationship.includes(q)
     );
   });
+  const selectedContact = selectedId
+    ? contacts.find((contact) => contact.id === selectedId) || null
+    : null;
 
   function openAdd() {
     setForm(emptyForm());
@@ -456,8 +459,148 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {/* Contact cards */}
-      {filtered.length === 0 && !showForm ? (
+      {selectedContact && !showForm && !mergeSourceId ? (
+        <div className="space-y-5">
+          <button
+            type="button"
+            onClick={() => setSelectedId(null)}
+            className="text-sm text-primary transition-colors hover:underline"
+          >
+            ← Back to contacts
+          </button>
+
+          <section className="bg-white border border-border rounded-card p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2
+                    className="text-3xl text-ink"
+                    style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
+                  >
+                    {selectedContact.name}
+                  </h2>
+                  {selectedContact.trusted && (
+                    <span className="rounded-full bg-primary-light px-3 py-1 text-xs font-medium text-primary">
+                      Trusted contact
+                    </span>
+                  )}
+                </div>
+                {relationshipLabel(selectedContact) && (
+                  <p className="mt-1 text-sm text-primary">{relationshipLabel(selectedContact)}</p>
+                )}
+                <p className="mt-2 text-sm text-ink-light">
+                  Added {new Date(selectedContact.created_at).toLocaleDateString()}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => toggleTrusted(selectedContact)}
+                  className="border border-border text-sm rounded-pill px-4 py-2 text-ink-mid hover:bg-bg transition-colors"
+                  aria-label={selectedContact.trusted ? `Remove ${selectedContact.name} from trusted contacts` : `Mark ${selectedContact.name} as trusted`}
+                >
+                  {selectedContact.trusted ? "Remove trusted" : "Mark trusted"}
+                </button>
+                <button
+                  onClick={() => openEdit(selectedContact)}
+                  className="border border-border text-sm rounded-pill px-4 py-2 text-ink-mid hover:bg-bg transition-colors"
+                >
+                  Edit
+                </button>
+                {contacts.length > 1 && (
+                  <button
+                    onClick={() => openMerge(selectedContact)}
+                    className="border border-border text-sm rounded-pill px-4 py-2 text-ink-mid hover:bg-bg transition-colors"
+                  >
+                    Merge
+                  </button>
+                )}
+                <button
+                  onClick={() => deleteContact(selectedContact.id)}
+                  className="border border-red-200 text-sm rounded-pill px-4 py-2 text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              <div className="rounded-card border border-border bg-bg p-4">
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-light">Email</p>
+                <p className="break-words text-sm text-ink">{selectedContact.email || "Not added"}</p>
+              </div>
+              <div className="rounded-card border border-border bg-bg p-4">
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-light">Slack</p>
+                <p className="break-words text-sm text-ink">{selectedContact.slack_handle || "Not added"}</p>
+              </div>
+              <div className="rounded-card border border-border bg-bg p-4">
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-light">Phone</p>
+                <p className="break-words text-sm text-ink">{selectedContact.phone_number || "Not added"}</p>
+              </div>
+            </div>
+          </section>
+
+          <section className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <div className="bg-white border border-border rounded-card p-5">
+              <h3 className="text-base font-medium text-ink mb-3">Notes</h3>
+              {selectedContact.notes ? (
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-mid">{selectedContact.notes}</p>
+              ) : (
+                <p className="text-sm text-ink-light">No notes yet.</p>
+              )}
+            </div>
+
+            <div className="bg-white border border-border rounded-card p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-medium text-ink">Relationship insights</h3>
+                  <p className="mt-1 text-xs text-ink-light">
+                    Beckett-generated context for communication coaching.
+                  </p>
+                </div>
+                <button
+                  onClick={() => refreshInsights(selectedContact.id)}
+                  disabled={generatingInsights}
+                  className="shrink-0 text-xs text-primary hover:underline disabled:opacity-50"
+                  aria-label={`${selectedContact.contact_insights ? "Refresh" : "Generate"} relationship insights for ${selectedContact.name}`}
+                >
+                  {generatingInsights ? "Generating…" : selectedContact.contact_insights ? "Refresh" : "Generate"}
+                </button>
+              </div>
+
+              {selectedContact.contact_insights ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {[
+                    { label: "Summary", key: "summary" },
+                    { label: "Communication", key: "communication_patterns" },
+                    { label: "Common topics", key: "common_topics" },
+                    { label: "Tone trend", key: "tone_trend" },
+                    { label: "Responsiveness", key: "responsiveness" },
+                  ].map(({ label, key }) => {
+                    const val = selectedContact.contact_insights![key as keyof ContactInsights];
+                    if (!val) return null;
+                    return (
+                      <div key={key} className="rounded-card border border-border bg-bg p-4">
+                        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-light">{label}</p>
+                        <p className="text-sm leading-relaxed text-ink-mid">{val}</p>
+                      </div>
+                    );
+                  })}
+                  {selectedContact.contact_insights.generated_at && (
+                    <p className="text-xs text-ink-light md:col-span-2">
+                      Updated {new Date(selectedContact.contact_insights.generated_at).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-ink-light">
+                  No insights yet. Click Generate to analyze this relationship.
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : filtered.length === 0 && !showForm ? (
         <div className="mt-6 text-center py-16 bg-white border border-border rounded-card">
           <p className="text-ink-mid text-sm">
             {search ? "No contacts match your search." : "No contacts yet."}
@@ -471,16 +614,10 @@ export default function ContactsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {filtered.map((c) => {
-            const expanded = selectedId === c.id;
             return (
               <div
                 key={c.id}
-                onClick={() => setSelectedId(expanded ? null : c.id)}
-                className={`bg-white border rounded-card p-4 cursor-pointer transition-colors ${
-                  expanded
-                    ? "border-primary ring-1 ring-primary"
-                    : "border-border hover:border-ink-light"
-                }`}
+                className="bg-white border border-border rounded-card p-4 transition-colors hover:border-ink-light"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -516,11 +653,10 @@ export default function ContactsPage() {
 
                 <div className="mt-4 flex gap-3" onClick={(e) => e.stopPropagation()}>
                   <button
-                    onClick={() => setSelectedId(expanded ? null : c.id)}
+                    onClick={() => { setSelectedId(c.id); setShowForm(false); setMergeSourceId(null); }}
                     className="text-xs text-primary transition-colors hover:underline"
-                    aria-expanded={expanded}
                   >
-                    {expanded ? "Hide details" : "Details"}
+                    Details
                   </button>
                   <button
                     onClick={() => openEdit(c)}
@@ -544,62 +680,6 @@ export default function ContactsPage() {
                   </button>
                 </div>
 
-                {expanded && (
-                  <div className="mt-4 border-t border-border pt-4">
-                    {c.notes && (
-                      <div className="mb-4">
-                        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-light">Notes</p>
-                        <p className="text-xs leading-relaxed text-ink-mid">{c.notes}</p>
-                      </div>
-                    )}
-
-                    <div>
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <p className="text-xs font-medium uppercase tracking-wide text-ink-light">
-                          Relationship insights
-                        </p>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); refreshInsights(c.id); }}
-                          disabled={generatingInsights}
-                          className="text-xs text-primary hover:underline disabled:opacity-50"
-                          aria-label={`${c.contact_insights ? "Refresh" : "Generate"} relationship insights for ${c.name}`}
-                        >
-                          {generatingInsights ? "Generating…" : c.contact_insights ? "Refresh" : "Generate"}
-                        </button>
-                      </div>
-
-                      {c.contact_insights ? (
-                        <div className="space-y-3">
-                          {[
-                            { label: "Summary", key: "summary" },
-                            { label: "Communication", key: "communication_patterns" },
-                            { label: "Common topics", key: "common_topics" },
-                            { label: "Tone trend", key: "tone_trend" },
-                            { label: "Responsiveness", key: "responsiveness" },
-                          ].map(({ label, key }) => {
-                            const val = c.contact_insights![key as keyof ContactInsights];
-                            if (!val) return null;
-                            return (
-                              <div key={key}>
-                                <p className="mb-0.5 text-xs font-medium text-ink">{label}</p>
-                                <p className="text-xs leading-relaxed text-ink-mid">{val}</p>
-                              </div>
-                            );
-                          })}
-                          {c.contact_insights.generated_at && (
-                            <p className="pt-1 text-xs text-ink-light">
-                              Updated {new Date(c.contact_insights.generated_at).toLocaleDateString()}
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-ink-light">
-                          No insights yet. Click Generate to analyse this relationship.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}
