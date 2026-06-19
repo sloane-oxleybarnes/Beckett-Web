@@ -469,22 +469,25 @@ export default function ContactsPage() {
             ← Back to contacts
           </button>
 
-          <section className="bg-white border border-border rounded-card p-6">
+          <section className="relative bg-white border border-border rounded-card p-6">
+            <button
+              onClick={() => toggleTrusted(selectedContact)}
+              className={`absolute right-5 top-5 text-2xl leading-none transition-colors ${
+                selectedContact.trusted ? "text-primary" : "text-ink-light hover:text-primary"
+              }`}
+              title={selectedContact.trusted ? "Remove trusted" : "Mark trusted"}
+              aria-label={selectedContact.trusted ? `Remove ${selectedContact.name} from trusted contacts` : `Mark ${selectedContact.name} as trusted`}
+            >
+              <span aria-hidden="true">{selectedContact.trusted ? "♥" : "♡"}</span>
+            </button>
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-3">
-                  <h2
-                    className="text-3xl text-ink"
-                    style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-                  >
-                    {selectedContact.name}
-                  </h2>
-                  {selectedContact.trusted && (
-                    <span className="rounded-full bg-primary-light px-3 py-1 text-xs font-medium text-primary">
-                      Trusted contact
-                    </span>
-                  )}
-                </div>
+              <div className="min-w-0 pr-10">
+                <h2
+                  className="text-3xl text-ink"
+                  style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
+                >
+                  {selectedContact.name}
+                </h2>
                 {relationshipLabel(selectedContact) && (
                   <p className="mt-1 text-sm text-primary">{relationshipLabel(selectedContact)}</p>
                 )}
@@ -494,13 +497,6 @@ export default function ContactsPage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => toggleTrusted(selectedContact)}
-                  className="border border-border text-sm rounded-pill px-4 py-2 text-ink-mid hover:bg-bg transition-colors"
-                  aria-label={selectedContact.trusted ? `Remove ${selectedContact.name} from trusted contacts` : `Mark ${selectedContact.name} as trusted`}
-                >
-                  {selectedContact.trusted ? "Remove trusted" : "Mark trusted"}
-                </button>
                 <button
                   onClick={() => openEdit(selectedContact)}
                   className="border border-border text-sm rounded-pill px-4 py-2 text-ink-mid hover:bg-bg transition-colors"
@@ -623,7 +619,6 @@ export default function ContactsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="truncate text-sm font-medium text-ink">{c.name}</p>
-                      {c.trusted && <span className="text-base leading-none" aria-label="Trusted contact">💛</span>}
                     </div>
                     {relationshipLabel(c) && (
                       <p className="mt-1 text-xs text-primary">{relationshipLabel(c)}</p>
@@ -643,11 +638,13 @@ export default function ContactsPage() {
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleTrusted(c); }}
-                    className="shrink-0 text-xs text-ink-light transition-colors hover:text-amber-500"
+                    className={`shrink-0 text-xl leading-none transition-colors ${
+                      c.trusted ? "text-primary" : "text-ink-light hover:text-primary"
+                    }`}
                     title={c.trusted ? "Remove trusted" : "Mark trusted"}
                     aria-label={c.trusted ? `Remove ${c.name} from trusted contacts` : `Mark ${c.name} as trusted`}
                   >
-                    <span aria-hidden="true">{c.trusted ? "💛" : "♡"}</span>
+                    <span aria-hidden="true">{c.trusted ? "♥" : "♡"}</span>
                   </button>
                 </div>
 
