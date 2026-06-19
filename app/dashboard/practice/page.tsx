@@ -621,7 +621,7 @@ export default function PracticePage() {
                   type="text"
                   value={person}
                   onChange={e => setPerson(e.target.value)}
-                  placeholder="e.g. Nick"
+                  placeholder="e.g. Avery"
                   className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 {contactContext && (
@@ -638,7 +638,7 @@ export default function PracticePage() {
                 label="How do you know them?"
                 value={relationshipContext}
                 onChange={setRelationshipContext}
-                placeholder="e.g. They&apos;ve been my manager for 2 years and we usually have high trust"
+                placeholder="e.g. We work on the same launch project, but this is our first time owning a handoff together"
                 helperText="A sentence or two is enough. Include the role or dynamic that matters here."
               />
 
@@ -672,7 +672,7 @@ export default function PracticePage() {
                 <textarea
                   value={situation}
                   onChange={e => setSituation(e.target.value)}
-                  placeholder="e.g. I need to set a boundary around weekend messages without sounding combative"
+                  placeholder="e.g. I need to ask what they need from me before Friday without sounding like I missed something obvious"
                   rows={4}
                   className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary resize-none"
                 />
@@ -709,7 +709,7 @@ export default function PracticePage() {
                   label="What do you want Beckett to help you practice?"
                   value={practiceFocus}
                   onChange={setPracticeFocus}
-                  placeholder="e.g. Help me start clearly and not backpedal"
+                  placeholder="e.g. Help me ask directly, stay concise, and not over-apologize"
                   helperText="This helps Beckett tune feedback to the part you most want to improve."
                 />
                 <div className="mt-2 flex flex-wrap gap-2">
