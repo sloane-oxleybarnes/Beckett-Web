@@ -214,6 +214,11 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [practiceMessages])
 
+  useEffect(() => {
+    if (phase === 'open-practice') return
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [phase, currentSlideIndex])
+
   // Shuffle matching right column when reaching a matching slide
   useEffect(() => {
     if (phase === 'slides' && maybeCourse) {
