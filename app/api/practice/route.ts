@@ -17,6 +17,11 @@ function lengthInstruction(messageCount: number) {
   return 'Keep your response to 1-2 sentences. Be concise and realistic — real conversations don\'t monologue.'
 }
 
+function extractJsonObject(text: string) {
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+  return cleaned.startsWith('{') ? cleaned : cleaned.match(/\{[\s\S]*\}/)?.[0] || cleaned
+}
+
 export async function POST(req: NextRequest) {
   try {
   const supabase = createSupabaseServerClient()
@@ -134,7 +139,7 @@ Rules:
 
     const result = await callMeteredAnthropic(system, [{ role: 'user', content: user }], 350)
     try {
-      const parsed = JSON.parse(result.trim()) as { note?: string; improvedResponse?: string }
+      const parsed = JSON.parse(extractJsonObject(result)) as { note?: string; improvedResponse?: string }
       return NextResponse.json({
         note: parsed.note?.trim() || '',
         improvedResponse: parsed.improvedResponse?.trim() || '',
@@ -182,7 +187,7 @@ Analyze whether this conversation would be more effective in person or over text
       120
     )
     try {
-      const parsed = JSON.parse(result.trim()) as { format: string; reason: string }
+      const parsed = JSON.parse(extractJsonObject(result)) as { format: string; reason: string }
       return NextResponse.json(parsed)
     } catch {
       return NextResponse.json({ format: 'text', reason: 'Could not determine a recommendation. Proceeding with text.' })
@@ -240,9 +245,7 @@ ${channelRules}
       channel === 'email' ? 320 : 180
     )
     try {
-      const cleaned = result.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
-      const jsonText = cleaned.startsWith('{') ? cleaned : cleaned.match(/\{[\s\S]*\}/)?.[0] || cleaned
-      const parsed = JSON.parse(jsonText) as { prompts: string[] }
+      const parsed = JSON.parse(extractJsonObject(result)) as { prompts: string[] }
       return NextResponse.json({ prompts: parsed.prompts || [] })
     } catch {
       return NextResponse.json({ prompts: [] })
@@ -308,9 +311,7 @@ Quality bar:
 
     const result = await callMeteredAnthropic(system, [{ role: 'user', content: user }], 900)
     try {
-      const cleaned = result.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
-      const jsonText = cleaned.startsWith('{') ? cleaned : cleaned.match(/\{[\s\S]*\}/)?.[0] || cleaned
-      const parsed = JSON.parse(jsonText) as { tips?: { title?: string; text?: string }[] }
+      const parsed = JSON.parse(extractJsonObject(result)) as { tips?: { title?: string; text?: string }[] }
       const expectedTitles = ['How to start', 'How this might go', 'What to watch for']
       const tips = expectedTitles.map((title, index) => ({
         title,
@@ -349,7 +350,7 @@ Return ONLY valid JSON — one of these three forms:
       100
     )
     try {
-      const parsed = JSON.parse(result.trim()) as { intervene?: boolean; severity?: string; message?: string }
+      const parsed = JSON.parse(extractJsonObject(result)) as { intervene?: boolean; severity?: string; message?: string }
       return NextResponse.json(parsed)
     } catch {
       return NextResponse.json({ intervene: false })
@@ -382,7 +383,7 @@ Return only valid JSON. No markdown, no extra text.`
 
     const result = await callMeteredAnthropic(system, [{ role: 'user', content: user }], 600)
     try {
-      const parsed = JSON.parse(result.trim()) as Record<string, string>
+      const parsed = JSON.parse(extractJsonObject(result)) as Record<string, string>
       return NextResponse.json(parsed)
     } catch {
       return NextResponse.json({ error: 'Failed to parse feedback. Please try again.' }, { status: 500 })
