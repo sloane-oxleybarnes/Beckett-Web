@@ -28,13 +28,7 @@ chrome.runtime.onStartup.addListener(() => {
 function isBeckettAppUrl(url = '') {
   try {
     const parsed = new URL(url);
-    const isProduction =
-      parsed.hostname === 'meetbeckett.co' ||
-      parsed.hostname === 'www.meetbeckett.co';
-    const isLocalDev =
-      (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
-      (parsed.pathname.startsWith('/dashboard') || parsed.pathname.startsWith('/auth'));
-    return isProduction || isLocalDev;
+    return parsed.hostname === 'meetbeckett.co' || parsed.hostname === 'www.meetbeckett.co';
   } catch (_) {
     return false;
   }

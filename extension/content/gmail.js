@@ -1,4 +1,4 @@
-// Gmail content script — extracts thread context and communicates with Lumen side panel
+// Gmail content script — extracts thread context and communicates with the Beckett side panel.
 
 (function () {
   let currentContext = null;

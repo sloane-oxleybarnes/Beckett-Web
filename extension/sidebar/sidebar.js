@@ -456,7 +456,7 @@ const MEETING_TEMPLATE = `
 </div>
 `;
 
-class LumenSidebar {
+class BeckettSidebar {
   constructor({ platform = 'generic', isMeeting = false } = {}) {
     this.platform = platform;
     this.isMeeting = isMeeting;
@@ -679,4 +679,4 @@ class LumenSidebar {
 }
 
 // Expose globally so platform content scripts can instantiate it
-window.LumenSidebar = LumenSidebar;
+window.BeckettSidebar = BeckettSidebar;

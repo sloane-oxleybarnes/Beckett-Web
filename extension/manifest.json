@@ -17,8 +17,7 @@
     "https://meetbeckett.co/*",
     "https://www.meetbeckett.co/*",
     "https://gmail.googleapis.com/*",
-    "https://slack.com/api/*",
-    "https://lumen-slack.sloane-oxleyhase.workers.dev/*"
+    "https://slack.com/api/*"
   ],
   "background": {
     "service_worker": "background/service_worker.js",
