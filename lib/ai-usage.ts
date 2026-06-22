@@ -1,6 +1,6 @@
 import { supabaseAdmin } from './server-admin'
 
-const DEFAULT_BETA_DAILY_LIMIT = 15
+const DEFAULT_BETA_DAILY_LIMIT = 30
 const DEFAULT_BETA_DAILY_COURSE_LIMIT = 40
 export const UNLIMITED_AI_LIMIT = 999999
 

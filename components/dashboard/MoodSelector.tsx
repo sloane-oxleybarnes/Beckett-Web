@@ -3,7 +3,19 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 
-const MOODS = ["😔", "😐", "🙂", "😊", "🤩"];
+const MOODS = ["Low", "Strained", "Okay", "Focused", "Energized"];
+
+const legacyMoodLabels: Record<string, string> = {
+  "😔": "Low",
+  "😐": "Strained",
+  "🙂": "Okay",
+  "😊": "Focused",
+  "🤩": "Energized",
+};
+
+function normalizeMood(mood: string) {
+  return legacyMoodLabels[mood] || mood;
+}
 
 export default function MoodSelector() {
   const supabase = createClient();
@@ -21,7 +33,7 @@ export default function MoodSelector() {
         .eq("user_id", user.id)
         .eq("date", today)
         .maybeSingle();
-      if (data?.mood) setSelected(data.mood);
+      if (data?.mood) setSelected(normalizeMood(data.mood));
     }
     loadTodaysMood();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -42,19 +54,20 @@ export default function MoodSelector() {
   }
 
   return (
-    <div className="flex items-center gap-2 mt-3">
-      {MOODS.map((emoji) => (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      {MOODS.map((mood) => (
         <button
-          key={emoji}
-          onClick={() => saveMood(emoji)}
-          className={`text-2xl rounded-full w-10 h-10 flex items-center justify-center transition-all ${
-            selected === emoji
-              ? "bg-primary-light ring-2 ring-primary scale-110"
-              : "hover:bg-bg hover:scale-105"
+          key={mood}
+          type="button"
+          onClick={() => saveMood(mood)}
+          className={`rounded-pill border px-3 py-2 text-xs font-medium transition-colors ${
+            selected === mood
+              ? "border-primary bg-primary-light text-primary"
+              : "border-border bg-white text-ink-mid hover:border-primary-mid hover:text-ink"
           }`}
-          aria-label={emoji}
+          aria-pressed={selected === mood}
         >
-          {emoji}
+          {mood}
         </button>
       ))}
     </div>

@@ -3,12 +3,9 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import {
-  coachingToneOptions,
-  communicationPreferenceOptions,
   neurodivergentContextOptions,
   strengthOptions,
   workplaceTriggerOptions,
-  type CoachingTone,
 } from "@/lib/onboarding";
 
 type AboutData = {
@@ -36,6 +33,33 @@ function toggleValue(list: string[], value: string, max?: number) {
   if (list.includes(value)) return list.filter((item) => item !== value);
   if (max && list.length >= max) return list;
   return [...list, value];
+}
+
+function splitCustomEntries(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function mergeCustomEntries(list: string[], value: string, max?: number) {
+  const next = [...list];
+  const existing = new Set(next.map((item) => item.toLowerCase()));
+
+  for (const entry of splitCustomEntries(value)) {
+    if (max && next.length >= max) break;
+    const key = entry.toLowerCase();
+    if (existing.has(key)) continue;
+    next.push(entry);
+    existing.add(key);
+  }
+
+  return next;
+}
+
+function getCustomValues(values: string[], presetOptions: string[]) {
+  const presets = new Set(presetOptions.map((item) => item.toLowerCase()));
+  return values.filter((value) => !presets.has(value.toLowerCase()));
 }
 
 function OptionButton({
@@ -116,6 +140,69 @@ function SummarySection({
   );
 }
 
+function CustomEntryControls({
+  value,
+  onChange,
+  onAdd,
+  values,
+  presetOptions,
+  onRemove,
+  disabled,
+  helperText,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onAdd: () => void;
+  values: string[];
+  presetOptions: string[];
+  onRemove: (value: string) => void;
+  disabled?: boolean;
+  helperText?: string;
+}) {
+  const customValues = getCustomValues(values, presetOptions);
+
+  return (
+    <div className="mt-4 rounded-sm border border-border bg-bg/60 p-3">
+      <label className="block text-xs font-medium uppercase tracking-wide text-ink-light">
+        Add your own
+      </label>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          placeholder="Separate each answer with a comma"
+          className="min-w-0 flex-1 rounded-sm border border-border bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+        />
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={disabled || splitCustomEntries(value).length === 0}
+          className="rounded-pill border border-border bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-primary-mid hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Add
+        </button>
+      </div>
+      {helperText && <p className="mt-2 text-xs text-ink-light">{helperText}</p>}
+      {customValues.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {customValues.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => onRemove(item)}
+              className="rounded-pill bg-white px-3 py-1 text-xs text-ink-mid transition-colors hover:bg-red-50 hover:text-red-700"
+              aria-label={`Remove ${item}`}
+            >
+              {item} x
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TextAreaCard({
   title,
   description,
@@ -156,10 +243,11 @@ export default function AboutPage() {
   const [saved, setSaved] = useState(false);
   const [strengths, setStrengths] = useState<string[]>([]);
   const [workplaceTriggers, setWorkplaceTriggers] = useState<string[]>([]);
-  const [preferences, setPreferences] = useState<string[]>([]);
-  const [coachingTone, setCoachingTone] = useState<CoachingTone>("direct_kind");
   const [neurodivergentContext, setNeurodivergentContext] = useState<string[]>([]);
   const [contextOther, setContextOther] = useState("");
+  const [customStrengths, setCustomStrengths] = useState("");
+  const [customTriggers, setCustomTriggers] = useState("");
+  const [customContext, setCustomContext] = useState("");
   const [editingSections, setEditingSections] = useState<Set<string>>(new Set());
   const [toolkitItems, setToolkitItems] = useState<ToolkitItem[]>([]);
   const [deletingToolkitId, setDeletingToolkitId] = useState<string | null>(null);
@@ -184,14 +272,12 @@ export default function AboutPage() {
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("strengths, workplace_triggers, communication_preferences, coaching_tone, neurodivergent_context, neurodivergent_context_other")
+        .select("strengths, workplace_triggers, neurodivergent_context, neurodivergent_context_other")
         .eq("id", user.id)
         .single();
       if (profile) {
         setStrengths(profile.strengths || []);
         setWorkplaceTriggers(profile.workplace_triggers || []);
-        setPreferences(profile.communication_preferences || []);
-        setCoachingTone(profile.coaching_tone || "direct_kind");
         setNeurodivergentContext(profile.neurodivergent_context || []);
         setContextOther(profile.neurodivergent_context_other || "");
       }
@@ -220,8 +306,6 @@ export default function AboutPage() {
       .update({
         strengths,
         workplace_triggers: workplaceTriggers,
-        communication_preferences: preferences,
-        coaching_tone: coachingTone,
         neurodivergent_context: neurodivergentContext,
         neurodivergent_context_other: contextOther.trim() || null,
         updated_at: new Date().toISOString(),
@@ -239,6 +323,21 @@ export default function AboutPage() {
       else next.add(section);
       return next;
     });
+  }
+
+  function addCustomStrengths() {
+    setStrengths((current) => mergeCustomEntries(current, customStrengths, 3));
+    setCustomStrengths("");
+  }
+
+  function addCustomTriggers() {
+    setWorkplaceTriggers((current) => mergeCustomEntries(current, customTriggers));
+    setCustomTriggers("");
+  }
+
+  function addCustomContext() {
+    setNeurodivergentContext((current) => mergeCustomEntries(current, customContext));
+    setCustomContext("");
   }
 
   async function deleteToolkitItem(id: string) {
@@ -365,6 +464,20 @@ export default function AboutPage() {
             ))}
           </div>
           <p className="text-xs text-ink-light mt-3">{strengths.length}/3 selected</p>
+          <CustomEntryControls
+            value={customStrengths}
+            onChange={setCustomStrengths}
+            onAdd={addCustomStrengths}
+            values={strengths}
+            presetOptions={strengthOptions}
+            onRemove={(value) => setStrengths((current) => current.filter((item) => item !== value))}
+            disabled={strengths.length >= 3}
+            helperText={
+              strengths.length >= 3
+                ? "Remove a strength before adding another."
+                : "Strengths are capped at three total answers."
+            }
+          />
         </SummarySection>
 
         <TextAreaCard
@@ -392,6 +505,14 @@ export default function AboutPage() {
               />
             ))}
           </div>
+          <CustomEntryControls
+            value={customTriggers}
+            onChange={setCustomTriggers}
+            onAdd={addCustomTriggers}
+            values={workplaceTriggers}
+            presetOptions={workplaceTriggerOptions}
+            onRemove={(value) => setWorkplaceTriggers((current) => current.filter((item) => item !== value))}
+          />
         </SummarySection>
 
         <TextAreaCard
@@ -401,45 +522,6 @@ export default function AboutPage() {
           onChange={(value) => setData({ ...data, triggers: value })}
           placeholder="e.g. Being interrupted. Vague feedback. Feeling like I am being judged. Unexpected confrontation."
         />
-
-        <SummarySection
-          title="Communication preferences"
-          description="Choose how you want Beckett to coach, explain, and draft with you."
-          values={[
-            ...preferences,
-            coachingToneOptions.find((option) => option.value === coachingTone)?.label || "",
-          ].filter(Boolean)}
-          editing={editingSections.has("preferences")}
-          onToggle={() => toggleSection("preferences")}
-        >
-          <div className="grid gap-2 sm:grid-cols-2 mb-5">
-            {communicationPreferenceOptions.map((option) => (
-              <OptionButton
-                key={option}
-                label={option}
-                selected={preferences.includes(option)}
-                onClick={() => setPreferences((current) => toggleValue(current, option))}
-              />
-            ))}
-          </div>
-          <div className="space-y-2">
-            {coachingToneOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setCoachingTone(option.value)}
-                className={`w-full text-left rounded-sm border px-3 py-3 transition-colors ${
-                  coachingTone === option.value
-                    ? "border-primary bg-primary-light"
-                    : "border-border hover:border-primary-mid"
-                }`}
-              >
-                <p className="text-sm font-medium text-ink">{option.label}</p>
-                <p className="text-xs text-ink-mid mt-0.5">{option.description}</p>
-              </button>
-            ))}
-          </div>
-        </SummarySection>
 
         <TextAreaCard
           title="How I communicate"
@@ -479,6 +561,14 @@ export default function AboutPage() {
               />
             </div>
           )}
+          <CustomEntryControls
+            value={customContext}
+            onChange={setCustomContext}
+            onAdd={addCustomContext}
+            values={neurodivergentContext.filter((item) => item !== "Something else")}
+            presetOptions={neurodivergentContextOptions}
+            onRemove={(value) => setNeurodivergentContext((current) => current.filter((item) => item !== value))}
+          />
         </SummarySection>
 
         <button

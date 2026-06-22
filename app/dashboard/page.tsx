@@ -4,7 +4,13 @@ import Link from "next/link";
 import MoodSelector from "@/components/dashboard/MoodSelector";
 import CoachWalkthrough from "@/components/dashboard/CoachWalkthrough";
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams?: {
+    tour?: string | string[];
+  };
+};
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const supabase = createSupabaseServerClient();
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect("/auth/login");
@@ -77,9 +83,10 @@ export default async function DashboardPage() {
   ];
   const setupCompleteCount = setupItems.filter((item) => item.done).length;
   const setupComplete = setupCompleteCount === setupItems.length;
-  const showWalkthrough = Boolean(
-    profile?.first_login_complete && !profile?.dashboard_walkthrough_completed_at
-  );
+  const tourParam = Array.isArray(searchParams?.tour) ? searchParams?.tour[0] : searchParams?.tour;
+  const showWalkthrough =
+    tourParam === "1" ||
+    Boolean(profile?.first_login_complete && !profile?.dashboard_walkthrough_completed_at);
 
   return (
     <div className="w-full max-w-6xl">

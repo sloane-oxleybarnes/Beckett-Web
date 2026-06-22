@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import DashboardSidebar from "@/components/dashboard/Sidebar";
-import BetaFeedbackWidget from "@/components/dashboard/BetaFeedbackWidget";
+import DashboardShell from "@/components/dashboard/DashboardShell";
 
 export default async function DashboardLayout({
   children,
@@ -28,12 +27,8 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-bg flex">
-      <DashboardSidebar profile={profile} userEmail={session.user.email || ""} />
-      <main className="flex-1 md:ml-64 px-4 py-6 pt-16 md:px-8 md:py-8 md:pt-8">
-        {children}
-      </main>
-      <BetaFeedbackWidget />
-    </div>
+    <DashboardShell profile={profile} userEmail={session.user.email || ""}>
+      {children}
+    </DashboardShell>
   );
 }

@@ -26,9 +26,13 @@ const navItems = [
 export default function DashboardSidebar({
   profile,
   userEmail,
+  desktopCollapsed,
+  onDesktopCollapseChange,
 }: {
   profile: Profile | null;
   userEmail: string;
+  desktopCollapsed: boolean;
+  onDesktopCollapseChange: (collapsed: boolean) => void;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -45,7 +49,7 @@ export default function DashboardSidebar({
   const sidebarContent = (
     <>
       {/* Logo */}
-      <div className="p-6 border-b border-border flex items-center justify-between">
+      <div className="p-6 border-b border-border flex items-center justify-between gap-3">
         <Link
           href="/dashboard"
           className="relative block h-9 w-36"
@@ -61,6 +65,15 @@ export default function DashboardSidebar({
           />
           <span className="sr-only">Beckett</span>
         </Link>
+        <button
+          type="button"
+          onClick={() => onDesktopCollapseChange(true)}
+          className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border text-sm text-ink-mid transition-colors hover:border-primary-mid hover:text-ink md:flex"
+          aria-label="Collapse sidebar"
+          title="Collapse sidebar"
+        >
+          {"<"}
+        </button>
         <button
           onClick={() => setMobileOpen(false)}
           className="md:hidden text-ink-light hover:text-ink text-xl leading-none"
@@ -91,7 +104,7 @@ export default function DashboardSidebar({
         </div>
 
         <p className="mt-5 px-3 text-xs leading-snug text-ink-light/70">
-          Your profile, triggers, and coaching preferences live in About Me.
+          Your profile and triggers live in About Me. Beckett coaching settings live in Settings.
         </p>
       </nav>
 
@@ -138,6 +151,21 @@ export default function DashboardSidebar({
         <span className="w-4 h-px bg-ink block" />
       </button>
 
+      {desktopCollapsed && (
+        <button
+          type="button"
+          onClick={() => onDesktopCollapseChange(false)}
+          className="fixed left-4 top-4 z-50 hidden h-9 w-9 flex-col items-center justify-center gap-1.5 rounded-sm border border-border bg-white shadow-sm md:flex"
+          aria-label="Open sidebar"
+          aria-expanded={false}
+          title="Open sidebar"
+        >
+          <span className="w-4 h-px bg-ink block" />
+          <span className="w-4 h-px bg-ink block" />
+          <span className="w-4 h-px bg-ink block" />
+        </button>
+      )}
+
       {/* Backdrop — mobile only */}
       {mobileOpen && (
         <div
@@ -148,8 +176,9 @@ export default function DashboardSidebar({
 
       {/* Sidebar — fixed on desktop, slide-in on mobile */}
       <aside
-        className={`fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-border flex flex-col z-50 transition-transform duration-200
-          ${mobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
+        className={`fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-border flex flex-col z-50 transition-[left,transform] duration-200 md:translate-x-0 ${
+          desktopCollapsed ? "md:-left-64" : "md:left-0"
+        } ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
         {sidebarContent}
       </aside>

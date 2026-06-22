@@ -134,9 +134,7 @@ function SkillModuleCard({
       <div className="min-w-0 flex-1 relative">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <h2 className="text-base font-medium text-ink">{card.title}</h2>
-          {isLive ? (
-            <span className="rounded-pill bg-primary-light px-2 py-0.5 text-xs text-primary">{card.level}</span>
-          ) : (
+          {!isLive && (
             <span className="rounded-pill bg-bg px-2 py-0.5 text-xs text-ink-light">Coming soon</span>
           )}
           {isCompleted && (

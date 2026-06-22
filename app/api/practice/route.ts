@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json() as {
-    action: 'turn' | 'debrief' | 'inline_feedback' | 'suggested_prompts' | 'recommend_format' | 'draft_feedback' | 'intervention_check'
+    action: 'turn' | 'debrief' | 'inline_feedback' | 'assistant_feedback' | 'suggested_prompts' | 'recommend_format' | 'draft_feedback' | 'intervention_check'
     mode?: 'personal' | 'professional'
     system?: string
     messages?: { role: string; content: string }[]
@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
     goal?: string
     conversationHistory?: string
     userMessage?: string
+    assistantMessage?: string
     context?: string
     person?: string
     lastAIMessage?: string
@@ -108,14 +109,52 @@ In one short sentence (max 20 words), note how they came across. Be direct and s
     if (!userMessage) return NextResponse.json({ error: 'userMessage required' }, { status: 400 })
     const toneNote = mode === 'professional' ? 'Focus on professional tone and effectiveness.' : 'Focus on emotional tone and how natural it sounds.'
 
-    const system = `You are a communication coach previewing a message before it is sent. ${toneNote}`
+    const system = `You are a communication coach previewing a message before it is sent. ${toneNote} Return only valid JSON.`
     const user = `The user is practicing a conversation with ${person || 'someone'} about: ${situation || 'a difficult topic'}. Their goal: ${goal || 'not specified'}.
 
 ${conversationHistory ? `Conversation so far:\n${conversationHistory}\n\n` : ''}The user is about to send: "${userMessage}"
 
-In one sentence (max 20 words), note how this message would likely land — focus on tone and effectiveness, not grammar. Return only the sentence.`
+Return ONLY valid JSON with exactly these fields:
+{
+  "note": "One sentence, max 22 words, about how the message would likely land.",
+  "improvedResponse": "A more natural, effective version of the user's message."
+}
 
-    const note = await callMeteredAnthropic(system, [{ role: 'user', content: user }], 80)
+Rules:
+- Preserve the user's intent.
+- Make the improved response sound human, not polished or corporate.
+- Fix grammar and awkward phrasing when needed.
+- Do not make the response much longer than the original unless clarity requires it.`
+
+    const result = await callMeteredAnthropic(system, [{ role: 'user', content: user }], 350)
+    try {
+      const parsed = JSON.parse(result.trim()) as { note?: string; improvedResponse?: string }
+      return NextResponse.json({
+        note: parsed.note?.trim() || '',
+        improvedResponse: parsed.improvedResponse?.trim() || '',
+      })
+    } catch {
+      return NextResponse.json({ note: result.trim(), improvedResponse: '' })
+    }
+  }
+
+  if (action === 'assistant_feedback') {
+    const { assistantMessage, conversationHistory, person, situation, goal } = body
+    if (!assistantMessage) return NextResponse.json({ error: 'assistantMessage required' }, { status: 400 })
+    const toneNote = mode === 'professional'
+      ? 'Focus on workplace dynamics and likely pressure points.'
+      : 'Focus on emotional and relational dynamics.'
+
+    const system = `You are Beckett, a communication coach giving a brief note about the other person's response. ${toneNote}`
+    const user = `The user is practicing a conversation with ${person || 'someone'}.
+Situation: ${situation || 'not specified'}
+Goal: ${goal || 'not specified'}
+
+${conversationHistory ? `Conversation so far:\n${conversationHistory}\n\n` : ''}The other person just replied: "${assistantMessage}"
+
+In one short sentence (max 22 words), explain what this reply suggests about how the other person may be reacting or feeling. Return only the sentence.`
+
+    const note = await callMeteredAnthropic(system, [{ role: 'user', content: user }], 90)
     return NextResponse.json({ note: note.trim() })
   }
 

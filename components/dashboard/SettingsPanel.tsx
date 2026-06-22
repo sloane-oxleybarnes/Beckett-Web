@@ -1,14 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import type { Profile } from "@/lib/supabase";
 import {
   coachingToneOptions,
   communicationPreferenceOptions,
-  neurodivergentContextOptions,
-  strengthOptions,
-  workplaceTriggerOptions,
   type CoachingTone,
 } from "@/lib/onboarding";
 
@@ -66,6 +64,32 @@ function toggleValue(list: string[], value: string, max?: number) {
   return [...list, value];
 }
 
+function splitCustomEntries(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function mergeCustomEntries(list: string[], value: string) {
+  const next = [...list];
+  const existing = new Set(next.map((item) => item.toLowerCase()));
+
+  for (const entry of splitCustomEntries(value)) {
+    const key = entry.toLowerCase();
+    if (existing.has(key)) continue;
+    next.push(entry);
+    existing.add(key);
+  }
+
+  return next;
+}
+
+function getCustomValues(values: string[], presetOptions: string[]) {
+  const presets = new Set(presetOptions.map((item) => item.toLowerCase()));
+  return values.filter((value) => !presets.has(value.toLowerCase()));
+}
+
 function SettingsOption({
   label,
   selected,
@@ -90,6 +114,61 @@ function SettingsOption({
     >
       {label}
     </button>
+  );
+}
+
+function CustomPreferenceControls({
+  value,
+  onChange,
+  onAdd,
+  values,
+  onRemove,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onAdd: () => void;
+  values: string[];
+  onRemove: (value: string) => void;
+}) {
+  const customValues = getCustomValues(values, communicationPreferenceOptions);
+
+  return (
+    <div className="mt-4 rounded-sm border border-border bg-bg/60 p-3">
+      <label className="block text-xs font-medium uppercase tracking-wide text-ink-light">
+        Add your own
+      </label>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Separate each preference with a comma"
+          className="min-w-0 flex-1 rounded-sm border border-border bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={splitCustomEntries(value).length === 0}
+          className="rounded-pill border border-border bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-primary-mid hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Add
+        </button>
+      </div>
+      {customValues.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {customValues.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => onRemove(item)}
+              className="rounded-pill bg-white px-3 py-1 text-xs text-ink-mid transition-colors hover:bg-red-50 hover:text-red-700"
+              aria-label={`Remove ${item}`}
+            >
+              {item} x
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -164,15 +243,9 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [pwSaved, setPwSaved] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [strengths, setStrengths] = useState<string[]>([]);
-  const [triggers, setTriggers] = useState<string[]>([]);
   const [preferences, setPreferences] = useState<string[]>([]);
   const [coachingTone, setCoachingTone] = useState<CoachingTone>("direct_kind");
-  const [context, setContext] = useState<string[]>([]);
-  const [contextOther, setContextOther] = useState("");
+  const [customPreferences, setCustomPreferences] = useState("");
   const [deletionNotes, setDeletionNotes] = useState("");
   const [deletionStatus, setDeletionStatus] = useState<"idle" | "loading" | "requested" | "error">("idle");
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
@@ -191,15 +264,8 @@ export default function SettingsPage() {
         .then(({ data: profileData }) => {
           setProfile(profileData as Profile);
           setFullName(profileData?.full_name || "");
-          setFirstName(profileData?.first_name || "");
-          setLastName(profileData?.last_name || "");
-          setDisplayName(profileData?.display_name || profileData?.first_name || "");
-          setStrengths(profileData?.strengths || []);
-          setTriggers(profileData?.workplace_triggers || []);
           setPreferences(profileData?.communication_preferences || []);
           setCoachingTone(profileData?.coaching_tone || "direct_kind");
-          setContext(profileData?.neurodivergent_context || []);
-          setContextOther(profileData?.neurodivergent_context_other || "");
         });
     });
   }, [supabase]);
@@ -234,24 +300,15 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 3000);
   }
 
-  async function saveCoachingProfile(e: React.FormEvent) {
+  async function saveCoachingSettings(e: React.FormEvent) {
     e.preventDefault();
     const { data } = await supabase.auth.getUser();
     const user = data.user;
     if (!user) return;
 
-    const nextFullName = `${firstName.trim()} ${lastName.trim()}`.trim() || fullName;
     const update = {
-      full_name: nextFullName,
-      first_name: firstName.trim() || null,
-      last_name: lastName.trim() || null,
-      display_name: displayName.trim() || null,
-      strengths,
-      workplace_triggers: triggers,
       communication_preferences: preferences,
       coaching_tone: coachingTone,
-      neurodivergent_context: context,
-      neurodivergent_context_other: contextOther.trim() || null,
       updated_at: new Date().toISOString(),
     };
 
@@ -261,16 +318,13 @@ export default function SettingsPage() {
     setTimeout(() => setProfileSaved(false), 3000);
   }
 
-  async function clearCoachingProfile() {
-    if (!window.confirm("Clear your Beckett coaching profile answers? You can add them again later.")) {
+  async function clearCoachingSettings() {
+    if (!window.confirm("Clear your Beckett coaching settings? You can add them again later.")) {
       return;
     }
-    setStrengths([]);
-    setTriggers([]);
     setPreferences([]);
     setCoachingTone("direct_kind");
-    setContext([]);
-    setContextOther("");
+    setCustomPreferences("");
 
     const { data } = await supabase.auth.getUser();
     const user = data.user;
@@ -278,15 +332,16 @@ export default function SettingsPage() {
     await supabase
       .from("profiles")
       .update({
-        strengths: [],
-        workplace_triggers: [],
         communication_preferences: [],
         coaching_tone: "direct_kind",
-        neurodivergent_context: [],
-        neurodivergent_context_other: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id);
+  }
+
+  function addCustomPreferences() {
+    setPreferences((current) => mergeCustomEntries(current, customPreferences));
+    setCustomPreferences("");
   }
 
   async function changePassword(e: React.FormEvent) {
@@ -406,6 +461,26 @@ export default function SettingsPage() {
         </form>
       </section>
 
+      {/* Dashboard tour */}
+      <section className="bg-white rounded-card border border-border p-6 mb-5">
+        <h2
+          className="text-lg text-ink mb-1"
+          style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
+        >
+          Dashboard tour
+        </h2>
+        <p className="text-sm text-ink-mid mb-4">
+          Replay Beckett&apos;s short walkthrough of the dashboard, practice, skills, setup,
+          About Me, and Settings.
+        </p>
+        <Link
+          href="/dashboard?tour=1"
+          className="inline-flex rounded-pill border border-border px-5 py-2 text-sm font-medium text-ink transition-colors hover:border-primary-mid hover:bg-primary-light"
+        >
+          Restart dashboard tour
+        </Link>
+      </section>
+
       {/* Change password */}
       <section className="bg-white rounded-card border border-border p-6 mb-5">
         <h2
@@ -433,77 +508,19 @@ export default function SettingsPage() {
         </form>
       </section>
 
-      {/* Coaching profile */}
+      {/* Beckett coaching settings */}
       <section className="bg-white rounded-card border border-border p-6 mb-5">
         <h2
           className="text-lg text-ink mb-1"
           style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
         >
-          Coaching profile
+          Beckett&apos;s Coaching Settings
         </h2>
         <p className="text-sm text-ink-mid mb-5">
-          These answers shape how Beckett coaches you. You can edit or clear them anytime.
+          Choose how Beckett coaches, explains, and drafts with you. Personal profile details
+          live in About Me.
         </p>
-        <form onSubmit={saveCoachingProfile} className="space-y-6">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1">First name</label>
-              <input
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="w-full border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1">Last name</label>
-              <input
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="w-full border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-ink mb-1">Display name</label>
-              <input
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <label className="block text-sm font-medium text-ink">Strengths</label>
-              <span className="text-xs text-ink-light">{strengths.length}/3 selected</span>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {strengthOptions.map((option) => (
-                <SettingsOption
-                  key={option}
-                  label={option}
-                  selected={strengths.includes(option)}
-                  disabled={!strengths.includes(option) && strengths.length >= 3}
-                  onClick={() => setStrengths((current) => toggleValue(current, option, 3))}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-ink mb-2">Workplace triggers</label>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {workplaceTriggerOptions.map((option) => (
-                <SettingsOption
-                  key={option}
-                  label={option}
-                  selected={triggers.includes(option)}
-                  onClick={() => setTriggers((current) => toggleValue(current, option))}
-                />
-              ))}
-            </div>
-          </div>
-
+        <form onSubmit={saveCoachingSettings} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-ink mb-2">Communication preferences</label>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -516,6 +533,13 @@ export default function SettingsPage() {
                 />
               ))}
             </div>
+            <CustomPreferenceControls
+              value={customPreferences}
+              onChange={setCustomPreferences}
+              onAdd={addCustomPreferences}
+              values={preferences}
+              onRemove={(value) => setPreferences((current) => current.filter((item) => item !== value))}
+            />
           </div>
 
           <div>
@@ -539,46 +563,19 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-ink mb-2">
-              Optional neurodivergent context
-            </label>
-            <p className="text-xs text-ink-light mb-3">
-              Beckett uses this quietly in the background. It is not required.
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {neurodivergentContextOptions.map((option) => (
-                <SettingsOption
-                  key={option}
-                  label={option}
-                  selected={context.includes(option)}
-                  onClick={() => setContext((current) => toggleValue(current, option))}
-                />
-              ))}
-            </div>
-            {context.includes("Something else") && (
-              <input
-                value={contextOther}
-                onChange={(e) => setContextOther(e.target.value)}
-                placeholder="Add your own context"
-                className="mt-3 w-full border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            )}
-          </div>
-
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="submit"
               className="bg-primary text-white text-sm rounded-pill px-5 py-2 hover:bg-primary-dark transition-colors"
             >
-              {profileSaved ? "Saved ✓" : "Save coaching profile"}
+              {profileSaved ? "Saved ✓" : "Save coaching settings"}
             </button>
             <button
               type="button"
-              onClick={clearCoachingProfile}
+              onClick={clearCoachingSettings}
               className="text-sm border border-border rounded-pill px-5 py-2 text-ink hover:bg-bg transition-colors"
             >
-              Clear answers
+              Clear settings
             </button>
           </div>
         </form>

@@ -256,7 +256,7 @@ export default function ProfileSetupForm() {
                   <input value={lastName} onChange={(e) => setLastName(e.target.value)} className="w-full border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-ink mb-1">Display name</label>
+                  <label className="block text-sm font-medium text-ink mb-1">What do you want Beckett to call you?</label>
                   <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                 </div>
               </div>
@@ -402,6 +402,13 @@ export default function ProfileSetupForm() {
                   Connecting a tool lets Beckett use that tool only for coaching you request.
                   Beckett stores connection status, usage counts, and beta debugging metadata, not
                   full Gmail or Slack message history by default.
+                </TrustNote>
+              </div>
+              <div className="mb-4">
+                <TrustNote>
+                  During beta, you get 30 daily Beckett credits for general AI coaching requests,
+                  including extension analysis, drafting or rewrite help, and dashboard practice
+                  support.
                 </TrustNote>
               </div>
               <div className="space-y-3">

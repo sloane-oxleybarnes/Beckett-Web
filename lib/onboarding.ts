@@ -23,14 +23,12 @@ export const workplaceTriggerOptions = [
 ];
 
 export const communicationPreferenceOptions = [
-  "I prefer direct language",
-  "I process better in writing",
-  "I need time before responding",
-  "I prefer scripts and examples",
-  "Help me understand the social context",
-  "Help me choose what to do next",
-  "Help me make messages warmer",
-  "Help me make messages more concise",
+  "Being more direct",
+  "Advocating for my needs",
+  "Understanding the social context",
+  "Understanding what to do next",
+  "Being warmer in my responses",
+  "Being more concise",
 ];
 
 export const coachingToneOptions = [

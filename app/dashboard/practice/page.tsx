@@ -80,7 +80,7 @@ Their goal: "${goal}"`
 
   const contextLines = [
     practiceContext.relationshipContext ? `How the user knows them: ${practiceContext.relationshipContext}` : null,
-    practiceContext.personStyle ? `Their collaboration style: ${practiceContext.personStyle}` : null,
+    practiceContext.personStyle ? `Their communication style: ${practiceContext.personStyle}` : null,
     practiceContext.recurringPattern ? `What tends to happen with them: ${practiceContext.recurringPattern}` : null,
     practiceContext.stakes ? `Stakes/pressure level: ${practiceContext.stakes}` : null,
     practiceContext.expectedResponse ? `Likely response from them: ${practiceContext.expectedResponse}` : null,
@@ -112,6 +112,98 @@ Their goal: "${goal}"`
 
   prompt += `\n\nStay in character throughout. Respond as this person realistically would — including appropriate resistance, questions, or emotional reactions. Do not be artificially easy or artificially difficult. Be realistic.`
   return prompt
+}
+
+function getChannelLabel(format: ConversationFormat, textSubFormat: TextSubFormat) {
+  if (format === 'in-person') return 'in-person'
+  if (textSubFormat === 'email') return 'email'
+  if (textSubFormat === 'sms') return 'text message'
+  return 'Slack'
+}
+
+function buildPracticePreview({
+  person,
+  relationshipContext,
+  personStyle,
+  situation,
+  stakes,
+  practiceFocus,
+  conversationFormat,
+  textSubFormat,
+}: {
+  person: string
+  relationshipContext: string
+  personStyle: string
+  situation: string
+  stakes: string
+  practiceFocus: string
+  conversationFormat: ConversationFormat
+  textSubFormat: TextSubFormat
+}) {
+  const otherPerson = person.trim() || 'the other person'
+  const channel = getChannelLabel(conversationFormat, textSubFormat)
+  const sentences = [`You will practice a ${channel} conversation with ${otherPerson}.`]
+
+  if (relationshipContext.trim()) {
+    sentences.push(`You know them as ${relationshipContext.trim()}.`)
+  }
+  if (personStyle.trim()) {
+    sentences.push(`${otherPerson} tends to communicate like this: ${personStyle.trim()}.`)
+  }
+  if (situation.trim()) {
+    sentences.push(`The conversation is about ${situation.trim()}.`)
+  }
+  if (stakes.trim()) {
+    sentences.push(`This feels ${stakes.trim().toLowerCase()}.`)
+  }
+  if (practiceFocus.trim()) {
+    sentences.push(`Your coaching focus is: ${practiceFocus.trim()}.`)
+  }
+
+  return sentences
+}
+
+function buildPrepTips({
+  person,
+  personStyle,
+  stakes,
+  practiceFocus,
+  conversationFormat,
+  textSubFormat,
+}: {
+  person: string
+  personStyle: string
+  stakes: string
+  practiceFocus: string
+  conversationFormat: ConversationFormat
+  textSubFormat: TextSubFormat
+}) {
+  const otherPerson = person.trim() || 'the other person'
+  const channel = getChannelLabel(conversationFormat, textSubFormat)
+  const startTip =
+    channel === 'email'
+      ? 'Open with one clear sentence about why you are writing, then make the ask easy to find.'
+      : channel === 'Slack'
+        ? 'Start with a short context line, then ask one specific question or make one clear request.'
+        : channel === 'text message'
+          ? 'Keep the opener short and direct so the other person knows what you need from them.'
+          : 'Start by naming the topic calmly, then pause long enough for them to respond.'
+
+  const responseTip = personStyle.trim()
+    ? `${otherPerson} may respond in a ${personStyle.trim().toLowerCase()} way, so give them one clear thing to react to.`
+    : `${otherPerson} may ask for more context, push back, or need a moment before they understand what you are asking.`
+
+  const watchTip = practiceFocus.trim()
+    ? `Keep your attention on this: ${practiceFocus.trim()}.`
+    : stakes.trim()
+      ? `Because this feels ${stakes.trim().toLowerCase()}, watch for over-explaining or softening the ask too much.`
+      : 'Watch whether your message includes the point, the reason, and the next step.'
+
+  return [
+    { title: 'How to start', text: startTip },
+    { title: 'How this might go', text: responseTip },
+    { title: 'What to watch for', text: watchTip },
+  ]
 }
 
 // ── LocalStorage helpers ───────────────────────────────────────────────────
@@ -279,10 +371,12 @@ export default function PracticePage() {
   const [loading, setLoading] = useState(false)
   const [draftLoading, setDraftLoading] = useState(false)
   const [draftNote, setDraftNote] = useState<string | null>(null)
+  const [draftImprovedResponse, setDraftImprovedResponse] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [limitNotice, setLimitNotice] = useState<string | null>(null)
   const [debrief, setDebrief] = useState<DebriefData | null>(null)
   const [inlineFeedback, setInlineFeedback] = useState<Record<number, string>>({})
+  const [assistantFeedback, setAssistantFeedback] = useState<Record<number, string>>({})
   const [suggestedPrompts, setSuggestedPrompts] = useState<string[]>([])
   const [intervention, setIntervention] = useState<Intervention | null>(null)
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([])
@@ -338,6 +432,8 @@ export default function PracticePage() {
   async function getDraftFeedback() {
     if (!input.trim() || draftLoading) return
     setDraftLoading(true)
+    setDraftNote(null)
+    setDraftImprovedResponse(null)
     setLimitNotice(null)
     const history = messages.map(m => `[${m.role === 'user' ? 'You' : person}]: ${m.content}`).join('\n')
     const res = await fetch('/api/practice', {
@@ -345,13 +441,14 @@ export default function PracticePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'draft_feedback', mode, userMessage: input, conversationHistory: history, person, situation, goal }),
     })
-    const data = await res.json() as { note?: string; error?: string }
+    const data = await res.json() as { note?: string; improvedResponse?: string; error?: string }
     setDraftLoading(false)
     if (!res.ok) {
       setLimitNotice(data.error || 'Beckett could not generate feedback right now.')
       return
     }
-    if (data.note) setDraftNote(data.note)
+    setDraftNote(data.note || null)
+    setDraftImprovedResponse(data.improvedResponse || null)
   }
 
   async function startPractice() {
@@ -367,6 +464,12 @@ export default function PracticePage() {
     }
     setError('')
     setMessages([])
+    setInlineFeedback({})
+    setAssistantFeedback({})
+    setDraftNote(null)
+    setDraftImprovedResponse(null)
+    setDebrief(null)
+    setIntervention(null)
     setPhase('conversation')
     setLimitNotice(null)
     loadSuggestedPrompts(undefined, 0)
@@ -381,6 +484,7 @@ export default function PracticePage() {
     setMessages(next)
     setInput('')
     setDraftNote(null)
+    setDraftImprovedResponse(null)
     setSuggestedPrompts([])
     setSentViaPrompt(false)
     setLoading(true)
@@ -406,6 +510,7 @@ export default function PracticePage() {
     if (data.text) {
       const aiMsg = data.text.replace(/^["""'']|["""'']$/g, '').trim()
       const withAI = [...next, { role: 'assistant' as const, content: aiMsg }]
+      const assistantIndex = withAI.length - 1
       setMessages(withAI)
 
       if (!wasSentViaPrompt) {
@@ -419,6 +524,24 @@ export default function PracticePage() {
           .then((d: { note?: string }) => { if (d.note) setInlineFeedback(prev => ({ ...prev, [userIndex]: d.note as string })) })
           .catch(() => {})
       }
+
+      const conversationHistory = withAI.map(m => `[${m.role === 'user' ? 'You' : person}]: ${m.content}`).join('\n')
+      fetch('/api/practice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'assistant_feedback',
+          mode,
+          assistantMessage: aiMsg,
+          conversationHistory,
+          person,
+          situation,
+          goal: effectiveGoal,
+        }),
+      })
+        .then(r => r.json())
+        .then((d: { note?: string }) => { if (d.note) setAssistantFeedback(prev => ({ ...prev, [assistantIndex]: d.note as string })) })
+        .catch(() => {})
 
       loadSuggestedPrompts(aiMsg, withAI.length)
 
@@ -493,8 +616,10 @@ export default function PracticePage() {
     setPracticeFocus(session.practiceFocus || '')
     setMessages(session.messages)
     setInlineFeedback({})
+    setAssistantFeedback({})
     setSuggestedPrompts([])
     setDraftNote(null)
+    setDraftImprovedResponse(null)
     setIntervention(null)
     setError('')
     setPhase('conversation')
@@ -506,8 +631,10 @@ export default function PracticePage() {
     setMessages([])
     setDebrief(null)
     setInlineFeedback({})
+    setAssistantFeedback({})
     setSuggestedPrompts([])
     setDraftNote(null)
+    setDraftImprovedResponse(null)
     setIntervention(null)
     setError('')
   }
@@ -522,22 +649,45 @@ export default function PracticePage() {
     ]
     const setupSlides = [
       {
-        eyebrow: 'Step 1 of 3',
+        eyebrow: 'Step 1 of 4',
         title: 'About Them',
         description: 'Tell Beckett who you are talking to and what kind of conversation this should feel like.',
       },
       {
-        eyebrow: 'Step 2 of 3',
+        eyebrow: 'Step 2 of 4',
         title: 'The Conversation',
         description: 'Describe the conversation, your goal, and how much pressure this carries.',
       },
       {
-        eyebrow: 'Step 3 of 3',
+        eyebrow: 'Step 3 of 4',
         title: 'Coaching Target',
         description: 'Choose what you want Beckett to watch for while you practice.',
       },
+      {
+        eyebrow: 'Step 4 of 4',
+        title: 'Before You Start',
+        description: 'Use these quick notes to choose your opening move and anticipate the shape of the conversation.',
+      },
     ]
     const currentSlide = setupSlides[setupStep]
+    const previewSentences = buildPracticePreview({
+      person,
+      relationshipContext,
+      personStyle,
+      situation,
+      stakes,
+      practiceFocus,
+      conversationFormat,
+      textSubFormat,
+    })
+    const prepTips = buildPrepTips({
+      person,
+      personStyle,
+      stakes,
+      practiceFocus,
+      conversationFormat,
+      textSubFormat,
+    })
 
     return (
       <div className="w-full max-w-2xl">
@@ -596,8 +746,8 @@ export default function PracticePage() {
                 </div>
 
                 <div>
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-light">Channel format</p>
-                  <div className="flex flex-wrap overflow-hidden rounded-pill border border-border bg-white" role="group" aria-label="Channel format">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-light">Channel</p>
+                  <div className="flex flex-wrap overflow-hidden rounded-pill border border-border bg-white" role="group" aria-label="Channel">
                     {textSubFormatOptions.map(({ value, label }) => (
                       <button
                         key={value}
@@ -643,7 +793,7 @@ export default function PracticePage() {
               />
 
               <div>
-                <p className="mb-2 text-sm font-medium text-ink">Their collaboration style</p>
+                <p className="mb-2 text-sm font-medium text-ink">Their communication style</p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {communicationStyleSuggestions.map((suggestion) => (
                     <button
@@ -660,6 +810,17 @@ export default function PracticePage() {
                       {suggestion}
                     </button>
                   ))}
+                </div>
+                <div className="mt-3">
+                  <label className="mb-1 block text-sm font-medium text-ink">Add your own communication style</label>
+                  <input
+                    type="text"
+                    value={personStyle}
+                    onChange={e => setPersonStyle(e.target.value)}
+                    placeholder="e.g. Blunt when stressed, appreciates context first"
+                    className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="mt-1 text-xs text-ink-light">Use a preset or describe their style in your own words.</p>
                 </div>
               </div>
             </div>
@@ -733,14 +894,30 @@ export default function PracticePage() {
 
               <div className="rounded-card border border-border bg-bg p-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-ink-light mb-3">Practice preview</p>
-                <p className="text-sm leading-relaxed text-ink">
-                  Beckett will practice this as a {textSubFormatOptions.find(option => option.value === textSubFormat)?.label || 'Slack'} conversation with{' '}
-                  {person.trim() || 'the other person'}
-                  {relationshipContext.trim() ? `, who you know as ${relationshipContext.trim()}` : ''}
-                  {personStyle.trim() ? ` and who tends to collaborate in a ${personStyle.trim().toLowerCase()} way` : ''}.{' '}
-                  You want to practice: {situation.trim() || 'the conversation you describe'}
-                  {stakes.trim() ? ` This feels ${stakes.trim().toLowerCase()}.` : '.'}
-                  {practiceFocus.trim() ? ` Beckett will focus on helping you ${practiceFocus.trim().toLowerCase()}.` : ''}
+                <div className="space-y-2">
+                  {previewSentences.map((sentence) => (
+                    <p key={sentence} className="text-sm leading-relaxed text-ink">
+                      {sentence}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {setupStep === 3 && (
+            <div className="space-y-4">
+              {prepTips.map((tip) => (
+                <div key={tip.title} className="rounded-card border border-border bg-bg p-4">
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-light">{tip.title}</p>
+                  <p className="text-sm leading-relaxed text-ink">{tip.text}</p>
+                </div>
+              ))}
+              <div className="rounded-card border border-primary/20 bg-primary-light/40 p-4">
+                <p className="text-sm font-medium text-ink">When practice starts, you go first.</p>
+                <p className="mt-1 text-xs leading-relaxed text-ink-mid">
+                  Beckett can suggest opening lines once the conversation opens, or you can write
+                  the first message yourself.
                 </p>
               </div>
             </div>
@@ -831,6 +1008,11 @@ export default function PracticePage() {
                     <p className="text-xs text-ink-light italic">{inlineFeedback[i]}</p>
                   </div>
                 )}
+                {m.role === 'assistant' && assistantFeedback[i] && (
+                  <div className="px-5 py-1.5 bg-primary-light/40 border-b border-border">
+                    <p className="text-xs text-ink-light italic">{assistantFeedback[i]}</p>
+                  </div>
+                )}
               </div>
             ))}
             {loading && (
@@ -876,6 +1058,11 @@ export default function PracticePage() {
                       <p className="text-xs text-ink-light italic pl-11">{inlineFeedback[i]}</p>
                     </div>
                   )}
+                  {m.role === 'assistant' && assistantFeedback[i] && (
+                    <div className="px-4 pb-1 pl-16">
+                      <p className="text-xs text-ink-light italic">{assistantFeedback[i]}</p>
+                    </div>
+                  )}
                 </div>
               ))}
               {loading && (
@@ -919,6 +1106,13 @@ export default function PracticePage() {
                   </p>
                 </div>
               )}
+              {m.role === 'assistant' && assistantFeedback[i] && (
+                <div className="flex justify-start mt-1">
+                  <p className="max-w-sm pl-1 text-xs italic text-ink-light/70">
+                    {assistantFeedback[i]}
+                  </p>
+                </div>
+              )}
             </div>
           ))}
           {loading && (
@@ -956,9 +1150,10 @@ export default function PracticePage() {
           <button
             onClick={endAndDebrief}
             disabled={loading || messages.length < 2}
+            aria-label="End conversation and generate feedback"
             className="text-xs text-primary border border-primary rounded-pill px-3 py-1.5 hover:bg-primary-light transition-colors disabled:opacity-40 shrink-0"
           >
-            End + get feedback
+            X End Conversation
           </button>
         </div>
 
@@ -1003,7 +1198,7 @@ export default function PracticePage() {
               {suggestedPrompts.map((prompt, i) => (
                 <button
                   key={i}
-                  onClick={() => { setInput(prompt); setSentViaPrompt(true); setDraftNote(null) }}
+                  onClick={() => { setInput(prompt); setSentViaPrompt(true); setDraftNote(null); setDraftImprovedResponse(null) }}
                   className="text-xs border border-border rounded-pill px-3 py-1 text-ink-mid hover:text-ink hover:border-primary transition-colors"
                 >
                   {prompt}
@@ -1019,7 +1214,7 @@ export default function PracticePage() {
             aria-label="Your practice message"
             rows={1}
             value={input}
-            onChange={e => { setInput(e.target.value); setDraftNote(null); setSentViaPrompt(false) }}
+            onChange={e => { setInput(e.target.value); setDraftNote(null); setDraftImprovedResponse(null); setSentViaPrompt(false) }}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
             placeholder={
               textSubFormat === 'email' ? 'Type your reply…' :
@@ -1047,12 +1242,39 @@ export default function PracticePage() {
           </button>
         </div>
 
-        {draftNote && (
-          <div className="flex items-start gap-2 mt-2 shrink-0">
-            <p className="text-xs text-ink-mid italic flex-1">
-              <span className="not-italic text-ink-light">↳ Beckett:</span> {draftNote}
-            </p>
-            <button onClick={() => setDraftNote(null)} className="text-ink-light hover:text-ink text-xs shrink-0" aria-label="Dismiss draft feedback">×</button>
+        {(draftNote || draftImprovedResponse) && (
+          <div className="mt-2 shrink-0 rounded-card border border-primary/15 bg-primary-light/40 p-3">
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-primary">Beckett feedback</p>
+              <button
+                onClick={() => { setDraftNote(null); setDraftImprovedResponse(null) }}
+                className="text-ink-light hover:text-ink text-xs shrink-0"
+                aria-label="Dismiss draft feedback"
+              >
+                ×
+              </button>
+            </div>
+            {draftNote && (
+              <p className="text-xs leading-relaxed text-ink-mid italic">{draftNote}</p>
+            )}
+            {draftImprovedResponse && (
+              <div className="mt-3 rounded-sm border border-border bg-white p-3">
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-light">Improved response</p>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{draftImprovedResponse}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInput(draftImprovedResponse)
+                    setSentViaPrompt(false)
+                    setDraftNote(null)
+                    setDraftImprovedResponse(null)
+                  }}
+                  className="mt-3 rounded-pill border border-primary px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary-light"
+                >
+                  Use this response
+                </button>
+              </div>
+            )}
           </div>
         )}
 
