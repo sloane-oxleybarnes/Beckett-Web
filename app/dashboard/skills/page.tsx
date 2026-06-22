@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import type { CourseCatalogItem } from '@/lib/course-content'
 
 type SkillCard = {
   id: string
@@ -13,6 +14,8 @@ type SkillCard = {
   estimatedMinutes: number
   courseId?: string
   illustration: 'date' | 'colleague' | 'clarity' | 'no'
+  section?: 'Professional' | 'Personal'
+  sortOrder?: number
 }
 
 const SECTIONS: { label: string; description: string; cards: SkillCard[] }[] = [
@@ -158,6 +161,7 @@ function SkillModuleCard({
 export default function SkillsPage() {
   const [completedCourseIds, setCompletedCourseIds] = useState<Set<string>>(new Set())
   const [progressCourseIds, setProgressCourseIds] = useState<Set<string>>(new Set())
+  const [sections, setSections] = useState(SECTIONS)
   const supabase = createClient()
 
   useEffect(() => {
@@ -170,6 +174,24 @@ export default function SkillsPage() {
       ])
       if (completions) setCompletedCourseIds(new Set(completions.map((r: { course_id: string }) => r.course_id)))
       if (progressRows) setProgressCourseIds(new Set(progressRows.map((r: { course_id: string }) => r.course_id)))
+      const catalogRes = await fetch('/api/courses/catalog')
+      if (catalogRes.ok) {
+        const catalogData = await catalogRes.json().catch(() => ({})) as { courses?: CourseCatalogItem[] }
+        if (catalogData.courses?.length) {
+          setSections([
+            {
+              label: 'Professional',
+              description: 'Foundational workplace courses we are building for beta.',
+              cards: catalogData.courses.filter((course) => course.section === 'Professional'),
+            },
+            {
+              label: 'Personal',
+              description: 'A small look at where Beckett will go beyond work later.',
+              cards: catalogData.courses.filter((course) => course.section === 'Personal'),
+            },
+          ].filter((section) => section.cards.length > 0))
+        }
+      }
     }
     loadCourseStatus()
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -184,13 +206,13 @@ export default function SkillsPage() {
         Beckett coaches you through real situations, then gives you space to practice before you try it live.
       </p>
 
-      {SECTIONS.map(section => (
+      {sections.map(section => (
         <section key={section.label} className="mb-10">
           <div className="mb-4">
             <h2 className="text-xs font-medium uppercase tracking-wide text-ink-light">{section.label}</h2>
           </div>
           <div className="grid gap-4">
-            {section.cards.slice(0, 2).map(card => (
+            {section.cards.map(card => (
               <SkillModuleCard
                 key={card.id}
                 card={card}

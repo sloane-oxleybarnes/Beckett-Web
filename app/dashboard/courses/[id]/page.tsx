@@ -8,7 +8,7 @@ import type {
   MatchingSlide, InteractiveReadSlide, DraftPracticeSlide,
   SideBySideSlide, SortingSlide, MultipleChoiceSlide, ChecklistSlide,
   VisualFormulaSlide, ReflectionChoiceSlide, GuidedBuilderSlide,
-  MultiSelectQuizSlide, ScenarioMessage,
+  MultiSelectQuizSlide, ScenarioMessage, Course,
 } from '@/lib/courses'
 
 type Phase = 'confidence-start' | 'slides' | 'guided-practice' | 'open-practice-intro' | 'open-practice' | 'debrief' | 'confidence-end' | 'completion' | 'review'
@@ -81,7 +81,9 @@ export default function CoursePage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
-  const maybeCourse = getCourse(params.id)
+  const fallbackCourse = getCourse(params.id)
+  const [loadedCourse, setLoadedCourse] = useState<Course | null>(null)
+  const [courseLoading, setCourseLoading] = useState(true)
 
   // ── Auth + plan + completion check ──────────────────────────────────────
   const [planError, setPlanError] = useState<string | null>(null)
@@ -92,8 +94,24 @@ export default function CoursePage({ params }: { params: { id: string } }) {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [saveMessage, setSaveMessage] = useState('')
   const [completedSlides, setCompletedSlides] = useState<Record<string, true>>({})
+  const courseCandidate = loadedCourse || fallbackCourse
+
+  useEffect(() => {
+    async function loadCourseContent() {
+      setCourseLoading(true)
+      const res = await fetch(`/api/courses/content?id=${encodeURIComponent(params.id)}`)
+      if (res.ok) {
+        const data = await res.json().catch(() => ({})) as { course?: Course }
+        if (data.course) setLoadedCourse(data.course)
+      }
+      setCourseLoading(false)
+    }
+    loadCourseContent()
+  }, [params.id])
+
   useEffect(() => {
     async function checkAccess() {
+      if (courseLoading) return
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth/login'); return }
       const { data: profile } = await supabase.from('profiles').select('plan, display_name, first_name, full_name').eq('id', user.id).single()
@@ -102,9 +120,9 @@ export default function CoursePage({ params }: { params: { id: string } }) {
         return
       }
       setProfileName(profile?.display_name || profile?.first_name || profile?.full_name?.split(' ')[0] || '')
-      if (maybeCourse) {
+      if (courseCandidate) {
         const { data: completion } = await supabase.from('course_completions')
-          .select('completed_at').eq('user_id', user.id).eq('course_id', maybeCourse.id).maybeSingle()
+          .select('completed_at').eq('user_id', user.id).eq('course_id', courseCandidate.id).maybeSingle()
         if (completion) {
           setIsCompleted(true)
           setCompletedAt(completion.completed_at)
@@ -113,7 +131,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
         const { data: progressRow } = await supabase.from('course_progress')
           .select('phase,current_slide_index,pre_confidence,progress_percent,saved_at,activity_state')
           .eq('user_id', user.id)
-          .eq('course_id', maybeCourse.id)
+          .eq('course_id', courseCandidate.id)
           .maybeSingle()
         if (progressRow && !completion) setSavedProgress(progressRow as CourseProgressRow)
       }
@@ -121,7 +139,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     }
     checkAccess()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [courseLoading, courseCandidate?.id])
 
   // ── Phase + navigation ───────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>('confidence-start')
@@ -231,8 +249,8 @@ export default function CoursePage({ params }: { params: { id: string } }) {
 
   // Shuffle matching right column when reaching a matching slide
   useEffect(() => {
-    if (phase === 'slides' && maybeCourse) {
-      const slide = maybeCourse.slides[currentSlideIndex]
+    if (phase === 'slides' && courseCandidate) {
+      const slide = courseCandidate.slides[currentSlideIndex]
       if (slide.type === 'matching') {
         const order = slide.pairs.map((_, i) => i)
         for (let i = order.length - 1; i > 0; i--) {
@@ -264,9 +282,13 @@ export default function CoursePage({ params }: { params: { id: string } }) {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, currentSlideIndex, maybeCourse])
+  }, [phase, currentSlideIndex, courseCandidate])
 
-  if (!maybeCourse) {
+  if (courseLoading) {
+    return <div className="max-w-lg mx-auto py-16 text-center"><p className="text-ink-mid">Loading course...</p></div>
+  }
+
+  if (!courseCandidate) {
     return <div className="max-w-lg mx-auto py-16 text-center"><p className="text-ink-mid">Course not found.</p></div>
   }
 
@@ -279,8 +301,8 @@ export default function CoursePage({ params }: { params: { id: string } }) {
     )
   }
 
-  // maybeCourse is narrowed to Course past both guards
-  const course = maybeCourse
+  // courseCandidate is narrowed to Course past both guards
+  const course = courseCandidate
 
   // ── Progress ───────────────────────────────────────────────────────────────
   const TOTAL_STEPS = course.slides.length + 7

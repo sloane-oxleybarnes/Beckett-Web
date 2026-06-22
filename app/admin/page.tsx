@@ -3,8 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 import AdminLoginForm from "./LoginForm";
 import AdminApprovalList from "./ApprovalList";
 import AdminContentEditor from "./ContentEditor";
+import AdminCourseStudio from "./CourseStudio";
 import AdminBetaTracker, { type BetaTrackerRow } from "./BetaTracker";
 import AdminFeedbackViewer, { type AdminFeedbackRow } from "./FeedbackViewer";
+import { getCourseStudioItems } from "@/lib/course-content";
 import { getSiteContent } from "@/lib/site-content-server";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +34,7 @@ export default async function AdminPage() {
     { data: feedback },
     { data: betaEvents },
     content,
+    courses,
   ] = await Promise.all([
     supabase
       .from("beta_signups")
@@ -62,6 +65,7 @@ export default async function AdminPage() {
       .order("created_at", { ascending: false })
       .limit(300),
     getSiteContent(),
+    getCourseStudioItems(),
   ]);
 
   const pendingSignups = (signups || []).filter((signup) => !signup.approved);
@@ -80,6 +84,7 @@ export default async function AdminPage() {
       <AdminApprovalList signups={pendingSignups} />
       <AdminBetaTracker rows={trackerRows} />
       <AdminFeedbackViewer feedback={(feedback || []) as AdminFeedbackRow[]} profiles={profiles || []} />
+      <AdminCourseStudio courses={courses} />
       <AdminContentEditor content={content} />
     </div>
   );
