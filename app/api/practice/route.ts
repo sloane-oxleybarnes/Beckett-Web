@@ -190,31 +190,59 @@ Analyze whether this conversation would be more effective in person or over text
   }
 
   if (action === 'suggested_prompts') {
-    const { person, situation, goal, messageCount, lastAIMessage } = body
+    const { person, situation, goal, messageCount, lastAIMessage, conversationFormat, textSubFormat } = body
     const isOpening = !messageCount || messageCount === 0
+    const channel = conversationFormat === 'in-person'
+      ? 'in person'
+      : textSubFormat === 'email'
+        ? 'email'
+        : textSubFormat === 'sms'
+          ? 'text message'
+          : 'Slack or chat'
+    const channelRules = channel === 'email'
+      ? `- These should read like email body drafts, not chat messages.
+- Each suggestion should be 2-4 natural sentences, usually 35-75 words.
+- Do not include a subject line.
+- Use a greeting only if it sounds natural for the relationship.
+- For openings, include context plus a clear ask or next step.`
+      : channel === 'Slack or chat'
+        ? `- These should read like Slack/chat messages.
+- Each suggestion should be concise, conversational, and skimmable.
+- Each suggestion max 22 words.`
+        : channel === 'text message'
+          ? `- These should read like text messages.
+- Each suggestion should be short, casual, and direct.
+- Each suggestion max 20 words.`
+          : `- These should sound like something the user could say out loud.
+- Each suggestion should be conversational and natural.
+- Each suggestion max 28 words.`
 
     const user = `Someone is practicing a difficult conversation.
 Talking to: ${person || 'someone'}
 Situation: ${situation || 'not specified'}
 Goal: ${goal || 'not specified'}
 Mode: ${mode || 'not specified'}
+Channel: ${channel}
 Messages so far: ${messageCount ?? 0}
 ${lastAIMessage ? `The other person just said: "${lastAIMessage}"` : ''}
 
-Generate exactly 2 short suggested messages the user could send next.
+Generate exactly 2 suggested messages the user could send next.
 Rules:
 - ${isOpening ? 'These are OPENING lines only — introductory, not mid-conversation' : 'These MUST react to what the other person just said'}
-- Each suggestion max 12 words
+- Match the selected channel exactly.
+${channelRules}
 - Vary the approaches (direct, soft, clarifying)
 - Return ONLY valid JSON: { "prompts": ["...", "..."] }`
 
     const result = await callMeteredAnthropic(
-      'You generate short conversation suggestions. Return only valid JSON.',
+      'You generate channel-specific conversation suggestions. Return only valid JSON.',
       [{ role: 'user', content: user }],
-      150
+      channel === 'email' ? 320 : 180
     )
     try {
-      const parsed = JSON.parse(result.trim()) as { prompts: string[] }
+      const cleaned = result.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+      const jsonText = cleaned.startsWith('{') ? cleaned : cleaned.match(/\{[\s\S]*\}/)?.[0] || cleaned
+      const parsed = JSON.parse(jsonText) as { prompts: string[] }
       return NextResponse.json({ prompts: parsed.prompts || [] })
     } catch {
       return NextResponse.json({ prompts: [] })

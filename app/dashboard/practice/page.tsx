@@ -21,6 +21,7 @@ type SavedSession = {
   mode: Mode
   conversationFormat: ConversationFormat
   textSubFormat: TextSubFormat
+  emailSubject?: string
   relationshipContext?: string
   personStyle?: string
   recurringPattern?: string
@@ -414,6 +415,7 @@ export default function PracticePage() {
   const [mode, setMode] = useState<Mode>('professional')
   const [conversationFormat, setConversationFormat] = useState<ConversationFormat>('text')
   const [textSubFormat, setTextSubFormat] = useState<TextSubFormat>('slack')
+  const [emailSubject, setEmailSubject] = useState('')
   const [person, setPerson] = useState('')
   const [situation, setSituation] = useState('')
   const [goal, setGoal] = useState('')
@@ -491,7 +493,17 @@ export default function PracticePage() {
       const res = await fetch('/api/practice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'suggested_prompts', mode, person, situation, goal: effectiveGoal, messageCount: msgCount, lastAIMessage }),
+        body: JSON.stringify({
+          action: 'suggested_prompts',
+          mode,
+          person,
+          situation,
+          goal: effectiveGoal,
+          messageCount: msgCount,
+          lastAIMessage,
+          conversationFormat,
+          textSubFormat,
+        }),
       })
       const data = await res.json() as { prompts?: string[]; error?: string }
       if (!res.ok) {
@@ -500,7 +512,7 @@ export default function PracticePage() {
       }
       if (data.prompts?.length) setSuggestedPrompts(data.prompts)
     } catch { /* non-blocking */ }
-  }, [mode, person, situation, goal])
+  }, [mode, person, situation, goal, conversationFormat, textSubFormat])
 
   useEffect(() => {
     if (phase !== 'setup' || setupStep !== 3) return
@@ -737,6 +749,7 @@ export default function PracticePage() {
       mode,
       conversationFormat,
       textSubFormat,
+      emailSubject,
       relationshipContext,
       personStyle,
       recurringPattern,
@@ -804,6 +817,7 @@ export default function PracticePage() {
     setMode(session.mode)
     setConversationFormat(session.conversationFormat)
     setTextSubFormat(session.textSubFormat)
+    setEmailSubject(session.emailSubject || '')
     setRelationshipContext(session.relationshipContext || '')
     setPersonStyle(session.personStyle || '')
     setShowCustomPersonStyle(isCustomCommunicationStyle(session.personStyle || ''))
@@ -840,6 +854,7 @@ export default function PracticePage() {
     setDraftImprovedResponse(null)
     setIntervention(null)
     setError('')
+    setEmailSubject('')
     setPracticeFeedbackRating(null)
     setPracticeFeedbackUseful('')
     setPracticeFeedbackOff('')
@@ -1249,7 +1264,7 @@ export default function PracticePage() {
       textSubFormat === 'email' ? 'Email' :
       'Slack'
     const isEmailPractice = textSubFormat === 'email' && conversationFormat === 'text'
-    const emailSubject = cleanPreviewValue(situation) || 'Practice conversation'
+    const emailThreadSubject = emailSubject.trim() || 'No subject'
 
     const renderMessages = () => {
       if (isEmailPractice) {
@@ -1257,7 +1272,7 @@ export default function PracticePage() {
           <div className="mb-3 flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
             <div className="border-b border-border bg-gray-50 px-5 py-3">
               <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Gmail practice</p>
-              <p className="mt-1 truncate text-sm font-medium text-ink">{emailSubject}</p>
+              <p className="mt-1 truncate text-sm font-medium text-ink">{emailThreadSubject}</p>
             </div>
             <div className="flex-1 overflow-y-auto bg-gray-50">
               {messages.length === 0 && !loading && (
@@ -1469,12 +1484,15 @@ export default function PracticePage() {
         {suggestedPrompts.length > 0 && (
           <div className="mb-2 shrink-0">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-light">Need a starting point?</p>
-            <div className="flex gap-2 flex-wrap">
+            <div className={isEmailPractice ? 'grid gap-2' : 'flex gap-2 flex-wrap'}>
               {suggestedPrompts.map((prompt, i) => (
                 <button
                   key={i}
                   onClick={() => { setInput(prompt); setSentViaPrompt(true); setDraftNote(null); setDraftImprovedResponse(null) }}
-                  className="text-xs border border-border rounded-pill px-3 py-1 text-ink-mid hover:text-ink hover:border-primary transition-colors"
+                  className={isEmailPractice
+                    ? 'whitespace-pre-wrap rounded-card border border-border bg-white px-3 py-2.5 text-left text-xs leading-relaxed text-ink-mid transition-colors hover:border-primary hover:text-ink'
+                    : 'rounded-pill border border-border px-3 py-1 text-xs text-ink-mid transition-colors hover:border-primary hover:text-ink'
+                  }
                 >
                   {prompt}
                 </button>
@@ -1491,8 +1509,16 @@ export default function PracticePage() {
               <span className="min-w-0 flex-1 truncate text-ink">{person || 'recipient'}</span>
             </div>
             <div className="flex items-center gap-2 border-b border-border px-4 py-2 text-sm">
-              <span className="text-ink-light">Subject</span>
-              <span className="min-w-0 flex-1 truncate text-ink">{emailSubject}</span>
+              <label htmlFor="practice-email-subject" className="text-ink-light">Subject</label>
+              <input
+                id="practice-email-subject"
+                type="text"
+                value={emailSubject}
+                onChange={e => setEmailSubject(e.target.value)}
+                placeholder="Subject"
+                disabled={loading}
+                className="min-w-0 flex-1 border-0 bg-transparent text-ink placeholder:text-ink-light focus:outline-none focus:ring-0"
+              />
             </div>
             <textarea
               ref={textareaRef}
