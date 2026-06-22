@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 
-type Phase = 'setup' | 'conversation' | 'debrief'
+type Phase = 'setup' | 'conversation' | 'debrief' | 'feedback'
 type Mode = 'personal' | 'professional'
 type ConversationFormat = 'text' | 'in-person' | 'not-sure'
 type TextSubFormat = 'slack' | 'email' | 'sms' | 'not-sure'
@@ -10,6 +10,8 @@ type Message = { role: 'user' | 'assistant'; content: string }
 type TrustedPerson = { id: string; name: string; relationship: string; communication_style: string; notes: string }
 type ContactContext = { name: string; style: string; notes: string }
 type DebriefData = { other_person_felt: string; how_you_came_across: string; what_went_well: string; things_to_work_on: string }
+type PrepTip = { title: string; text: string }
+type PracticeFeedbackRating = 'yes' | 'no'
 type Intervention = { severity: 'warning' | 'end'; message: string }
 type SavedSession = {
   id: string
@@ -192,7 +194,7 @@ function buildPrepTips({
   practiceFocus: string
   conversationFormat: ConversationFormat
   textSubFormat: TextSubFormat
-}) {
+}): PrepTip[] {
   const otherPerson = person.trim() || 'the other person'
   const channel = getChannelLabel(conversationFormat, textSubFormat)
   const startTip =
@@ -219,6 +221,50 @@ function buildPrepTips({
     { title: 'How this might go', text: responseTip },
     { title: 'What to watch for', text: watchTip },
   ]
+}
+
+function buildPrepTipsCacheKey({
+  mode,
+  person,
+  relationshipContext,
+  personStyle,
+  situation,
+  goal,
+  stakes,
+  practiceFocus,
+  conversationFormat,
+  textSubFormat,
+}: {
+  mode: Mode
+  person: string
+  relationshipContext: string
+  personStyle: string
+  situation: string
+  goal: string
+  stakes: string
+  practiceFocus: string
+  conversationFormat: ConversationFormat
+  textSubFormat: TextSubFormat
+}) {
+  return JSON.stringify({
+    mode,
+    person: person.trim(),
+    relationshipContext: relationshipContext.trim(),
+    personStyle: personStyle.trim(),
+    situation: situation.trim(),
+    goal: goal.trim(),
+    stakes: stakes.trim(),
+    practiceFocus: practiceFocus.trim(),
+    conversationFormat,
+    textSubFormat,
+  })
+}
+
+function buildLoadingPrepTips(fallbackTips: PrepTip[]) {
+  return fallbackTips.map((tip) => ({
+    title: tip.title,
+    text: 'Tailoring this to your situation...',
+  }))
 }
 
 // ── LocalStorage helpers ───────────────────────────────────────────────────
@@ -388,6 +434,9 @@ export default function PracticePage() {
   const [draftLoading, setDraftLoading] = useState(false)
   const [draftNote, setDraftNote] = useState<string | null>(null)
   const [draftImprovedResponse, setDraftImprovedResponse] = useState<string | null>(null)
+  const [aiPrepTips, setAiPrepTips] = useState<PrepTip[] | null>(null)
+  const [prepTipsLoading, setPrepTipsLoading] = useState(false)
+  const [prepTipsCacheKey, setPrepTipsCacheKey] = useState('')
   const [error, setError] = useState('')
   const [limitNotice, setLimitNotice] = useState<string | null>(null)
   const [debrief, setDebrief] = useState<DebriefData | null>(null)
@@ -396,6 +445,13 @@ export default function PracticePage() {
   const [suggestedPrompts, setSuggestedPrompts] = useState<string[]>([])
   const [intervention, setIntervention] = useState<Intervention | null>(null)
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([])
+  const [practiceFeedbackRating, setPracticeFeedbackRating] = useState<PracticeFeedbackRating | null>(null)
+  const [practiceFeedbackUseful, setPracticeFeedbackUseful] = useState('')
+  const [practiceFeedbackOff, setPracticeFeedbackOff] = useState('')
+  const [practiceFeedbackWouldUse, setPracticeFeedbackWouldUse] = useState('')
+  const [practiceFeedbackSubmitting, setPracticeFeedbackSubmitting] = useState(false)
+  const [practiceFeedbackSubmitted, setPracticeFeedbackSubmitted] = useState(false)
+  const [practiceFeedbackError, setPracticeFeedbackError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -406,9 +462,10 @@ export default function PracticePage() {
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`
+      const maxHeight = phase === 'conversation' && conversationFormat === 'text' && textSubFormat === 'email' ? 220 : 160
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, maxHeight)}px`
     }
-  }, [input])
+  }, [input, phase, conversationFormat, textSubFormat])
 
   useEffect(() => {
     setSavedSessions(loadSavedSessions())
@@ -444,6 +501,78 @@ export default function PracticePage() {
       if (data.prompts?.length) setSuggestedPrompts(data.prompts)
     } catch { /* non-blocking */ }
   }, [mode, person, situation, goal])
+
+  useEffect(() => {
+    if (phase !== 'setup' || setupStep !== 3) return
+
+    const cacheKey = buildPrepTipsCacheKey({
+      mode,
+      person,
+      relationshipContext,
+      personStyle,
+      situation,
+      goal,
+      stakes,
+      practiceFocus,
+      conversationFormat,
+      textSubFormat,
+    })
+    if (prepTipsCacheKey === cacheKey) return
+
+    let cancelled = false
+    setAiPrepTips(null)
+    setPrepTipsLoading(true)
+
+    async function loadPrepTips() {
+      try {
+        const res = await fetch('/api/practice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'prep_tips',
+            mode,
+            person,
+            relationshipContext,
+            personStyle,
+            situation,
+            goal: goal || situation,
+            stakes,
+            practiceFocus,
+            conversationFormat,
+            textSubFormat,
+          }),
+        })
+        const data = await res.json() as { tips?: PrepTip[] }
+        if (!cancelled && res.ok && data.tips?.length === 3) {
+          setAiPrepTips(data.tips)
+        }
+      } catch {
+        // Fallback tips remain available if tailored prep cannot load.
+      } finally {
+        if (!cancelled) {
+          setPrepTipsCacheKey(cacheKey)
+          setPrepTipsLoading(false)
+        }
+      }
+    }
+
+    loadPrepTips()
+    return () => { cancelled = true }
+  }, [
+    phase,
+    setupStep,
+    mode,
+    person,
+    relationshipContext,
+    personStyle,
+    situation,
+    goal,
+    stakes,
+    practiceFocus,
+    conversationFormat,
+    textSubFormat,
+    prepTipsCacheKey,
+  ])
 
   async function getDraftFeedback() {
     if (!input.trim() || draftLoading) return
@@ -486,6 +615,12 @@ export default function PracticePage() {
     setDraftImprovedResponse(null)
     setDebrief(null)
     setIntervention(null)
+    setPracticeFeedbackRating(null)
+    setPracticeFeedbackUseful('')
+    setPracticeFeedbackOff('')
+    setPracticeFeedbackWouldUse('')
+    setPracticeFeedbackSubmitted(false)
+    setPracticeFeedbackError(null)
     setPhase('conversation')
     setLimitNotice(null)
     loadSuggestedPrompts(undefined, 0)
@@ -617,6 +752,51 @@ export default function PracticePage() {
     setPhase('debrief')
   }
 
+  async function submitPracticeFeedback() {
+    if (!practiceFeedbackRating || practiceFeedbackSubmitting) return
+    setPracticeFeedbackSubmitting(true)
+    setPracticeFeedbackError(null)
+
+    const comment = [
+      practiceFeedbackUseful.trim() ? `Most useful: ${practiceFeedbackUseful.trim()}` : null,
+      practiceFeedbackOff.trim() ? `Felt off: ${practiceFeedbackOff.trim()}` : null,
+      practiceFeedbackWouldUse.trim() ? `Would use before real situation: ${practiceFeedbackWouldUse.trim()}` : null,
+    ].filter(Boolean).join('\n\n')
+
+    const res = await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rating: practiceFeedbackRating,
+        comment,
+        page: '/dashboard/practice',
+        source: 'practice',
+        metadata: {
+          mode,
+          conversationFormat,
+          textSubFormat,
+          person,
+          situation,
+          stakes,
+          practiceFocus,
+          messageCount: messages.length,
+          useful: practiceFeedbackUseful.trim() || null,
+          off: practiceFeedbackOff.trim() || null,
+          wouldUse: practiceFeedbackWouldUse.trim() || null,
+        },
+      }),
+    })
+
+    setPracticeFeedbackSubmitting(false)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({})) as { error?: string }
+      setPracticeFeedbackError(data.error || 'Could not save feedback. Please try again.')
+      return
+    }
+
+    setPracticeFeedbackSubmitted(true)
+  }
+
   function loadSession(session: SavedSession) {
     setPerson(session.person)
     setSituation(session.situation)
@@ -639,6 +819,12 @@ export default function PracticePage() {
     setDraftImprovedResponse(null)
     setIntervention(null)
     setError('')
+    setPracticeFeedbackRating(null)
+    setPracticeFeedbackUseful('')
+    setPracticeFeedbackOff('')
+    setPracticeFeedbackWouldUse('')
+    setPracticeFeedbackSubmitted(false)
+    setPracticeFeedbackError(null)
     setPhase('conversation')
   }
 
@@ -654,6 +840,12 @@ export default function PracticePage() {
     setDraftImprovedResponse(null)
     setIntervention(null)
     setError('')
+    setPracticeFeedbackRating(null)
+    setPracticeFeedbackUseful('')
+    setPracticeFeedbackOff('')
+    setPracticeFeedbackWouldUse('')
+    setPracticeFeedbackSubmitted(false)
+    setPracticeFeedbackError(null)
   }
 
   // ── Setup ──────────────────────────────────────────────────────────────────
@@ -698,7 +890,19 @@ export default function PracticePage() {
       conversationFormat,
       textSubFormat,
     })
-    const prepTips = buildPrepTips({
+    const prepTipsKey = buildPrepTipsCacheKey({
+      mode,
+      person,
+      relationshipContext,
+      personStyle,
+      situation,
+      goal,
+      stakes,
+      practiceFocus,
+      conversationFormat,
+      textSubFormat,
+    })
+    const fallbackPrepTips = buildPrepTips({
       person,
       personStyle,
       stakes,
@@ -706,6 +910,12 @@ export default function PracticePage() {
       conversationFormat,
       textSubFormat,
     })
+    const showPrepTipsLoading = prepTipsLoading && prepTipsCacheKey !== prepTipsKey
+    const prepTips = showPrepTipsLoading
+      ? buildLoadingPrepTips(fallbackPrepTips)
+      : prepTipsCacheKey === prepTipsKey && aiPrepTips
+        ? aiPrepTips
+        : fallbackPrepTips
 
     return (
       <div className="w-full max-w-2xl">
@@ -952,11 +1162,14 @@ export default function PracticePage() {
           )}
 
           {setupStep === 3 && (
-            <div className="space-y-4">
+            <div className="space-y-4" aria-busy={showPrepTipsLoading}>
               {prepTips.map((tip) => (
-                <div key={tip.title} className="rounded-card border border-border bg-bg p-4">
+                <div
+                  key={tip.title}
+                  className={`rounded-card border border-border bg-bg p-4 ${showPrepTipsLoading ? 'animate-pulse' : ''}`}
+                >
                   <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-light">{tip.title}</p>
-                  <p className="text-sm leading-relaxed text-ink">{tip.text}</p>
+                  <p className={`text-sm leading-relaxed ${showPrepTipsLoading ? 'text-ink-light' : 'text-ink'}`}>{tip.text}</p>
                 </div>
               ))}
               <div className="rounded-card border border-primary/20 bg-primary-light/40 p-4">
@@ -1035,44 +1248,60 @@ export default function PracticePage() {
       textSubFormat === 'sms' ? 'Text' :
       textSubFormat === 'email' ? 'Email' :
       'Slack'
+    const isEmailPractice = textSubFormat === 'email' && conversationFormat === 'text'
+    const emailSubject = cleanPreviewValue(situation) || 'Practice conversation'
 
     const renderMessages = () => {
-      if (textSubFormat === 'email' && conversationFormat === 'text') {
+      if (isEmailPractice) {
         return (
-          <div className="flex-1 overflow-y-auto mb-3 border border-border rounded-lg overflow-hidden bg-gray-50">
-            {messages.length === 0 && !loading && (
-              <p className="text-xs text-ink-light text-center py-8">You go first — type your opening message below.</p>
-            )}
-            {messages.map((m, i) => (
-              <div key={i}>
-                <div className={`px-5 py-4 border-b border-border last:border-0 ${m.role === 'user' ? 'bg-white' : 'bg-gray-50'}`}>
-                  <p className="text-xs font-semibold text-ink mb-2">{m.role === 'user' ? 'You' : person}</p>
-                  <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">{m.content}</p>
-                </div>
-                {m.role === 'user' && inlineFeedback[i] && (
-                  <div className="px-5 py-1.5 bg-amber-50 border-b border-border">
-                    <p className="text-xs text-ink-light italic">{inlineFeedback[i]}</p>
+          <div className="mb-3 flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
+            <div className="border-b border-border bg-gray-50 px-5 py-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Gmail practice</p>
+              <p className="mt-1 truncate text-sm font-medium text-ink">{emailSubject}</p>
+            </div>
+            <div className="flex-1 overflow-y-auto bg-gray-50">
+              {messages.length === 0 && !loading && (
+                <p className="px-5 py-8 text-center text-xs text-ink-light">You go first — draft your opening email below.</p>
+              )}
+              {messages.map((m, i) => (
+                <div key={i}>
+                  <div className="border-b border-border bg-white px-5 py-4 last:border-0">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-ink">{m.role === 'user' ? 'You' : person}</p>
+                        <p className="truncate text-xs text-ink-light">
+                          {m.role === 'user' ? `to ${person || 'recipient'}` : 'to you'}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-xs text-ink-light">Practice email</p>
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{m.content}</p>
                   </div>
-                )}
-                {m.role === 'assistant' && assistantFeedback[i] && (
-                  <div className="px-5 py-1.5 bg-primary-light/40 border-b border-border">
-                    <p className="text-xs text-ink-light italic">{assistantFeedback[i]}</p>
-                  </div>
-                )}
-              </div>
-            ))}
-            {loading && (
-              <div className="px-5 py-4 bg-gray-50" role="status" aria-live="polite">
-                <p className="text-xs font-semibold text-ink mb-2">{person}</p>
-                <div className="flex gap-1 items-center h-4" aria-hidden="true">
-                  <span className="w-1.5 h-1.5 bg-ink-light rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-1.5 h-1.5 bg-ink-light rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-1.5 h-1.5 bg-ink-light rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  {m.role === 'user' && inlineFeedback[i] && (
+                    <div className="border-b border-border bg-amber-50 px-5 py-1.5">
+                      <p className="text-xs italic text-ink-light">{inlineFeedback[i]}</p>
+                    </div>
+                  )}
+                  {m.role === 'assistant' && assistantFeedback[i] && (
+                    <div className="border-b border-border bg-primary-light/40 px-5 py-1.5">
+                      <p className="text-xs italic text-ink-light">{assistantFeedback[i]}</p>
+                    </div>
+                  )}
                 </div>
-                <span className="sr-only">{person} is responding</span>
-              </div>
-            )}
-            <div ref={bottomRef} />
+              ))}
+              {loading && (
+                <div className="bg-white px-5 py-4" role="status" aria-live="polite">
+                  <p className="mb-2 text-xs font-semibold text-ink">{person}</p>
+                  <div className="flex h-4 items-center gap-1" aria-hidden="true">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-light" style={{ animationDelay: '0ms' }} />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-light" style={{ animationDelay: '150ms' }} />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-light" style={{ animationDelay: '300ms' }} />
+                  </div>
+                  <span className="sr-only">{person} is responding</span>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
           </div>
         )
       }
@@ -1254,39 +1483,86 @@ export default function PracticePage() {
           </div>
         )}
 
-        <div className="flex gap-2 shrink-0 items-end">
-          <textarea
-            ref={textareaRef}
-            aria-label="Your practice message"
-            rows={1}
-            value={input}
-            onChange={e => { setInput(e.target.value); setDraftNote(null); setDraftImprovedResponse(null); setSentViaPrompt(false) }}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-            placeholder={
-              textSubFormat === 'email' ? 'Type your reply…' :
-              textSubFormat === 'slack' ? 'Message…' :
-              'Your turn…'
-            }
-            disabled={loading}
-            style={{ resize: 'none', overflowY: 'hidden', minHeight: '42px', maxHeight: '160px' }}
-            className="flex-1 border border-border rounded-xl px-4 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-          <button
-            onClick={getDraftFeedback}
-            disabled={draftLoading || loading || !input.trim() || sentViaPrompt}
-            className="border border-border text-ink-mid rounded-pill px-4 py-2.5 text-sm hover:text-ink hover:border-primary transition-colors disabled:opacity-40 shrink-0"
-            title={sentViaPrompt ? 'Edit the suggestion before asking Beckett for feedback.' : undefined}
-          >
-            {draftLoading ? '…' : 'Get feedback'}
-          </button>
-          <button
-            onClick={sendMessage}
-            disabled={loading || !input.trim()}
-            className="bg-primary text-white rounded-pill px-5 py-2.5 text-sm font-medium hover:bg-primary-dark transition-colors disabled:opacity-50 shrink-0"
-          >
-            Send
-          </button>
-        </div>
+        {isEmailPractice ? (
+          <div className="shrink-0 overflow-hidden rounded-lg border border-border bg-white shadow-sm">
+            <div className="bg-gray-100 px-4 py-2 text-xs font-medium text-ink">New Message</div>
+            <div className="flex items-center gap-2 border-b border-border px-4 py-2 text-sm">
+              <span className="text-ink-light">To</span>
+              <span className="min-w-0 flex-1 truncate text-ink">{person || 'recipient'}</span>
+            </div>
+            <div className="flex items-center gap-2 border-b border-border px-4 py-2 text-sm">
+              <span className="text-ink-light">Subject</span>
+              <span className="min-w-0 flex-1 truncate text-ink">{emailSubject}</span>
+            </div>
+            <textarea
+              ref={textareaRef}
+              aria-label="Email body"
+              rows={6}
+              value={input}
+              onChange={e => { setInput(e.target.value); setDraftNote(null); setDraftImprovedResponse(null); setSentViaPrompt(false) }}
+              onKeyDown={e => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                  e.preventDefault()
+                  sendMessage()
+                }
+              }}
+              placeholder="Write your email..."
+              disabled={loading}
+              style={{ resize: 'none', overflowY: 'auto', minHeight: '148px', maxHeight: '220px' }}
+              className="w-full border-0 bg-white px-4 py-3 text-sm leading-relaxed text-ink focus:outline-none focus:ring-0"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3">
+              <button
+                onClick={sendMessage}
+                disabled={loading || !input.trim()}
+                className="rounded-pill bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-dark disabled:opacity-50"
+              >
+                Send
+              </button>
+              <button
+                onClick={getDraftFeedback}
+                disabled={draftLoading || loading || !input.trim() || sentViaPrompt}
+                className="rounded-pill border border-border px-4 py-2.5 text-sm text-ink-mid transition-colors hover:border-primary hover:text-ink disabled:opacity-40"
+                title={sentViaPrompt ? 'Edit the suggestion before asking Beckett for feedback.' : undefined}
+              >
+                {draftLoading ? '…' : 'Get feedback'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-2 shrink-0 items-end">
+            <textarea
+              ref={textareaRef}
+              aria-label="Your practice message"
+              rows={1}
+              value={input}
+              onChange={e => { setInput(e.target.value); setDraftNote(null); setDraftImprovedResponse(null); setSentViaPrompt(false) }}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
+              placeholder={
+                textSubFormat === 'slack' ? 'Message…' :
+                'Your turn…'
+              }
+              disabled={loading}
+              style={{ resize: 'none', overflowY: 'hidden', minHeight: '42px', maxHeight: '160px' }}
+              className="flex-1 border border-border rounded-xl px-4 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <button
+              onClick={getDraftFeedback}
+              disabled={draftLoading || loading || !input.trim() || sentViaPrompt}
+              className="border border-border text-ink-mid rounded-pill px-4 py-2.5 text-sm hover:text-ink hover:border-primary transition-colors disabled:opacity-40 shrink-0"
+              title={sentViaPrompt ? 'Edit the suggestion before asking Beckett for feedback.' : undefined}
+            >
+              {draftLoading ? '…' : 'Get feedback'}
+            </button>
+            <button
+              onClick={sendMessage}
+              disabled={loading || !input.trim()}
+              className="bg-primary text-white rounded-pill px-5 py-2.5 text-sm font-medium hover:bg-primary-dark transition-colors disabled:opacity-50 shrink-0"
+            >
+              Send
+            </button>
+          </div>
+        )}
 
         {(draftNote || draftImprovedResponse) && (
           <div className="mt-2 shrink-0 rounded-card border border-primary/15 bg-primary-light/40 p-3">
@@ -1328,6 +1604,103 @@ export default function PracticePage() {
     )
   }
 
+  // ── Practice feedback ──────────────────────────────────────────────────────
+
+  if (phase === 'feedback') {
+    return (
+      <div className="max-w-lg mx-auto">
+        <h1 className="text-3xl text-ink mb-2" style={{ fontFamily: 'var(--font-dm-serif), Georgia, serif' }}>
+          How was this practice?
+        </h1>
+        <p className="text-ink-mid text-sm mb-8">Optional beta feedback helps Beckett make practice more useful.</p>
+
+        <div className="bg-white border border-border rounded-card p-5 mb-6">
+          {practiceFeedbackSubmitted ? (
+            <div>
+              <p className="text-sm font-medium text-ink mb-2">Thanks — this helps us make Beckett better.</p>
+              <p className="text-sm text-ink-mid leading-relaxed">We&apos;ll use this to tune practice before more beta users try it.</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm font-medium text-ink mb-2">Did this practice session feel useful?</p>
+              <p className="mb-4 text-xs leading-relaxed text-ink-light">
+                Practice feedback is saved for beta review and may include the notes you type here.
+              </p>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {[
+                  { value: 'yes', label: 'Useful' },
+                  { value: 'no', label: 'Needs work' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setPracticeFeedbackRating(option.value as PracticeFeedbackRating)}
+                    className={`rounded-sm border px-4 py-2.5 text-sm font-medium transition-colors ${
+                      practiceFeedbackRating === option.value
+                        ? 'border-primary bg-primary-light text-primary'
+                        : 'border-border text-ink-mid hover:border-primary hover:text-ink'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-3">
+                <PracticeFeedbackTextarea
+                  label="What felt most useful?"
+                  value={practiceFeedbackUseful}
+                  onChange={setPracticeFeedbackUseful}
+                  placeholder="A tip, prompt, roleplay moment, or piece of feedback."
+                />
+                <PracticeFeedbackTextarea
+                  label="Where did Beckett feel too much, too vague, or off?"
+                  value={practiceFeedbackOff}
+                  onChange={setPracticeFeedbackOff}
+                  placeholder="Anything that felt confusing, intense, generic, or wrong."
+                />
+                <PracticeFeedbackTextarea
+                  label="Would you use this before the real situation?"
+                  value={practiceFeedbackWouldUse}
+                  onChange={setPracticeFeedbackWouldUse}
+                  placeholder="Yes, no, maybe — and why."
+                />
+              </div>
+
+              {practiceFeedbackError && <p className="text-xs text-red-600 mt-3">{practiceFeedbackError}</p>}
+
+              <button
+                type="button"
+                onClick={submitPracticeFeedback}
+                disabled={!practiceFeedbackRating || practiceFeedbackSubmitting}
+                className="mt-4 w-full bg-primary text-white rounded-pill py-3 text-sm font-medium hover:bg-primary-dark transition-colors disabled:opacity-40"
+              >
+                {practiceFeedbackSubmitting ? 'Saving…' : 'Send practice feedback'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={resetToSetup}
+            className="flex-1 border border-primary text-primary rounded-pill py-3 text-sm font-medium hover:bg-primary-light transition-colors"
+          >
+            Practice again
+          </button>
+          <a
+            href="/dashboard"
+            className="flex-1 bg-primary text-white rounded-pill py-3 text-sm font-medium text-center hover:bg-primary-dark transition-colors"
+          >
+            {practiceFeedbackSubmitted ? 'Back to overview' : 'Skip feedback'}
+          </a>
+        </div>
+      </div>
+    )
+  }
+
   // ── Debrief ────────────────────────────────────────────────────────────────
 
   return (
@@ -1360,12 +1733,13 @@ export default function PracticePage() {
             >
               Try again
             </button>
-            <a
-              href="/dashboard"
+            <button
+              type="button"
+              onClick={() => setPhase('feedback')}
               className="flex-1 border border-border rounded-pill py-3 text-sm font-medium text-ink text-center hover:bg-primary-light transition-colors"
             >
-              Back to overview
-            </a>
+              Next
+            </button>
           </div>
         </div>
       )}
@@ -1397,6 +1771,31 @@ function PracticeTextInput({
         className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
       />
       {helperText && <p className="mt-1 text-xs text-ink-light">{helperText}</p>}
+    </div>
+  )
+}
+
+function PracticeFeedbackTextarea({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium uppercase tracking-wide text-ink-light mb-1">{label}</label>
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={3}
+        className="w-full resize-none rounded-sm border border-border bg-white px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+      />
     </div>
   )
 }

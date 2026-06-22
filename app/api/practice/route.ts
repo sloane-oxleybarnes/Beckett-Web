@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json() as {
-    action: 'turn' | 'debrief' | 'inline_feedback' | 'assistant_feedback' | 'suggested_prompts' | 'recommend_format' | 'draft_feedback' | 'intervention_check'
+    action: 'turn' | 'debrief' | 'inline_feedback' | 'assistant_feedback' | 'suggested_prompts' | 'recommend_format' | 'draft_feedback' | 'intervention_check' | 'prep_tips'
     mode?: 'personal' | 'professional'
     system?: string
     messages?: { role: string; content: string }[]
@@ -49,6 +49,12 @@ export async function POST(req: NextRequest) {
     context?: string
     person?: string
     lastAIMessage?: string
+    relationshipContext?: string
+    personStyle?: string
+    stakes?: string
+    practiceFocus?: string
+    conversationFormat?: string
+    textSubFormat?: string
   }
 
   const { action, mode } = body
@@ -212,6 +218,70 @@ Rules:
       return NextResponse.json({ prompts: parsed.prompts || [] })
     } catch {
       return NextResponse.json({ prompts: [] })
+    }
+  }
+
+  if (action === 'prep_tips') {
+    const {
+      person,
+      situation,
+      goal,
+      relationshipContext,
+      personStyle,
+      stakes,
+      practiceFocus,
+      conversationFormat,
+      textSubFormat,
+    } = body
+
+    const channel = conversationFormat === 'in-person'
+      ? 'in person'
+      : textSubFormat === 'email'
+        ? 'email'
+        : textSubFormat === 'sms'
+          ? 'text message'
+          : 'Slack or chat'
+
+    const system = `You are Beckett, a practical communication coach preparing someone for a realistic practice conversation. Return only valid JSON.`
+    const user = `Generate tailored "before you start" prep notes for this practice scenario.
+
+Mode: ${mode || 'not specified'}
+Channel: ${channel}
+Other person: ${person || 'the other person'}
+How the user knows them: ${relationshipContext || 'not specified'}
+Their communication style: ${personStyle || 'not specified'}
+Situation and goal: ${situation || goal || 'not specified'}
+Pressure level: ${stakes || 'not specified'}
+What the user wants to practice: ${practiceFocus || 'not specified'}
+
+Return ONLY valid JSON in this shape:
+{
+  "tips": [
+    { "title": "How to start", "text": "..." },
+    { "title": "How this might go", "text": "..." },
+    { "title": "What to watch for", "text": "..." }
+  ]
+}
+
+Rules:
+- Use exactly those three titles, in that order.
+- Each text field should be 1-2 concise, natural sentences.
+- Infer the conversation type from the situation. For example, a raise conversation often involves evidence, timing, budget, or performance questions; a coverage handoff may involve priorities, ownership, and ambiguity.
+- Explain the likely shape of the conversation, including realistic pushback or questions the other person may ask.
+- If the context suggests the other person responds poorly, defensively, dismissively, vaguely, intensely, or under pressure, name that pattern and give the user a grounded way to prepare.
+- Avoid generic advice unless it is tied to this specific scenario.`
+
+    const result = await callMeteredAnthropic(system, [{ role: 'user', content: user }], 500)
+    try {
+      const parsed = JSON.parse(result.trim()) as { tips?: { title?: string; text?: string }[] }
+      const expectedTitles = ['How to start', 'How this might go', 'What to watch for']
+      const tips = expectedTitles.map((title, index) => ({
+        title,
+        text: parsed.tips?.[index]?.text?.trim() || '',
+      })).filter(tip => tip.text)
+      return NextResponse.json({ tips: tips.length === expectedTitles.length ? tips : [] })
+    } catch {
+      return NextResponse.json({ tips: [] })
     }
   }
 
