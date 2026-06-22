@@ -125,6 +125,17 @@ function getChannelLabel(format: ConversationFormat, textSubFormat: TextSubForma
   return 'Slack'
 }
 
+function getChannelPhrase(format: ConversationFormat, textSubFormat: TextSubFormat) {
+  const channel = getChannelLabel(format, textSubFormat)
+  return channel === 'email' || channel === 'in-person'
+    ? `an ${channel}`
+    : `a ${channel}`
+}
+
+function cleanPreviewValue(value: string) {
+  return value.trim().replace(/[.!?]+$/g, '')
+}
+
 function buildPracticePreview({
   person,
   relationshipContext,
@@ -145,23 +156,23 @@ function buildPracticePreview({
   textSubFormat: TextSubFormat
 }) {
   const otherPerson = person.trim() || 'the other person'
-  const channel = getChannelLabel(conversationFormat, textSubFormat)
-  const sentences = [`You will practice a ${channel} conversation with ${otherPerson}.`]
+  const channelPhrase = getChannelPhrase(conversationFormat, textSubFormat)
+  const sentences = [`You will practice ${channelPhrase} conversation with ${otherPerson}.`]
 
   if (relationshipContext.trim()) {
-    sentences.push(`You know them as ${relationshipContext.trim()}.`)
+    sentences.push(`Relationship context: ${cleanPreviewValue(relationshipContext)}.`)
   }
   if (personStyle.trim()) {
-    sentences.push(`${otherPerson} tends to communicate like this: ${personStyle.trim()}.`)
+    sentences.push(`Their communication style: ${cleanPreviewValue(personStyle)}.`)
   }
   if (situation.trim()) {
-    sentences.push(`The conversation is about ${situation.trim()}.`)
+    sentences.push(`Conversation focus: ${cleanPreviewValue(situation)}.`)
   }
   if (stakes.trim()) {
-    sentences.push(`This feels ${stakes.trim().toLowerCase()}.`)
+    sentences.push(`Pressure level: ${cleanPreviewValue(stakes)}.`)
   }
   if (practiceFocus.trim()) {
-    sentences.push(`Your coaching focus is: ${practiceFocus.trim()}.`)
+    sentences.push(`Beckett will watch for: ${cleanPreviewValue(practiceFocus)}.`)
   }
 
   return sentences
@@ -795,8 +806,16 @@ export default function PracticePage() {
                 label="How do you know them?"
                 value={relationshipContext}
                 onChange={setRelationshipContext}
-                placeholder="e.g. We work on the same launch project, but this is our first time owning a handoff together"
-                helperText="A sentence or two is enough. Include the role or dynamic that matters here."
+                placeholder={
+                  mode === 'personal'
+                    ? 'e.g. We have been close friends for years, but conflict usually gets awkward between us'
+                    : 'e.g. We work on the same launch project, but this is our first time owning a handoff together'
+                }
+                helperText={
+                  mode === 'personal'
+                    ? 'A sentence or two is enough. Include the relationship, history, or emotional dynamic that matters here.'
+                    : 'A sentence or two is enough. Include the role or work dynamic that matters here.'
+                }
               />
 
               <div>
