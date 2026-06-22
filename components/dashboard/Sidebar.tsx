@@ -102,10 +102,6 @@ export default function DashboardSidebar({
             </Link>
           ))}
         </div>
-
-        <p className="mt-5 px-3 text-xs leading-snug text-ink-light/70">
-          Your profile and triggers live in About Me. Beckett coaching settings live in Settings.
-        </p>
       </nav>
 
       {/* User footer */}
@@ -152,18 +148,20 @@ export default function DashboardSidebar({
       </button>
 
       {desktopCollapsed && (
-        <button
-          type="button"
-          onClick={() => onDesktopCollapseChange(false)}
-          className="fixed left-4 top-4 z-50 hidden h-9 w-9 flex-col items-center justify-center gap-1.5 rounded-sm border border-border bg-white shadow-sm md:flex"
-          aria-label="Open sidebar"
-          aria-expanded={false}
-          title="Open sidebar"
-        >
-          <span className="w-4 h-px bg-ink block" />
-          <span className="w-4 h-px bg-ink block" />
-          <span className="w-4 h-px bg-ink block" />
-        </button>
+        <div className="fixed left-0 top-0 bottom-0 z-40 hidden w-16 border-r border-border bg-white md:block">
+          <button
+            type="button"
+            onClick={() => onDesktopCollapseChange(false)}
+            className="absolute left-3 top-4 flex h-9 w-9 flex-col items-center justify-center gap-1.5 rounded-sm border border-border bg-white shadow-sm transition-colors hover:border-primary-mid"
+            aria-label="Open sidebar"
+            aria-expanded={false}
+            title="Open sidebar"
+          >
+            <span className="w-4 h-px bg-ink block" />
+            <span className="w-4 h-px bg-ink block" />
+            <span className="w-4 h-px bg-ink block" />
+          </button>
+        </div>
       )}
 
       {/* Backdrop — mobile only */}

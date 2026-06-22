@@ -447,7 +447,7 @@ export default function AboutPage() {
 
         <SummarySection
           title="Communication strengths"
-          description="Pick up to three. Beckett starts from what already works."
+          description="Beckett starts from what already works."
           values={strengths}
           editing={editingSections.has("strengths")}
           onToggle={() => toggleSection("strengths")}
@@ -458,12 +458,10 @@ export default function AboutPage() {
                 key={option}
                 label={option}
                 selected={strengths.includes(option)}
-                disabled={!strengths.includes(option) && strengths.length >= 3}
-                onClick={() => setStrengths((current) => toggleValue(current, option, 3))}
+                onClick={() => setStrengths((current) => toggleValue(current, option))}
               />
             ))}
           </div>
-          <p className="text-xs text-ink-light mt-3">{strengths.length}/3 selected</p>
           <CustomEntryControls
             value={customStrengths}
             onChange={setCustomStrengths}
@@ -471,25 +469,11 @@ export default function AboutPage() {
             values={strengths}
             presetOptions={strengthOptions}
             onRemove={(value) => setStrengths((current) => current.filter((item) => item !== value))}
-            disabled={strengths.length >= 3}
-            helperText={
-              strengths.length >= 3
-                ? "Remove a strength before adding another."
-                : "Strengths are capped at three total answers."
-            }
           />
         </SummarySection>
 
-        <TextAreaCard
-          title="How I work best"
-          description="What conditions help you communicate and collaborate well?"
-          value={data.how_i_work_best}
-          onChange={(value) => setData({ ...data, how_i_work_best: value })}
-          placeholder="e.g. I do better with written context before a meeting. I need clear expectations. I work well one-on-one."
-        />
-
         <SummarySection
-          title="Workplace triggers and hard moments"
+          title="My Triggers"
           description="Beckett uses this to be more careful around the moments that tend to spike stress or confusion."
           values={workplaceTriggers}
           editing={editingSections.has("triggers")}
@@ -514,14 +498,6 @@ export default function AboutPage() {
             onRemove={(value) => setWorkplaceTriggers((current) => current.filter((item) => item !== value))}
           />
         </SummarySection>
-
-        <TextAreaCard
-          title="My triggers"
-          description="What kinds of interactions are hardest for you? What tends to throw you off?"
-          value={data.triggers}
-          onChange={(value) => setData({ ...data, triggers: value })}
-          placeholder="e.g. Being interrupted. Vague feedback. Feeling like I am being judged. Unexpected confrontation."
-        />
 
         <TextAreaCard
           title="How I communicate"

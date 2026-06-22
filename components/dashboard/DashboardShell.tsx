@@ -38,7 +38,7 @@ export default function DashboardShell({
       />
       <main
         className={`flex-1 px-4 py-6 pt-16 transition-[margin] duration-200 md:px-8 md:py-8 md:pt-8 ${
-          sidebarCollapsed ? "md:ml-0" : "md:ml-64"
+          sidebarCollapsed ? "md:ml-16" : "md:ml-64"
         }`}
       >
         {children}

@@ -522,7 +522,7 @@ export default function SettingsPage() {
         </p>
         <form onSubmit={saveCoachingSettings} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-ink mb-2">Communication preferences</label>
+            <label className="block text-sm font-medium text-ink mb-2">What I Want Beckett to Help Me With</label>
             <div className="grid gap-2 sm:grid-cols-2">
               {communicationPreferenceOptions.map((option) => (
                 <SettingsOption
