@@ -1324,10 +1324,6 @@ export default function PracticePage() {
       if (textSubFormat === 'slack' && conversationFormat === 'text') {
         return (
           <div className="flex-1 overflow-y-auto mb-3 border border-border rounded-lg overflow-hidden">
-            <div className="bg-gray-800 px-4 py-2 flex items-center gap-2 shrink-0">
-              <span className="text-gray-400 text-sm font-medium">#</span>
-              <span className="text-white text-sm font-medium truncate">{situation.slice(0, 40)}{situation.length > 40 ? '…' : ''}</span>
-            </div>
             <div className="bg-white">
               {messages.length === 0 && !loading && (
                 <p className="text-xs text-ink-light text-center py-8">You go first — type your opening message below.</p>
