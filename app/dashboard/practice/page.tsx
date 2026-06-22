@@ -45,6 +45,10 @@ const communicationStyleSuggestions = [
   'Fast-paced and reactive',
 ]
 
+function isCustomCommunicationStyle(value: string) {
+  return value.trim().length > 0 && !communicationStyleSuggestions.includes(value)
+}
+
 const stakesOptions = [
   'Low stakes',
   'Medium stakes',
@@ -358,6 +362,7 @@ export default function PracticePage() {
   const [goal, setGoal] = useState('')
   const [relationshipContext, setRelationshipContext] = useState('')
   const [personStyle, setPersonStyle] = useState('')
+  const [showCustomPersonStyle, setShowCustomPersonStyle] = useState(false)
   const [recurringPattern, setRecurringPattern] = useState('')
   const [stakes, setStakes] = useState('')
   const [expectedResponse, setExpectedResponse] = useState('')
@@ -610,6 +615,7 @@ export default function PracticePage() {
     setTextSubFormat(session.textSubFormat)
     setRelationshipContext(session.relationshipContext || '')
     setPersonStyle(session.personStyle || '')
+    setShowCustomPersonStyle(isCustomCommunicationStyle(session.personStyle || ''))
     setRecurringPattern(session.recurringPattern || '')
     setStakes(session.stakes || '')
     setExpectedResponse(session.expectedResponse || '')
@@ -670,6 +676,7 @@ export default function PracticePage() {
       },
     ]
     const currentSlide = setupSlides[setupStep]
+    const showOtherPersonStyle = showCustomPersonStyle || isCustomCommunicationStyle(personStyle)
     const previewSentences = buildPracticePreview({
       person,
       relationshipContext,
@@ -799,7 +806,10 @@ export default function PracticePage() {
                     <button
                       key={suggestion}
                       type="button"
-                      onClick={() => setPersonStyle(suggestion)}
+                      onClick={() => {
+                        setPersonStyle(suggestion)
+                        setShowCustomPersonStyle(false)
+                      }}
                       aria-pressed={personStyle === suggestion}
                       className={`rounded-pill border px-3 py-1 text-xs transition-colors ${
                         personStyle === suggestion
@@ -810,18 +820,35 @@ export default function PracticePage() {
                       {suggestion}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCustomPersonStyle(true)
+                      if (communicationStyleSuggestions.includes(personStyle)) setPersonStyle('')
+                    }}
+                    aria-pressed={showOtherPersonStyle}
+                    className={`rounded-pill border px-3 py-1 text-xs transition-colors ${
+                      showOtherPersonStyle
+                        ? 'border-primary bg-primary-light text-primary'
+                        : 'border-border bg-white text-ink-mid hover:border-primary hover:text-ink'
+                    }`}
+                  >
+                    Other
+                  </button>
                 </div>
-                <div className="mt-3">
-                  <label className="mb-1 block text-sm font-medium text-ink">Add your own communication style</label>
-                  <input
-                    type="text"
-                    value={personStyle}
-                    onChange={e => setPersonStyle(e.target.value)}
-                    placeholder="e.g. Blunt when stressed, appreciates context first"
-                    className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <p className="mt-1 text-xs text-ink-light">Use a preset or describe their style in your own words.</p>
-                </div>
+                {showOtherPersonStyle && (
+                  <div className="mt-3">
+                    <label className="mb-1 block text-sm font-medium text-ink">Other communication style</label>
+                    <input
+                      type="text"
+                      value={personStyle}
+                      onChange={e => setPersonStyle(e.target.value)}
+                      placeholder="e.g. Blunt when stressed, appreciates context first"
+                      className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <p className="mt-1 text-xs text-ink-light">Describe their style in your own words.</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
