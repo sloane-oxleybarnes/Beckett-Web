@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import AdminLoginForm from "./LoginForm";
+import AdminTabs from "./AdminTabs";
 import AdminApprovalList from "./ApprovalList";
 import AdminContentEditor from "./ContentEditor";
 import AdminCourseStudio from "./CourseStudio";
@@ -69,6 +70,7 @@ export default async function AdminPage() {
   ]);
 
   const pendingSignups = (signups || []).filter((signup) => !signup.approved);
+  const feedbackRows = (feedback || []) as AdminFeedbackRow[];
   const trackerRows = buildBetaTrackerRows({
     signups: signups || [],
     profiles: profiles || [],
@@ -80,13 +82,41 @@ export default async function AdminPage() {
   });
 
   return (
-    <div className="min-h-screen bg-bg p-8">
-      <AdminApprovalList signups={pendingSignups} />
-      <AdminBetaTracker rows={trackerRows} />
-      <AdminFeedbackViewer feedback={(feedback || []) as AdminFeedbackRow[]} profiles={profiles || []} />
+    <AdminTabs
+      tabs={[
+        {
+          id: "beta-testers",
+          label: "Beta testers",
+          description: "Approve new beta users and track setup, activity, course progress, and feedback.",
+          count: trackerRows.length,
+        },
+        {
+          id: "feedback",
+          label: "Feedback",
+          description: "Review beta feedback from dashboard pages, courses, practice, and extension analyses.",
+          count: feedbackRows.length,
+        },
+        {
+          id: "skills",
+          label: "Skills",
+          description: "Edit, duplicate, draft, and publish course content for the Skills library.",
+          count: courses.length,
+        },
+        {
+          id: "website",
+          label: "Website",
+          description: "Edit public website copy and launch-related site content.",
+        },
+      ]}
+    >
+      <div className="space-y-10 [&>section]:mt-0">
+        <AdminApprovalList signups={pendingSignups} />
+        <AdminBetaTracker rows={trackerRows} />
+      </div>
+      <AdminFeedbackViewer feedback={feedbackRows} profiles={profiles || []} />
       <AdminCourseStudio courses={courses} />
       <AdminContentEditor content={content} />
-    </div>
+    </AdminTabs>
   );
 }
 
