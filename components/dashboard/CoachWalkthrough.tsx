@@ -53,7 +53,7 @@ const walkthroughSteps: WalkthroughStep[] = [
     eyebrow: "Connections",
     title: "Connect the tools Beckett can coach in.",
     body:
-      "The setup checklist shows Chrome extension, Gmail, and Slack status. Settings is where you can reconnect anything later.",
+      "The setup checklist shows Chrome extension, Gmail, and Slack status. Once Slack is connected, type /beckett in Slack Desktop for private rewrite, decode, draft, prep, tone, and follow-up help.",
     target: '[data-tour="beta-setup"]',
     targetLabel: "Check setup status here",
   },

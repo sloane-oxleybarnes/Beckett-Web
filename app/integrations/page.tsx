@@ -21,6 +21,8 @@ const live = [
   { name: "Chrome extension", icon: "🧩", description: "Brings Beckett into the browser tools beta users are testing now." },
 ];
 
+const slackCommands = ["rewrite", "decode", "draft", "prep", "tone", "followup"];
+
 const comingSoon = [
   { name: "Google Meet", icon: "🎥" },
   { name: "Zoom", icon: "📹" },
@@ -80,6 +82,24 @@ export default async function IntegrationsPage() {
                 {item.name}
               </h3>
               <p className="text-sm text-ink-mid">{item.description}</p>
+              {item.name === "Slack" && (
+                <div className="mt-4 rounded-sm border border-primary/15 bg-primary-light/40 p-3">
+                  <p className="text-xs font-medium text-primary">In Slack Desktop</p>
+                  <p className="mt-1 text-xs leading-relaxed text-ink-mid">
+                    Type <code className="font-mono text-ink">/beckett</code> for private help with:
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {slackCommands.map((command) => (
+                      <code
+                        key={command}
+                        className="rounded-pill border border-primary/15 bg-white px-2 py-1 text-[11px] text-ink"
+                      >
+                        {command}
+                      </code>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="mt-4">
                 <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-pill px-2.5 py-0.5">
                   Live

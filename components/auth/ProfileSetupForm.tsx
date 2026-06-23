@@ -468,7 +468,9 @@ export default function ProfileSetupForm() {
                       <p className="text-sm font-medium text-ink">3. Connect Slack</p>
                       <p className="mt-1 text-xs text-ink-mid">
                         Lets Beckett use recent Slack DMs, channels, and threads when you ask for
-                        coaching. Beckett cannot post messages for you.
+                        coaching. After connecting, use <code className="font-mono text-ink">/beckett</code> in Slack
+                        Desktop for rewrite, decode, draft, prep, tone, and follow-up help. Beckett
+                        cannot post messages for you.
                       </p>
                     </div>
                     <button
