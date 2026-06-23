@@ -1,15 +1,10 @@
 import { getDeploymentEnv, isStagingLikeDeployment } from "@/lib/deployment-env";
+import StagingBannerClient from "./StagingBannerClient";
 
 export default function StagingBanner() {
-  if (!isStagingLikeDeployment() || process.env.NEXT_PUBLIC_HIDE_STAGING_BANNER === "true") {
-    return null;
-  }
-
+  const hidden = process.env.NEXT_PUBLIC_HIDE_STAGING_BANNER === "true";
   const env = getDeploymentEnv();
+  const label = isStagingLikeDeployment() ? (env === "preview" ? "Preview" : env) : "";
 
-  return (
-    <div className="sticky top-0 z-[100] border-b border-amber-300 bg-amber-100 px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-amber-900">
-      Beckett {env === "preview" ? "Preview" : env} environment - test data only
-    </div>
-  );
+  return <StagingBannerClient initialLabel={label} hidden={hidden} />;
 }
