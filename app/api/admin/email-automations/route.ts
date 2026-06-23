@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { sendBetaInviteReminderEmail, sendSetupNudgeEmail } from "@/lib/beta-emails";
 import { trackBetaEvent } from "@/lib/beta-events";
+import { canSendLifecycleMessages, lifecycleMessagesDisabledReason } from "@/lib/deployment-env";
 
 type AutomationResult = {
   inviteReminders: number;
@@ -164,8 +165,16 @@ export async function GET(req: NextRequest) {
   }
 
   const dryRun = req.nextUrl.searchParams.get("dryRun") === "true";
-  const result = await runEmailAutomations(req, dryRun);
-  return NextResponse.json({ ok: true, dryRun, result });
+  const lifecycleMessagesEnabled = canSendLifecycleMessages();
+  const effectiveDryRun = dryRun || !lifecycleMessagesEnabled;
+  const result = await runEmailAutomations(req, effectiveDryRun);
+  return NextResponse.json({
+    ok: true,
+    dryRun: effectiveDryRun,
+    lifecycleMessagesEnabled,
+    warning: lifecycleMessagesEnabled ? null : lifecycleMessagesDisabledReason(),
+    result,
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -174,6 +183,14 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json().catch(() => ({}))) as { dryRun?: boolean };
-  const result = await runEmailAutomations(req, Boolean(body.dryRun));
-  return NextResponse.json({ ok: true, dryRun: Boolean(body.dryRun), result });
+  const lifecycleMessagesEnabled = canSendLifecycleMessages();
+  const effectiveDryRun = Boolean(body.dryRun) || !lifecycleMessagesEnabled;
+  const result = await runEmailAutomations(req, effectiveDryRun);
+  return NextResponse.json({
+    ok: true,
+    dryRun: effectiveDryRun,
+    lifecycleMessagesEnabled,
+    warning: lifecycleMessagesEnabled ? null : lifecycleMessagesDisabledReason(),
+    result,
+  });
 }

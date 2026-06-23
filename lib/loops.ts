@@ -1,4 +1,5 @@
 import { LoopsClient } from "loops";
+import { canSendLifecycleMessages, lifecycleMessagesDisabledReason } from "./deployment-env";
 
 function getClient() {
   const key = process.env.LOOPS_API_KEY;
@@ -13,6 +14,11 @@ export async function addLoopsContact(params: {
   plan?: string;
   source?: string;
 }) {
+  if (!canSendLifecycleMessages()) {
+    console.warn(`Skipped Loops contact sync for ${params.email}. ${lifecycleMessagesDisabledReason()}`);
+    return;
+  }
+
   try {
     await getClient().createContact({
       email: params.email,
@@ -33,6 +39,11 @@ export async function updateLoopsContact(
   email: string,
   properties: Record<string, string | boolean>
 ) {
+  if (!canSendLifecycleMessages()) {
+    console.warn(`Skipped Loops contact update for ${email}. ${lifecycleMessagesDisabledReason()}`);
+    return;
+  }
+
   try {
     await getClient().updateContact({ email, properties });
   } catch (err) {
@@ -45,6 +56,11 @@ export async function triggerLoopsEvent(
   eventName: string,
   properties?: Record<string, string>
 ) {
+  if (!canSendLifecycleMessages()) {
+    console.warn(`Skipped Loops event ${eventName} for ${email}. ${lifecycleMessagesDisabledReason()}`);
+    return;
+  }
+
   try {
     await getClient().sendEvent({
       email,

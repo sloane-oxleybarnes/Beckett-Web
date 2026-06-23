@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { triggerLoopsEvent } from "@/lib/loops";
 import { sendBetaInviteEmail } from "@/lib/beta-emails";
+import { canSendLifecycleMessages, lifecycleMessagesDisabledReason } from "@/lib/deployment-env";
 
 function buildPasswordSetupLink(origin: string, tokenHash: string, type: "invite" | "recovery") {
   const url = new URL("/auth/callback", origin);
@@ -24,6 +25,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "email and id required" }, { status: 400 });
   }
   const normalizedEmail = email.trim().toLowerCase();
+
+  if (!canSendLifecycleMessages()) {
+    return NextResponse.json(
+      { error: lifecycleMessagesDisabledReason() },
+      { status: 409 }
+    );
+  }
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

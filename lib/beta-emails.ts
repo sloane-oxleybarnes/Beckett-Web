@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { supabaseAdmin } from "./server-admin";
+import { canSendLifecycleMessages, lifecycleMessagesDisabledReason } from "./deployment-env";
 
 const FROM_EMAIL = "Beckett <hello@meetbeckett.co>";
 const REPLY_TO_EMAIL = "hello@meetbeckett.co";
@@ -105,6 +106,11 @@ function renderHtml(email: BrandedEmail) {
 }
 
 async function sendBrandedEmail(email: BrandedEmail) {
+  if (!canSendLifecycleMessages()) {
+    console.warn(`Skipped lifecycle email to ${email.to}. ${lifecycleMessagesDisabledReason()}`);
+    return false;
+  }
+
   const resend = getResend();
   if (!resend) return false;
 
