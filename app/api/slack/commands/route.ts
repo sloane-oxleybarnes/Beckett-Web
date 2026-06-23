@@ -3,8 +3,9 @@ import {
   handleSlackAiError,
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
+  postSlackResponse,
   runSlackCoaching,
-  slackConnectResponse,
+  slackConnectText,
   slackErrorResponse,
   slackTextResponse,
   verifySlackRequest,
@@ -17,7 +18,16 @@ type SlashCommandPayload = {
   user_id?: string;
   text?: string;
   command?: string;
+  response_url?: string;
   ssl_check?: string;
+};
+
+type VercelRequestContext = {
+  get?: () =>
+    | {
+        waitUntil?: (task: Promise<unknown>) => void;
+      }
+    | undefined;
 };
 
 function parseSlashCommand(rawBody: string): SlashCommandPayload {
@@ -27,6 +37,7 @@ function parseSlashCommand(rawBody: string): SlashCommandPayload {
     user_id: params.get("user_id") || undefined,
     text: params.get("text") || "",
     command: params.get("command") || undefined,
+    response_url: params.get("response_url") || undefined,
     ssl_check: params.get("ssl_check") || undefined,
   };
 }
@@ -40,6 +51,60 @@ function helpText(command = "/beckett") {
     "",
     "For help with a specific Slack message, use the message shortcut: *Ask Beckett about this message*.",
   ].join("\n");
+}
+
+function scheduleBackgroundTask(task: Promise<void>) {
+  const handledTask = task.catch((error) => {
+    console.error("Slack slash command response failed", error);
+  });
+  const requestContext = (globalThis as { [key: symbol]: VercelRequestContext | undefined })[
+    Symbol.for("@vercel/request-context")
+  ];
+  const context = requestContext?.get?.();
+  if (context?.waitUntil) {
+    context.waitUntil(handledTask);
+  } else {
+    void handledTask;
+  }
+}
+
+async function sendSlashCommandResponse({
+  origin,
+  payload,
+  text,
+}: {
+  origin: string;
+  payload: SlashCommandPayload;
+  text: string;
+}) {
+  const responseUrl = payload.response_url || "";
+  try {
+    if (!payload.team_id || !payload.user_id) {
+      await postSlackResponse(responseUrl, "Slack did not include the workspace and user context.");
+      return;
+    }
+
+    const user = await lookupSlackConnectedUser(payload.team_id, payload.user_id);
+    if (!user) {
+      await postSlackResponse(responseUrl, slackConnectText(origin));
+      return;
+    }
+    if (!isAllowedSlackPlan(user)) {
+      await postSlackResponse(responseUrl, "Beckett Slack coaching is available for beta and pro users.");
+      return;
+    }
+
+    const response = await runSlackCoaching({
+      user,
+      action: "slash_command",
+      prompt: text,
+      sourceLabel: payload.command || "/beckett",
+    });
+
+    await postSlackResponse(responseUrl, response);
+  } catch (error) {
+    await postSlackResponse(responseUrl, `Beckett could not finish that request: ${handleSlackAiError(error)}`);
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -59,22 +124,17 @@ export async function POST(req: NextRequest) {
 
   if (!text) return slackTextResponse(helpText(payload.command));
 
-  try {
-    const user = await lookupSlackConnectedUser(payload.team_id, payload.user_id);
-    if (!user) return slackConnectResponse(req.nextUrl.origin);
-    if (!isAllowedSlackPlan(user)) {
-      return slackTextResponse("Beckett Slack coaching is available for beta and pro users.");
-    }
-
-    const response = await runSlackCoaching({
-      user,
-      action: "slash_command",
-      prompt: text,
-      sourceLabel: payload.command || "/beckett",
-    });
-
-    return slackTextResponse(response);
-  } catch (error) {
-    return slackErrorResponse(handleSlackAiError(error));
+  if (!payload.response_url) {
+    return slackErrorResponse("Slack did not include a response URL for this command.");
   }
+
+  scheduleBackgroundTask(
+    sendSlashCommandResponse({
+      origin: req.nextUrl.origin,
+      payload,
+      text,
+    })
+  );
+
+  return slackTextResponse("Got it - Beckett is thinking and will reply here in a moment.");
 }
