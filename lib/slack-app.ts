@@ -7,12 +7,15 @@ import { getPublicSiteUrl } from "@/lib/deployment-env";
 import { supabaseAdmin } from "@/lib/server-admin";
 
 const MAX_SLACK_TEXT_LENGTH = 2900;
+const MAX_SLACK_CONTEXT_MESSAGES = 8;
+const MAX_SLACK_CONTEXT_LENGTH = 2600;
 
 export type SlackConnectedUser = {
   id: string;
   email: string | null;
   name: string | null;
   plan: string | null;
+  accessToken: string | null;
   teamName: string | null;
   communicationPreferences: string[];
   coachingTone: string | null;
@@ -21,6 +24,31 @@ export type SlackConnectedUser = {
 type SlackVerificationResult =
   | { ok: true }
   | { ok: false; status: number; message: string };
+
+type SlackHistoryMessage = {
+  type?: string;
+  user?: string;
+  username?: string;
+  bot_id?: string;
+  text?: string;
+  subtype?: string;
+  ts?: string;
+};
+
+type SlackUserInfo = {
+  ok?: boolean;
+  user?: {
+    id?: string;
+    name?: string;
+    real_name?: string;
+    profile?: {
+      display_name?: string;
+      real_name?: string;
+    };
+  };
+};
+
+const slackUserNameCache = new Map<string, string>();
 
 function safeCompare(value: string, expected: string) {
   const valueBuffer = Buffer.from(value, "utf8");
@@ -118,7 +146,7 @@ export async function postSlackResponse(responseUrl: string, text: string) {
 export async function lookupSlackConnectedUser(teamId: string, slackUserId: string) {
   const { data: integration, error } = await supabaseAdmin
     .from("user_integrations")
-    .select("user_id, external_team_name")
+    .select("user_id, access_token, external_team_name")
     .eq("provider", "slack")
     .eq("external_team_id", teamId)
     .eq("external_user_id", slackUserId)
@@ -141,6 +169,7 @@ export async function lookupSlackConnectedUser(teamId: string, slackUserId: stri
     email: profile.email || null,
     name: profile.display_name || profile.first_name || profile.full_name || null,
     plan: profile.plan || "free",
+    accessToken: integration.access_token || null,
     teamName: integration.external_team_name || null,
     communicationPreferences: Array.isArray(profile.communication_preferences)
       ? profile.communication_preferences
@@ -151,6 +180,94 @@ export async function lookupSlackConnectedUser(teamId: string, slackUserId: stri
 
 export function isAllowedSlackPlan(user: SlackConnectedUser) {
   return user.plan === "beta" || user.plan === "pro";
+}
+
+function stripSlackMarkup(text: string) {
+  return text
+    .replace(/<@([A-Z0-9]+)>/g, "@$1")
+    .replace(/<#([A-Z0-9]+)\|([^>]+)>/g, "#$2")
+    .replace(/<([^|>]+)\|([^>]+)>/g, "$2")
+    .replace(/<([^>]+)>/g, "$1")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function slackApiFetch<T>(accessToken: string, method: string, params: URLSearchParams) {
+  const res = await fetch(`https://slack.com/api/${method}?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.json().catch(() => ({})) as Promise<T & { ok?: boolean; error?: string }>;
+}
+
+async function lookupSlackUserName(accessToken: string, userId: string) {
+  const cacheKey = `${accessToken.slice(-8)}:${userId}`;
+  const cached = slackUserNameCache.get(cacheKey);
+  if (cached) return cached;
+
+  const data = await slackApiFetch<SlackUserInfo>(
+    accessToken,
+    "users.info",
+    new URLSearchParams({ user: userId })
+  ).catch(() => null);
+  const name =
+    data?.user?.profile?.display_name ||
+    data?.user?.profile?.real_name ||
+    data?.user?.real_name ||
+    data?.user?.name ||
+    userId;
+
+  slackUserNameCache.set(cacheKey, name);
+  return name;
+}
+
+async function formatSlackHistoryMessage(accessToken: string, message: SlackHistoryMessage) {
+  const text = stripSlackMarkup(message.text || "");
+  if (!text) return null;
+
+  const author = message.user
+    ? await lookupSlackUserName(accessToken, message.user)
+    : message.username || (message.bot_id ? "App or workflow" : "Someone");
+
+  return `${author}: ${text}`;
+}
+
+export async function fetchSlackConversationContext({
+  accessToken,
+  channelId,
+  channelName,
+}: {
+  accessToken: string | null;
+  channelId?: string | null;
+  channelName?: string | null;
+}) {
+  if (!accessToken || !channelId) return null;
+
+  const data = await slackApiFetch<{ messages?: SlackHistoryMessage[] }>(
+    accessToken,
+    "conversations.history",
+    new URLSearchParams({
+      channel: channelId,
+      limit: String(MAX_SLACK_CONTEXT_MESSAGES),
+      inclusive: "true",
+    })
+  ).catch(() => null);
+
+  if (!data?.ok || !Array.isArray(data.messages) || data.messages.length === 0) return null;
+
+  const formatted = (
+    await Promise.all(data.messages.slice().reverse().map((message) => formatSlackHistoryMessage(accessToken, message)))
+  ).filter(Boolean) as string[];
+
+  if (!formatted.length) return null;
+
+  const label = channelName ? `#${channelName}` : "this Slack conversation";
+  const context = [`Recent Slack context from ${label} (oldest to newest):`, ...formatted].join("\n");
+  return context.length <= MAX_SLACK_CONTEXT_LENGTH
+    ? context
+    : `${context.slice(0, MAX_SLACK_CONTEXT_LENGTH - 40).trim()}\n[Context trimmed]`;
 }
 
 export async function runSlackCoaching({

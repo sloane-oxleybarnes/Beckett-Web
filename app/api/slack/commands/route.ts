@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  fetchSlackConversationContext,
   handleSlackAiError,
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
@@ -16,6 +17,8 @@ export const runtime = "nodejs";
 type SlashCommandPayload = {
   team_id?: string;
   user_id?: string;
+  channel_id?: string;
+  channel_name?: string;
   text?: string;
   command?: string;
   response_url?: string;
@@ -35,6 +38,8 @@ function parseSlashCommand(rawBody: string): SlashCommandPayload {
   return {
     team_id: params.get("team_id") || undefined,
     user_id: params.get("user_id") || undefined,
+    channel_id: params.get("channel_id") || undefined,
+    channel_name: params.get("channel_name") || undefined,
     text: params.get("text") || "",
     command: params.get("command") || undefined,
     response_url: params.get("response_url") || undefined,
@@ -94,11 +99,17 @@ async function sendSlashCommandResponse({
       return;
     }
 
+    const channelContext = await fetchSlackConversationContext({
+      accessToken: user.accessToken,
+      channelId: payload.channel_id,
+      channelName: payload.channel_name,
+    });
     const response = await runSlackCoaching({
       user,
       action: "slash_command",
       prompt: text,
       sourceLabel: payload.command || "/beckett",
+      messageText: channelContext,
     });
 
     await postSlackResponse(responseUrl, response);
