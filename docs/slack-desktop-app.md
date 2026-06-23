@@ -5,7 +5,7 @@ This is the staging-first Slack app path for using Beckett inside Slack Desktop.
 ## What This Adds
 
 - Slash command: `/beckett`
-- Message shortcut: `Ask Beckett about this message`
+- Message shortcut: `Ask Beckett`
 - Signed Slack request verification with `SLACK_SIGNING_SECRET`
 - Beckett account matching through the existing `user_integrations` Slack connection
 - Ephemeral coaching responses so Beckett does not post into public Slack channels
