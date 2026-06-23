@@ -23,9 +23,9 @@ const sections = [
   {
     title: "How Beckett uses your data",
     body: [
-      "Beckett uses user data to provide and improve its single purpose: workplace communication coaching in Gmail, Slack, the Chrome extension, practice sessions, and skill modules.",
+      "Beckett uses user data to provide and improve its single purpose: workplace and workplace-adjacent communication coaching in Gmail, Slack, the Chrome extension, practice sessions, and skill modules.",
       "That includes authenticating your account, enforcing beta access and usage limits, generating coaching responses, remembering your preferences, connecting Gmail or Slack when you ask, troubleshooting bugs, responding to support requests, and improving coaching quality.",
-      "Beckett does not use or transfer user data for purposes unrelated to workplace communication coaching.",
+      "Beckett does not use or transfer user data for purposes unrelated to workplace or workplace-adjacent communication coaching.",
     ],
   },
   {
@@ -52,7 +52,7 @@ const sections = [
     title: "Chrome Web Store and Google API Limited Use",
     body: [
       "The use of information received from Google APIs will adhere to the Chrome Web Store User Data Policy, including the Limited Use requirements.",
-      "Beckett uses Google API data only to provide or improve user-facing workplace communication coaching features requested by the user.",
+      "Beckett uses Google API data only to provide or improve user-facing workplace and workplace-adjacent communication coaching features requested by the user.",
       "Beckett does not use Google API data for advertising, does not sell Google API data, and does not transfer Google API data except as needed to provide or improve Beckett, comply with applicable law, protect against abuse or security threats, or complete a merger, acquisition, or sale of assets with user consent where required.",
     ],
   },
@@ -116,7 +116,7 @@ export default function PrivacyPage() {
           Beckett should be clear before it asks for context.
         </h1>
         <p className="max-w-3xl text-base leading-relaxed text-ink-mid">
-          Beckett is a workplace communication coach for beta users. It works best with real
+          Beckett is a workplace and workplace-adjacent communication coach for beta users. It works best with real
           communication context, so the rules below explain what Beckett reads, what it stores,
           how it uses and shares data, what feedback can include, and where the coaching
           boundaries are.

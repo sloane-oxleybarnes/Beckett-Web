@@ -3,13 +3,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { callAnthropic } from "@/lib/anthropic";
 import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
 import { trackBetaEvent } from "@/lib/beta-events";
+import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { getPublicSiteUrl } from "@/lib/deployment-env";
 import { supabaseAdmin } from "@/lib/server-admin";
 
-const MAX_SLACK_TEXT_LENGTH = 2900;
+const MAX_SLACK_TEXT_LENGTH = 2800;
 const MAX_SLACK_CONTEXT_MESSAGES = 8;
 const MAX_SLACK_CONTEXT_LENGTH = 2600;
 const MAX_SLACK_ASKED_PROMPT_LENGTH = 650;
+const MAX_QUICK_SLACK_ANSWER_LENGTH = 1200;
+const MAX_LONGER_SLACK_ANSWER_LENGTH = 2000;
 export const SLACK_SLASH_QUICK_ACTION_ID = "beckett_slash_quick";
 export const SLACK_SLASH_LONGER_ACTION_ID = "beckett_slash_longer";
 
@@ -187,7 +190,9 @@ export function formatAskedPrompt(prompt: string) {
 }
 
 export function formatAskedResponse(prompt: string, response: string) {
-  return [`*You asked:*`, `>${formatAskedPrompt(prompt)}`, "", response].join("\n");
+  const header = [`*You asked:*`, `>${formatAskedPrompt(prompt)}`, ""].join("\n");
+  const availableAnswerLength = Math.max(800, MAX_SLACK_TEXT_LENGTH - header.length - 2);
+  return `${header}\n${fitSlackAnswer(response, availableAnswerLength)}`;
 }
 
 export async function lookupSlackConnectedUser(teamId: string, slackUserId: string) {
@@ -342,13 +347,14 @@ export async function runSlackCoaching({
     },
   });
 
-  const system = `You are Beckett, a workplace communication coach for neurodivergent professionals.
+  const system = `You are Beckett, a workplace and workplace-adjacent communication coach for neurodivergent professionals.
 You are responding inside Slack, so be concise, practical, and easy to scan.
-Help the user understand workplace tone, subtext, context, next steps, and possible replies.
+Help the user understand tone, subtext, context, next steps, and possible replies.
 Do not claim certainty about another person's intent. Use phrases like "may" or "likely" when interpreting tone.
 Avoid generic encouragement. Give concrete language the user could use.
 Format with short headings and bullets. Do not use markdown tables.
-Do not repeat the user's request at the top of the answer; Beckett will add that outside the AI response.`;
+Do not repeat the user's request at the top of the answer; Beckett will add that outside the AI response.
+${beckettBoundaryPrompt()}`;
 
   const preferenceLine = user.communicationPreferences.length
     ? `What this user wants Beckett to help with: ${user.communicationPreferences.join(", ")}.`
@@ -356,9 +362,9 @@ Do not repeat the user's request at the top of the answer; Beckett will add that
   const toneLine = user.coachingTone ? `Preferred coaching tone: ${user.coachingTone}.` : "";
   const responseDetailLine =
     responseDetail === "quick"
-      ? "Response length: Quick answer. Keep it concise: 2-4 practical bullets, plus suggested wording only if useful."
+      ? "Response length: Quick answer. Keep it concise: 2-4 practical bullets, plus suggested wording only if useful. Keep the answer under 900 characters."
       : responseDetail === "longer"
-        ? "Response length: Longer explanation. Give more context about likely tone/subtext, what to watch for, next steps, and suggested wording. Keep it scannable in Slack."
+        ? "Response length: Longer explanation. Give more context about likely tone/subtext, what to watch for, next steps, and suggested wording. Keep it scannable in Slack and under 1700 characters."
         : "Response length: Default Slack coaching response. Be concise but useful.";
   const messageLine = messageText ? `\n\nSlack message/context:\n${messageText}` : "";
   const userPrompt = `${preferenceLine}
@@ -368,7 +374,7 @@ ${responseDetailLine}
 User request:
 ${prompt}${messageLine}`;
 
-  const maxTokens = responseDetail === "longer" ? 1100 : responseDetail === "quick" ? 650 : 800;
+  const maxTokens = responseDetail === "longer" ? 700 : responseDetail === "quick" ? 420 : 800;
   const text = await callAnthropic(system, [{ role: "user", content: userPrompt }], maxTokens);
 
   await trackBetaEvent({
@@ -384,7 +390,10 @@ ${prompt}${messageLine}`;
     },
   });
 
-  return truncateSlackText(text.trim() || "I could not generate a response for that Slack request.");
+  const cleaned = text.trim() || "I could not generate a response for that Slack request.";
+  if (responseDetail === "quick") return fitSlackAnswer(cleaned, MAX_QUICK_SLACK_ANSWER_LENGTH);
+  if (responseDetail === "longer") return fitSlackAnswer(cleaned, MAX_LONGER_SLACK_ANSWER_LENGTH);
+  return truncateSlackText(cleaned);
 }
 
 export function handleSlackAiError(error: unknown) {
@@ -399,4 +408,25 @@ export function handleSlackAiError(error: unknown) {
 export function truncateSlackText(text: string) {
   if (text.length <= MAX_SLACK_TEXT_LENGTH) return text;
   return `${text.slice(0, MAX_SLACK_TEXT_LENGTH - 40).trim()}\n\n_Trimmed for Slack._`;
+}
+
+export function fitSlackAnswer(text: string, maxLength: number) {
+  const cleaned = text
+    .replace(/\n\n_Trimmed for Slack\._$/i, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (cleaned.length <= maxLength) return cleaned;
+
+  const hardLimit = Math.max(200, maxLength - 3);
+  const slice = cleaned.slice(0, hardLimit);
+  const sentenceEnd = Math.max(
+    slice.lastIndexOf(". "),
+    slice.lastIndexOf("! "),
+    slice.lastIndexOf("? "),
+    slice.lastIndexOf("\n")
+  );
+  const cutoff = sentenceEnd > hardLimit * 0.55 ? sentenceEnd + 1 : hardLimit;
+  return `${cleaned.slice(0, cutoff).trim()}...`;
 }

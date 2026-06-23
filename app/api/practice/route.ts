@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { callAnthropic } from '@/lib/anthropic'
 import { AiUsageLimitError, recordAiUsage } from '@/lib/ai-usage'
 import { trackBetaEvent } from '@/lib/beta-events'
+import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
 
 function modeInstruction(mode?: string) {
   if (mode === 'professional') {
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest) {
     if (!messages?.length) return NextResponse.json({ error: 'messages required' }, { status: 400 })
     const modeNote = modeInstruction(mode)
     const lenNote = lengthInstruction(messageCount)
-    const instructions = [modeNote, lenNote].filter(Boolean).join(' ')
+    const instructions = [modeNote, beckettBoundaryPrompt(), lenNote].filter(Boolean).join('\n\n')
     const fullSystem = system
       ? (instructions ? `${system}\n\n${instructions}` : system)
       : instructions || null
@@ -104,7 +105,8 @@ export async function POST(req: NextRequest) {
       ? 'Focus on professional effectiveness.'
       : 'Include emotional and relational observations.'
 
-    const system = `You are a communication coach giving brief, honest in-the-moment feedback. ${toneNote}`
+    const system = `You are a communication coach giving brief, honest in-the-moment feedback. ${toneNote}
+${beckettBoundaryPrompt()}`
     const user = `Context: ${context || 'a practice conversation'}
 
 The user just said: "${userMessage}"
@@ -120,7 +122,9 @@ In one short sentence (max 20 words), note how they came across. Be direct and s
     if (!userMessage) return NextResponse.json({ error: 'userMessage required' }, { status: 400 })
     const toneNote = mode === 'professional' ? 'Focus on professional tone and effectiveness.' : 'Focus on emotional tone and how natural it sounds.'
 
-    const system = `You are a communication coach previewing a message before it is sent. ${toneNote} Return only valid JSON.`
+    const system = `You are a communication coach previewing a message before it is sent. ${toneNote}
+${beckettBoundaryPrompt()}
+Return only valid JSON.`
     const user = `The user is practicing a conversation with ${person || 'someone'} about: ${situation || 'a difficult topic'}. Their goal: ${goal || 'not specified'}.
 
 ${conversationHistory ? `Conversation so far:\n${conversationHistory}\n\n` : ''}The user is about to send: "${userMessage}"
@@ -156,7 +160,8 @@ Rules:
       ? 'Focus on workplace dynamics and likely pressure points.'
       : 'Focus on emotional and relational dynamics.'
 
-    const system = `You are Beckett, a communication coach giving a brief note about the other person's response. ${toneNote}`
+    const system = `You are Beckett, a communication coach giving a brief note about the other person's response. ${toneNote}
+${beckettBoundaryPrompt()}`
     const user = `The user is practicing a conversation with ${person || 'someone'}.
 Situation: ${situation || 'not specified'}
 Goal: ${goal || 'not specified'}
@@ -182,7 +187,9 @@ Analyze whether this conversation would be more effective in person or over text
 { "format": "in-person" | "text", "reason": "1-2 sentence explanation" }`
 
     const result = await callMeteredAnthropic(
-      'You analyze communication scenarios and return JSON recommendations. Return only valid JSON.',
+      `You analyze communication scenarios and return JSON recommendations.
+${beckettBoundaryPrompt()}
+Return only valid JSON.`,
       [{ role: 'user', content: user }],
       120
     )
@@ -240,7 +247,9 @@ ${channelRules}
 - Return ONLY valid JSON: { "prompts": ["...", "..."] }`
 
     const result = await callMeteredAnthropic(
-      'You generate channel-specific conversation suggestions. Return only valid JSON.',
+      `You generate channel-specific conversation suggestions.
+${beckettBoundaryPrompt()}
+Return only valid JSON.`,
       [{ role: 'user', content: user }],
       channel === 'email' ? 320 : 180
     )
@@ -273,7 +282,9 @@ ${channelRules}
           ? 'text message'
           : 'Slack or chat'
 
-    const system = `You are Beckett, a practical communication coach preparing someone for a realistic practice conversation. Your guidance should feel like a smart friend who has seen this exact kind of conversation before. Return only valid JSON.`
+    const system = `You are Beckett, a practical communication coach preparing someone for a realistic practice conversation. Your guidance should feel like a smart friend who has seen this exact kind of conversation before.
+${beckettBoundaryPrompt()}
+Return only valid JSON.`
     const user = `Generate tailored "before you start" prep notes for this practice scenario.
 
 Mode: ${mode || 'not specified'}
@@ -345,7 +356,9 @@ Return ONLY valid JSON — one of these three forms:
 { "intervene": true, "severity": "end", "message": "brief note from Beckett suggesting to wrap up, max 20 words" }`
 
     const result = await callMeteredAnthropic(
-      'You monitor practice conversations and return JSON. Return only valid JSON.',
+      `You monitor practice conversations and return JSON.
+${beckettBoundaryPrompt()}
+Return only valid JSON.`,
       [{ role: 'user', content: user }],
       100
     )
@@ -362,7 +375,9 @@ Return ONLY valid JSON — one of these three forms:
     if (!conversationHistory) return NextResponse.json({ error: 'conversationHistory required' }, { status: 400 })
     const modeNote = modeInstruction(mode)
 
-    const system = `You are Beckett, giving honest feedback after a practice conversation. ${modeNote} Always respond with valid JSON only — no extra text.`
+    const system = `You are Beckett, giving honest feedback after a practice conversation. ${modeNote}
+${beckettBoundaryPrompt()}
+Always respond with valid JSON only — no extra text.`
     const user = `You were just playing the role of ${personDescription} in a practice conversation.
 The situation: "${situation}"
 The user's goal: "${goal}"

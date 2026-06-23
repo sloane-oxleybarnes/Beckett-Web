@@ -3,6 +3,7 @@ import { callAnthropic, type AnthropicMessage } from '@/lib/anthropic'
 import { AiUsageLimitError, recordAiUsage } from '@/lib/ai-usage'
 import { getExtensionProfile } from '@/lib/extension-auth'
 import { trackBetaEvent } from '@/lib/beta-events'
+import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
 
 type ExtensionAiAction =
   | 'analyze_message'
@@ -71,7 +72,12 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    const text = await callAnthropic(system, messages, clampMaxTokens(body.maxTokens))
+    const systemWithBoundaries = system
+      ? system.includes('Relationship-at-work guidance')
+        ? system
+        : `${system}\n\n${beckettBoundaryPrompt()}`
+      : beckettBoundaryPrompt()
+    const text = await callAnthropic(systemWithBoundaries, messages, clampMaxTokens(body.maxTokens))
     const cleaned = text.trim()
 
     await trackBetaEvent({
