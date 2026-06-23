@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { callAnthropic } from '@/lib/anthropic'
 import { AiUsageLimitError, recordAiUsage } from '@/lib/ai-usage'
 import { trackBetaEvent } from '@/lib/beta-events'
+import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
 
 export async function POST(req: NextRequest) {
   const diagnostic: { action?: string; courseId?: string | null; userId?: string } = {}
@@ -71,7 +72,9 @@ export async function POST(req: NextRequest) {
     const lengthNote = msgCount <= 2
       ? 'Keep your reply to 1-2 sentences — short and natural, like a real text message.'
       : 'Keep your reply to 1-2 sentences maximum. Real people text briefly.'
-    const fullSystem = system ? `${system}\n\n${lengthNote}` : lengthNote
+    const fullSystem = system
+      ? `${system}\n\n${beckettBoundaryPrompt()}\n\n${lengthNote}`
+      : `${beckettBoundaryPrompt()}\n\n${lengthNote}`
     const text = await callMeteredAnthropic(fullSystem, messages as { role: 'user' | 'assistant'; content: string }[], 150)
     return NextResponse.json({ text: text.trim().replace(/^[""“”]|[""“”]$/g, '') })
   }
@@ -95,7 +98,9 @@ Return hardIntervention if the user said something harassing, explicitly sexual,
 Return ONLY valid JSON: { "ghost": boolean, "hardIntervention": null | "brief 1-sentence Beckett note about what happened (max 25 words)" }`
 
     const result = await callMeteredAnthropic(
-      'You assess dating app conversations. Return only valid JSON.',
+      `You assess dating app conversations.
+${beckettBoundaryPrompt()}
+Return only valid JSON.`,
       [{ role: 'user', content: prompt }],
       100
     )
@@ -118,7 +123,8 @@ ${conversationHistory || 'No conversation provided'}
 As Beckett, write 2-3 sentences of honest, compassionate analysis of why the conversation went the way it did. Focus on what patterns led here and what to try differently. Do not sugarcoat but do not be harsh. Return only the sentences.`
 
     const note = await callMeteredAnthropic(
-      'You are Beckett, a communication coach. Be honest and constructive.',
+      `You are Beckett, a communication coach. Be honest and constructive.
+${beckettBoundaryPrompt()}`,
       [{ role: 'user', content: prompt }],
       150
     )
@@ -141,7 +147,9 @@ Format: alternate between [User] and [${matchName || (isDating ? 'Jamie' : 'Jord
 Return ONLY valid JSON: { "messages": [{ "role": "user" | "assistant", "content": "..." }] }`
 
     const result = await callMeteredAnthropic(
-      `You generate realistic ${isDating ? 'dating app' : 'workplace'} conversation previews. Return only valid JSON.`,
+      `You generate realistic ${isDating ? 'dating app' : 'workplace'} conversation previews.
+${beckettBoundaryPrompt()}
+Return only valid JSON.`,
       [{ role: 'user', content: prompt }],
       400
     )
@@ -160,7 +168,8 @@ Return ONLY valid JSON: { "messages": [{ "role": "user" | "assistant", "content"
 
     const context = draftContext || 'The user is practicing asking someone out on a dating app.'
     const note = await callMeteredAnthropic(
-      `You are Beckett, a communication coach. ${context}`,
+      `You are Beckett, a communication coach. ${context}
+${beckettBoundaryPrompt()}`,
       [{ role: 'user', content: `The user wrote: "${userMessage}"\n\nIn one sentence (max 20 words), give honest specific feedback on this message. Return only the sentence.` }],
       80
     )
@@ -173,7 +182,9 @@ Return ONLY valid JSON: { "messages": [{ "role": "user" | "assistant", "content"
     if (!conversationHistory) return NextResponse.json({ error: 'conversationHistory required' }, { status: 400 })
 
     const isDating = practiceKind === 'dating'
-    const system = `You are Beckett, giving honest feedback after a ${isDating ? 'dating app' : 'workplace'} practice conversation. Always respond with valid JSON only — no extra text.`
+    const system = `You are Beckett, giving honest feedback after a ${isDating ? 'dating app' : 'workplace'} practice conversation.
+${beckettBoundaryPrompt()}
+Always respond with valid JSON only — no extra text.`
     const user = `You were playing the role of ${matchName || (isDating ? 'a dating app match' : 'the other person')} (${matchDescription || (isDating ? 'a dating app match' : 'a workplace conversation partner')}) in a practice conversation.
 
 Here is the conversation:

@@ -7,6 +7,7 @@ import {
   buildPracticeSystemPrompt,
   buildPracticeDebriefPrompt,
   buildVoiceContext,
+  BECKETT_BOUNDARY_GUIDANCE,
 } from '../utils/prompts.js';
 import { getGmailMessage, getGmailProfile, getGmailThread, parseThreadMessages, searchGmailMessages } from '../utils/gmail.js';
 
@@ -579,6 +580,7 @@ async function handleAskAboutContext(payload, sendResponse) {
     const system = [
       'You are Beckett, an AI communication coach for neurodivergent professionals.',
       'Answer the user\'s question about their conversation clearly and concisely.',
+      BECKETT_BOUNDARY_GUIDANCE,
       'Use only the actual messages provided in the conversation thread as evidence.',
       'Do not invent replies, reactions, agreement, comfort, rapport, intent, or relationship dynamics that are not visible.',
       'If someone has not responded to a message yet, say that clearly. Do not describe how they reacted to it.',

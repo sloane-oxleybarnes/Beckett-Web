@@ -19,15 +19,15 @@ Beckett stores the following data locally in your browser using Chrome's storage
 
 Beckett stores account details, beta access status, onboarding answers, connection status, usage counts, timestamps, contacts you choose to add, coaching settings, and feedback/debugging details needed to operate the beta. Beckett does not store full Gmail or Slack message history by default. Feedback reports may include message content only when you choose to include it.
 
-This may include personal information such as your name and email address, authentication and connection information, user-provided communication preferences, and workplace communication context you choose to send for coaching.
+This may include personal information such as your name and email address, authentication and connection information, user-provided communication preferences, and workplace or workplace-adjacent communication context you choose to send for coaching.
 
 ## How Beckett uses your data
 
-Beckett uses user data to provide and improve its single purpose: workplace communication coaching in Gmail, Slack, the Chrome extension, practice sessions, and skill modules.
+Beckett uses user data to provide and improve its single purpose: workplace and workplace-adjacent communication coaching in Gmail, Slack, the Chrome extension, practice sessions, and skill modules.
 
 That includes authenticating your account, enforcing beta access and usage limits, generating coaching responses, remembering your preferences, connecting Gmail or Slack when you ask, troubleshooting bugs, responding to support requests, and improving coaching quality.
 
-Beckett does not use or transfer user data for purposes unrelated to workplace communication coaching.
+Beckett does not use or transfer user data for purposes unrelated to workplace or workplace-adjacent communication coaching.
 
 ## Who Beckett shares data with
 
@@ -53,7 +53,7 @@ Service providers receive only the information needed for their role. Beckett do
 
 The use of information received from Google APIs will adhere to the Chrome Web Store User Data Policy, including the Limited Use requirements.
 
-Beckett uses Google API data only to provide or improve user-facing workplace communication coaching features requested by the user. Beckett does not use Google API data for advertising, does not sell Google API data, and does not transfer Google API data except as needed to provide or improve Beckett, comply with applicable law, protect against abuse or security threats, or complete a merger, acquisition, or sale of assets with user consent where required.
+Beckett uses Google API data only to provide or improve user-facing workplace and workplace-adjacent communication coaching features requested by the user. Beckett does not use Google API data for advertising, does not sell Google API data, and does not transfer Google API data except as needed to provide or improve Beckett, comply with applicable law, protect against abuse or security threats, or complete a merger, acquisition, or sale of assets with user consent where required.
 
 ## Beckett AI requests
 

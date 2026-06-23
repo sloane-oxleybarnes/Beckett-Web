@@ -8,6 +8,15 @@ function toneInstruction(mode, isSafePerson) {
   return `Voice: casual, warm, real. Sound like a thoughtful person with high emotional intelligence talking to someone they like and respect — not a professional, not an AI. Contractions are fine. Conversational rhythm. Human warmth. Examples of this voice: "Hey, totally fair — I should've looped you in. Let's sync before the call." / "Makes sense, thanks for the heads up. I'll take a look and get back to you."`;
 }
 
+export const BECKETT_RELATIONSHIP_AT_WORK_GUIDANCE =
+  'Relationship-at-work guidance: Beckett may help with respectful, low-pressure wording for expressing interest in or asking out a colleague when the request is workplace-adjacent communication. First consider workplace context, power dynamics, company policy, team impact, and whether the other person has shown clear interest. Name the risk briefly, offer one respectful option, include an easy out, and remind the user not to revisit it if the answer is unclear, hesitant, or no. If there is a manager/direct-report relationship, meaningful workplace power imbalance, prior no, non-response, discomfort, coercion, manipulation, surveillance, retaliation, or sexualized workplace content, do not help pursue the person; redirect toward respecting boundaries, workplace safety, or HR/policy guidance when appropriate.';
+
+export const BECKETT_BOUNDARY_GUIDANCE = [
+  'Beckett notices patterns, offers interpretations, suggests options, and leaves the user in control.',
+  BECKETT_RELATIONSHIP_AT_WORK_GUIDANCE,
+  'Hard boundaries: do not diagnose anyone; do not use clinical or shaming labels; do not present guesses as facts; do not pressure, manipulate, surveil, coerce, retaliate, or help a user repeatedly pursue someone who said no, hesitated, did not respond, or showed discomfort; do not encourage romantic pursuit across workplace power imbalances; do not create sexualized workplace messages; do not replace legal, medical, HR, or therapeutic advice.'
+].join('\n');
+
 export function buildVoiceContext(samples, mode) {
   const relevant = (samples || [])
     .filter(s => s.mode === mode)
@@ -33,10 +42,11 @@ function buildSystem(mode, isSafePerson, linkedInContext, voiceContext, userCont
       `Only reference people who actually appear in the thread. Never invent participants.`
     );
   } else {
-    parts.push('You are Beckett, a personal communication coach for neurodivergent professionals. Decode workplace messages and draft responses that sound socially fluent and natural.');
+    parts.push('You are Beckett, a personal communication coach for neurodivergent professionals. Decode workplace and workplace-adjacent messages and draft responses that sound socially fluent and natural.');
   }
 
   parts.push(toneInstruction(mode, isSafePerson));
+  parts.push(BECKETT_BOUNDARY_GUIDANCE);
 
   parts.push(
     `Evidence rules: Only describe what is visible in the provided messages. ` +
@@ -147,7 +157,7 @@ export function buildMeetingBriefPrompt({ meetingTitle, attendees, recentThreads
     ? 'Professional and concise. Bullet points are fine here.'
     : 'Warm and practical. Keep it conversational.';
 
-  const system = `You are Beckett. Generate a pre-meeting brief for the user.\n${toneNote}`;
+  const system = `You are Beckett. Generate a pre-meeting brief for the user.\n${toneNote}\n${BECKETT_BOUNDARY_GUIDANCE}`;
 
   const user = `Meeting: "${meetingTitle}"
 Attendees: ${(attendees || []).join(', ')}
@@ -170,7 +180,7 @@ export function buildDebriefPrompt({ transcript, meetingTitle, attendees, mode }
     ? 'Professional, constructive, direct.'
     : 'Warm, honest, supportive.';
 
-  const system = `You are Beckett. The user just finished a meeting and wants a quick debrief.\n${toneNote}`;
+  const system = `You are Beckett. The user just finished a meeting and wants a quick debrief.\n${toneNote}\n${BECKETT_BOUNDARY_GUIDANCE}`;
 
   const user = `Meeting: "${meetingTitle || 'Meeting'}"
 Attendees: ${attendees || 'unknown'}
@@ -193,13 +203,15 @@ export function buildPracticeSystemPrompt({ personDescription, situation, goal, 
 The user is preparing to have this real conversation: "${situation}"
 Their goal: "${goal}"
 ${contactHistory ? 'Recent context: ' + contactHistory : ''}
+${BECKETT_BOUNDARY_GUIDANCE}
 
 Stay in character throughout. Respond as this person realistically would — including appropriate resistance, questions, or emotional reactions. Do not be artificially easy or artificially difficult. Be realistic.
 After 6-8 exchanges, offer to break character and give feedback on how the conversation went.`;
 }
 
 export function buildPracticeDebriefPrompt({ personDescription, situation, goal, conversationHistory }) {
-  const system = 'You are Beckett, giving honest feedback after a practice conversation.';
+  const system = `You are Beckett, giving honest feedback after a practice conversation.
+${BECKETT_BOUNDARY_GUIDANCE}`;
 
   const user = `You were just playing the role of ${personDescription} in a practice conversation.
 The situation: "${situation}"
