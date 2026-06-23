@@ -11,7 +11,8 @@ type Mode = "personal" | "professional";
 export default function HomePage() {
   const [mode, setMode] = useState<Mode>("professional");
   const [betaEmail, setBetaEmail] = useState("");
-  const [betaStatus, setBetaStatus] = useState<"idle" | "loading" | "done">("idle");
+  const [betaStatus, setBetaStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [betaError, setBetaError] = useState("");
   const [activeSection, setActiveSection] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [siteContent, setSiteContent] = useState<Record<string, string>>(SITE_CONTENT_DEFAULTS);
@@ -59,14 +60,23 @@ export default function HomePage() {
   async function submitBeta(e: React.FormEvent) {
     e.preventDefault();
     setBetaStatus("loading");
+    setBetaError("");
     try {
-      await fetch("/api/beta-signup", {
+      const res = await fetch("/api/beta-signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: betaEmail, plan: "beta", source: "landing_page" }),
       });
-    } catch {}
-    setBetaStatus("done");
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Something went wrong. Please try again.");
+      }
+      setBetaStatus("done");
+    } catch (error) {
+      console.error("Beta signup error:", error);
+      setBetaError(error instanceof Error ? error.message : "Something went wrong. Please try again.");
+      setBetaStatus("error");
+    }
   }
 
   const features = [
@@ -481,11 +491,19 @@ export default function HomePage() {
                 placeholder="your@email.com"
                 required
                 value={betaEmail}
-                onChange={(e) => setBetaEmail(e.target.value)}
+                onChange={(e) => {
+                  setBetaEmail(e.target.value);
+                  if (betaStatus === "error") setBetaStatus("idle");
+                }}
               />
               <button className="beta-btn" type="submit" disabled={betaStatus === "loading"}>
                 {betaStatus === "loading" ? "Sending..." : copy("home.beta.button")}
               </button>
+              {betaStatus === "error" && (
+                <p className="beta-error" role="alert">
+                  {betaError || "Something went wrong. Please try again."}
+                </p>
+              )}
             </form>
           )}
           <p className="beta-note">{copy("home.beta.note")}</p>

@@ -767,6 +767,7 @@
 .lumen-home .beta-btn { background: var(--amber); color: #fff; padding: 11px 24px; border-radius: 100px; font-size: 14px; font-weight: 500; border: none; cursor: pointer; transition: all 0.2s; font-family: var(--sans); white-space: nowrap; }
 .lumen-home .beta-btn:hover { background: var(--amber-dark); transform: translateY(-1px); }
 .lumen-home .beta-ok { font-size: 14px; color: #2D6A2D; font-weight: 500; margin-top: 12px; }
+.lumen-home .beta-error { flex-basis: 100%; font-size: 13px; color: #9f2f21; font-weight: 500; margin: 4px 0 0; }
 .lumen-home .beta-note { font-size: 12px; color: var(--ink-light); margin-top: 12px; }
 
 /* ── FOOTER ── */

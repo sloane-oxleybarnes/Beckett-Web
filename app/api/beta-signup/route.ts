@@ -15,11 +15,27 @@ export async function POST(req: NextRequest) {
   const normalizedEmail = email.trim().toLowerCase();
   const sourceValue = source || "landing_page";
   const planValue = plan || "beta";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error("Beta signup config error: Supabase admin credentials are missing.");
+    return NextResponse.json(
+      { error: "Signup is temporarily unavailable. Please try again shortly." },
+      { status: 500 }
+    );
+  }
+
+  let supabase;
+  try {
+    supabase = createClient(supabaseUrl, serviceRoleKey);
+  } catch (configError) {
+    console.error("Beta signup config error:", configError);
+    return NextResponse.json(
+      { error: "Signup is temporarily unavailable. Please try again shortly." },
+      { status: 500 }
+    );
+  }
 
   const { error } = await supabase.from("beta_signups").upsert({
     email: normalizedEmail,
@@ -30,8 +46,12 @@ export async function POST(req: NextRequest) {
     last_activity_at: new Date().toISOString(),
   }, { onConflict: "email" });
 
-  if (error && error.code !== "23505") {
-    console.error("Supabase error:", error);
+  if (error) {
+    console.error("Supabase beta signup error:", error);
+    return NextResponse.json(
+      { error: "We could not save your beta signup. Please try again." },
+      { status: 500 }
+    );
   }
 
   const hsId = await createOrUpdateHubSpotContact({
