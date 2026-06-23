@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getPublicSiteUrl } from "@/lib/deployment-env";
-
-const SLACK_OAUTH_WORKER =
-  process.env.SLACK_OAUTH_WORKER_URL || "https://lumen-slack.sloane-oxleyhase.workers.dev";
+import { getSlackOAuthWorkerUrl } from "@/lib/slack-oauth";
 
 export async function GET(req: NextRequest) {
   const supabase = createSupabaseServerClient();
@@ -18,20 +16,31 @@ export async function GET(req: NextRequest) {
   const origin = getPublicSiteUrl(req.nextUrl.origin);
   const redirectUri = `${origin}/api/slack/callback`;
   const state = crypto.randomUUID();
-  const authRes = await fetch(
-    `${SLACK_OAUTH_WORKER}/auth-url?redirect_uri=${encodeURIComponent(redirectUri)}`
-  );
+  const slackOAuthWorker = getSlackOAuthWorkerUrl();
 
-  if (!authRes.ok) {
+  if (!slackOAuthWorker) {
     return NextResponse.redirect(new URL("/dashboard/settings?slack=setup_error", req.url));
   }
 
-  const authData = (await authRes.json()) as { auth_url?: string; error?: string };
+  const authRes = await fetch(
+    `${slackOAuthWorker}/auth-url?redirect_uri=${encodeURIComponent(redirectUri)}`
+  ).catch(() => null);
+
+  if (!authRes?.ok) {
+    return NextResponse.redirect(new URL("/dashboard/settings?slack=setup_error", req.url));
+  }
+
+  const authData = (await authRes.json().catch(() => ({}))) as { auth_url?: string; error?: string };
   if (!authData.auth_url) {
     return NextResponse.redirect(new URL("/dashboard/settings?slack=setup_error", req.url));
   }
 
-  const url = new URL(authData.auth_url);
+  let url: URL;
+  try {
+    url = new URL(authData.auth_url);
+  } catch {
+    return NextResponse.redirect(new URL("/dashboard/settings?slack=setup_error", req.url));
+  }
   url.searchParams.set("state", state);
 
   const response = NextResponse.redirect(url);
