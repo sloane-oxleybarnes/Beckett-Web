@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import AddToSlackButton from "@/components/integrations/AddToSlackButton";
 import { createClient } from "@/lib/supabase";
 import type { Profile } from "@/lib/supabase";
 import {
@@ -649,6 +650,14 @@ export default function SettingsPage() {
                 <p className="mt-3 text-xs leading-relaxed text-ink-mid">
                   For a specific Slack message, use the message shortcut: <span className="font-medium text-ink">Ask Beckett</span>.
                 </p>
+                {!diagnostics?.integrations.slack.connected && (
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <AddToSlackButton href="/api/slack/connect" />
+                    <span className="text-xs leading-relaxed text-ink-light">
+                      Connects this Slack workspace to your Beckett account.
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:max-w-lg">
                 {slackCommandExamples.map((example) => (

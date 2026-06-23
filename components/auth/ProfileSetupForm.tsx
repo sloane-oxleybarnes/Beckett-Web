@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import AddToSlackButton from "@/components/integrations/AddToSlackButton";
 import { createClient } from "@/lib/supabase";
 import {
   coachingToneOptions,
@@ -473,14 +474,10 @@ export default function ProfileSetupForm() {
                         cannot post messages for you.
                       </p>
                     </div>
-                    <button
-                      type="button"
+                    <AddToSlackButton
                       onClick={() => completeOnboarding("slack")}
                       disabled={saving}
-                      className="shrink-0 rounded-pill border border-border px-4 py-2 text-xs font-medium text-ink transition-colors hover:border-primary-mid disabled:opacity-50"
-                    >
-                      Connect
-                    </button>
+                    />
                   </div>
                 </div>
               </div>

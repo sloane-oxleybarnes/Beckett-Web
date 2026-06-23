@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import AddToSlackButton from "@/components/integrations/AddToSlackButton";
 
 type WalkthroughStep = {
   eyebrow: string;
@@ -9,6 +10,7 @@ type WalkthroughStep = {
   body: string;
   target?: string;
   targetLabel?: string;
+  slackConnect?: boolean;
 };
 
 type TargetRect = {
@@ -56,6 +58,7 @@ const walkthroughSteps: WalkthroughStep[] = [
       "The setup checklist shows Chrome extension, Gmail, and Slack status. Once Slack is connected, type /beckett in Slack Desktop for private rewrite, decode, draft, prep, tone, and follow-up help.",
     target: '[data-tour="beta-setup"]',
     targetLabel: "Check setup status here",
+    slackConnect: true,
   },
   {
     eyebrow: "About Me",
@@ -254,6 +257,13 @@ export default function CoachWalkthrough({ shouldShow }: CoachWalkthroughProps) 
               <div className="mt-5 rounded-card border border-primary/20 bg-primary-light/40 p-3">
                 <p className="text-xs font-medium uppercase tracking-wide text-primary">Where to click</p>
                 <p className="mt-1 text-sm text-ink">{current.targetLabel}</p>
+              </div>
+            )}
+
+            {current.slackConnect && (
+              <div className="mt-4 rounded-card border border-border bg-bg/70 p-3">
+                <p className="mb-2 text-xs font-medium text-ink">Connect Slack from Beckett</p>
+                <AddToSlackButton href="/api/slack/connect" onClick={() => void finish()} />
               </div>
             )}
 
