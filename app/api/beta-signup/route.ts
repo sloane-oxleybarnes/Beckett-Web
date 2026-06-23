@@ -5,6 +5,22 @@ import { addLoopsContact, triggerLoopsEvent } from "@/lib/loops";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { sendBetaSignupConfirmation } from "@/lib/beta-emails";
 
+type SupabaseError = {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+};
+
+function isMissingOptionalBetaSignupColumn(error: SupabaseError) {
+  const message = `${error.message || ""} ${error.details || ""} ${error.hint || ""}`.toLowerCase();
+  return (
+    error.code === "PGRST204" ||
+    message.includes("lifecycle_stage") ||
+    message.includes("last_activity_at")
+  );
+}
+
 export async function POST(req: NextRequest) {
   const { email, name, source, plan } = await req.json();
 
@@ -37,16 +53,42 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { error } = await supabase.from("beta_signups").upsert({
+  const signupPayload = {
     email: normalizedEmail,
     name,
     source: sourceValue,
     plan: planValue,
     lifecycle_stage: "requested_access",
     last_activity_at: new Date().toISOString(),
-  }, { onConflict: "email" });
+  };
+
+  const { error } = await supabase
+    .from("beta_signups")
+    .upsert(signupPayload, { onConflict: "email" });
 
   if (error) {
+    if (isMissingOptionalBetaSignupColumn(error)) {
+      console.warn(
+        "Supabase beta_signups is missing lifecycle columns. Retrying with base signup fields.",
+        error
+      );
+
+      const { error: fallbackError } = await supabase
+        .from("beta_signups")
+        .upsert({
+          email: normalizedEmail,
+          name,
+          source: sourceValue,
+          plan: planValue,
+        }, { onConflict: "email" });
+
+      if (!fallbackError) {
+        return NextResponse.json({ success: true, warning: "beta_signup_schema_outdated" });
+      }
+
+      console.error("Supabase fallback beta signup error:", fallbackError);
+    }
+
     console.error("Supabase beta signup error:", error);
     return NextResponse.json(
       { error: "We could not save your beta signup. Please try again." },
