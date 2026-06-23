@@ -30,6 +30,17 @@ create index if not exists beta_events_name_created_idx
 
 alter table public.beta_events enable row level security;
 
-create policy "Users can view own beta events"
-  on public.beta_events for select
-  using (auth.uid() = user_id);
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'beta_events'
+      and policyname = 'Users can view own beta events'
+  ) then
+    create policy "Users can view own beta events"
+      on public.beta_events for select
+      using (auth.uid() = user_id);
+  end if;
+end
+$$;
