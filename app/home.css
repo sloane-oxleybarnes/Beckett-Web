@@ -44,6 +44,10 @@
   border-bottom: 0.5px solid var(--border);
   flex-wrap: wrap;
 }
+
+.beckett-env-banner-visible .lumen-home .hn-nav {
+  top: var(--beckett-env-banner-height, 0px);
+}
 .lumen-home .nav-logo {
   font-family: var(--serif);
   font-size: 22px;
