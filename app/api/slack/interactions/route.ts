@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   fetchSlackConversationContext,
-  formatAskedPrompt,
   formatAskedResponse,
   handleSlackAiError,
   isAllowedSlackPlan,
@@ -9,7 +8,6 @@ import {
   postSlackResponse,
   runSlackCoaching,
   scheduleSlackBackgroundTask,
-  slackAskedLabel,
   slackConnectText,
   slackMessageResponse,
   SlackBlock,
@@ -123,27 +121,6 @@ function detailLabel(responseDetail: SlackResponseDetail) {
   return responseDetail === "longer" ? "longer explanation" : "quick answer";
 }
 
-function buildPreparingBlocks(
-  prompt: string,
-  responseDetail: SlackResponseDetail,
-  intent: SlackCoachingIntent = "general"
-): SlackBlock[] {
-  return [
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: [
-          `*${slackAskedLabel(intent)}*`,
-          `>${formatAskedPrompt(prompt)}`,
-          "",
-          `Beckett is preparing your ${detailLabel(responseDetail)}...`,
-        ].join("\n"),
-      },
-    },
-  ];
-}
-
 async function replaceSlackInteraction(responseUrl: string, text: string, blocks?: SlackBlock[]) {
   await postSlackResponse(responseUrl, text, {
     replaceOriginal: true,
@@ -224,12 +201,28 @@ async function sendPendingSlashResponse({
   const initialResponseUrl = payload.response_url || "";
 
   try {
+    console.info("Slack slash button background started", {
+      requestId,
+      intent,
+      responseDetail,
+      hasResponseUrl: Boolean(initialResponseUrl),
+      teamPresent: Boolean(teamId),
+      userPresent: Boolean(slackUserId),
+    });
+
     if (!teamId || !slackUserId) {
       await replaceSlackInteraction(initialResponseUrl, "Beckett could not read the Slack workspace and user context.");
       return;
     }
 
     const claim = await claimPendingRequest({ requestId, teamId, slackUserId });
+    console.info("Slack slash pending request claim complete", {
+      requestId,
+      intent,
+      responseDetail,
+      claimed: Boolean(claim.pending),
+      failureMessage: claim.pending ? null : claim.message,
+    });
     if (!claim.pending) {
       await replaceSlackInteraction(initialResponseUrl, claim.message || "Please run `/beckett` again.");
       return;
@@ -238,6 +231,12 @@ async function sendPendingSlashResponse({
     const pending = claim.pending;
     const responseUrl = initialResponseUrl || pending.response_url || "";
     const user = await lookupSlackConnectedUser(teamId, slackUserId);
+    console.info("Slack slash button user lookup complete", {
+      requestId,
+      intent,
+      responseDetail,
+      connected: Boolean(user),
+    });
     if (!user) {
       await replaceSlackInteraction(responseUrl, slackConnectText(origin));
       return;
@@ -253,6 +252,12 @@ async function sendPendingSlashResponse({
       channelId: pending.slack_channel_id,
       channelName: pending.slack_channel_name,
     });
+    console.info("Slack slash channel context fetched", {
+      requestId,
+      intent,
+      responseDetail,
+      contextLength: channelContext?.length || 0,
+    });
     const response = await runSlackCoaching({
       user,
       action: "slash_command",
@@ -264,7 +269,18 @@ async function sendPendingSlashResponse({
     });
 
     await replaceSlackInteraction(responseUrl, formatAskedResponse(pending.prompt, response, intent));
+    console.info("Slack slash final response posted", {
+      requestId,
+      intent,
+      responseDetail,
+    });
   } catch (error) {
+    console.error("Slack slash button response failed", {
+      requestId,
+      intent,
+      responseDetail,
+      message: error instanceof Error ? error.message : String(error),
+    });
     await replaceSlackInteraction(
       initialResponseUrl,
       `Beckett could not finish that request: ${handleSlackAiError(error)}`
@@ -286,33 +302,14 @@ export async function POST(req: NextRequest) {
     const detailAction = getSlashDetailAction(payload);
     if (!detailAction) return NextResponse.json({ ok: true });
 
-    const existing = await loadPendingRequest(detailAction.requestId);
-    if (!existing) {
-      if (payload.response_url) {
-        await replaceSlackInteraction(
-          payload.response_url,
-          "That Beckett request is no longer available. Please run `/beckett` again."
-        );
-        return NextResponse.json({ ok: true });
-      }
-      return slackMessageResponse("That Beckett request is no longer available. Please run `/beckett` again.", {
-        replaceOriginal: true,
-      });
-    }
-
-    const responseUrl = payload.response_url || existing.response_url || "";
-    if (responseUrl) {
-      await replaceSlackInteraction(
-        responseUrl,
-        `Beckett is preparing your ${detailLabel(detailAction.responseDetail)}...`,
-        buildPreparingBlocks(existing.prompt, detailAction.responseDetail, detailAction.intent)
-      );
-    } else {
-      return slackMessageResponse(`Beckett is preparing your ${detailLabel(detailAction.responseDetail)}...`, {
-        replaceOriginal: true,
-        blocks: buildPreparingBlocks(existing.prompt, detailAction.responseDetail, detailAction.intent),
-      });
-    }
+    console.info("Slack slash button clicked", {
+      requestId: detailAction.requestId,
+      intent: detailAction.intent,
+      responseDetail: detailAction.responseDetail,
+      hasResponseUrl: Boolean(payload.response_url),
+      teamPresent: Boolean(payload.team?.id),
+      userPresent: Boolean(payload.user?.id),
+    });
 
     scheduleSlackBackgroundTask(
       "Slack slash choice response failed",
@@ -325,7 +322,9 @@ export async function POST(req: NextRequest) {
       })
     );
 
-    return NextResponse.json({ ok: true });
+    return slackMessageResponse(`Beckett is preparing your ${detailLabel(detailAction.responseDetail)}...`, {
+      replaceOriginal: true,
+    });
   }
 
   if (payload.type !== "message_action" || payload.callback_id !== "beckett_message_context") {

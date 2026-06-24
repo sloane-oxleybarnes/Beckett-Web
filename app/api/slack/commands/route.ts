@@ -4,7 +4,8 @@ import {
   isAllowedSlackPlan,
   formatAskedPrompt,
   lookupSlackConnectedUser,
-  slackMessageResponse,
+  postSlackResponse,
+  scheduleSlackBackgroundTask,
   slackConnectText,
   slackErrorResponse,
   SlackBlock,
@@ -157,6 +158,106 @@ function buildChoiceBlocks(prompt: string, requestId: string, intent: SlackCoach
   ];
 }
 
+async function sendSlashChoiceCard({
+  origin,
+  payload,
+  parsed,
+}: {
+  origin: string;
+  payload: SlashCommandPayload;
+  parsed: ParsedSlackCommand;
+}) {
+  const responseUrl = payload.response_url || "";
+  const logContext = {
+    teamPresent: Boolean(payload.team_id),
+    userPresent: Boolean(payload.user_id),
+    channelPresent: Boolean(payload.channel_id),
+    intent: parsed.intent,
+    promptLength: parsed.prompt.length,
+  };
+
+  try {
+    console.info("Slack command setup started", logContext);
+
+    if (!payload.team_id || !payload.user_id) {
+      await postSlackResponse(responseUrl, "Beckett could not read the Slack workspace and user context.", {
+        replaceOriginal: true,
+      });
+      return;
+    }
+
+    const user = await lookupSlackConnectedUser(payload.team_id, payload.user_id);
+    console.info("Slack command user lookup complete", {
+      ...logContext,
+      connected: Boolean(user),
+    });
+
+    if (!user) {
+      await postSlackResponse(responseUrl, slackConnectText(origin), { replaceOriginal: true });
+      return;
+    }
+
+    if (!isAllowedSlackPlan(user)) {
+      await postSlackResponse(responseUrl, "Beckett Slack coaching is available for beta and pro users.", {
+        replaceOriginal: true,
+      });
+      return;
+    }
+
+    const requestId = randomUUID();
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const { error } = await supabaseAdmin.from("slack_pending_requests").insert({
+      id: requestId,
+      user_id: user.id,
+      slack_team_id: payload.team_id,
+      slack_user_id: payload.user_id,
+      slack_channel_id: payload.channel_id || null,
+      slack_channel_name: payload.channel_name || null,
+      prompt: parsed.prompt,
+      response_url: responseUrl,
+      expires_at: expiresAt,
+    });
+
+    if (error) {
+      console.error("Slack command pending insert failed", {
+        ...logContext,
+        code: error.code,
+        message: error.message,
+      });
+      await postSlackResponse(responseUrl, "Beckett could not save this Slack request. Please try `/beckett` again.", {
+        replaceOriginal: true,
+      });
+      return;
+    }
+
+    console.info("Slack command pending request inserted", {
+      ...logContext,
+      requestId,
+    });
+
+    await postSlackResponse(
+      responseUrl,
+      `${slackAskedLabel(parsed.intent)} ${parsed.prompt}\n\nHow much help do you want?`,
+      {
+        replaceOriginal: true,
+        blocks: buildChoiceBlocks(parsed.prompt, requestId, parsed.intent),
+      }
+    );
+    console.info("Slack command choice card posted", {
+      ...logContext,
+      requestId,
+    });
+  } catch (error) {
+    console.error("Slack command setup failed", {
+      ...logContext,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    await postSlackResponse(responseUrl, "Beckett could not open that request. Please try `/beckett` again.", {
+      replaceOriginal: true,
+    });
+  }
+}
+
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const verification = verifySlackRequest(req, rawBody);
@@ -181,31 +282,22 @@ export async function POST(req: NextRequest) {
     return slackErrorResponse("Slack did not include a response URL for this command.");
   }
 
-  const user = await lookupSlackConnectedUser(payload.team_id, payload.user_id);
-  if (!user) return slackTextResponse(slackConnectText(req.nextUrl.origin));
-  if (!isAllowedSlackPlan(user)) {
-    return slackTextResponse("Beckett Slack coaching is available for beta and pro users.");
-  }
-
-  const requestId = randomUUID();
-  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-  const { error } = await supabaseAdmin.from("slack_pending_requests").insert({
-    id: requestId,
-    user_id: user.id,
-    slack_team_id: payload.team_id,
-    slack_user_id: payload.user_id,
-    slack_channel_id: payload.channel_id || null,
-    slack_channel_name: payload.channel_name || null,
-    prompt: parsed.prompt,
-    response_url: payload.response_url,
-    expires_at: expiresAt,
+  console.info("Slack command received", {
+    teamPresent: Boolean(payload.team_id),
+    userPresent: Boolean(payload.user_id),
+    channelPresent: Boolean(payload.channel_id),
+    intent: parsed.intent,
+    promptLength: parsed.prompt.length,
   });
 
-  if (error) {
-    return slackErrorResponse("I could not save this Slack request. Please try /beckett again.");
-  }
+  scheduleSlackBackgroundTask(
+    "Slack command setup background task failed",
+    sendSlashChoiceCard({
+      origin: req.nextUrl.origin,
+      payload,
+      parsed,
+    })
+  );
 
-  return slackMessageResponse(`${slackAskedLabel(parsed.intent)} ${parsed.prompt}\n\nHow much help do you want?`, {
-    blocks: buildChoiceBlocks(parsed.prompt, requestId, parsed.intent),
-  });
+  return slackTextResponse("Beckett is opening your request...");
 }
