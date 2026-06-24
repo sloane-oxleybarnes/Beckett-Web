@@ -22,6 +22,7 @@ let state = {
   activeWorkspace: 'analyze',
   draftTask: 'new',
   draftRevision: '',
+  toolkitItems: [],
 };
 
 // ── Init ──────────────────────────────────────────────────────
@@ -38,12 +39,14 @@ async function init() {
   state.safePeople = settings.safePeople || [];
   state.voiceSampleCounts = settings.voiceSampleCounts || { personal: 0, business: 0 };
   state.beckettToken = settings.beckettToken || null;
+  state.toolkitItems = settings.toolkitItems || [];
 
   applyPlan();
   applyMode(state.mode);
   renderProfile(state.linkedInProfile);
   renderAuthState();
   updateVoiceBadge();
+  renderDraftToolkit();
   applyWorkspace('analyze');
   setEmptyStateForCurrentTab();
 
@@ -239,6 +242,36 @@ function renderDraftResult(result) {
   $('draftResultCard').hidden = !drafts.length;
 }
 
+function renderDraftToolkit() {
+  const card = $('draftToolkitCard');
+  const container = $('draftToolkitItems');
+  const items = (state.toolkitItems || [])
+    .filter(item => item?.content)
+    .slice(0, 4);
+
+  card.hidden = !items.length;
+  if (!items.length) {
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = items.map(item => {
+    const content = String(item.content || '');
+    const preview = content.length > 150 ? `${content.slice(0, 147).trim()}...` : content;
+    return `
+      <div class="draft-toolkit-item">
+        <div class="draft-toolkit-label">${escHtml(item.label || item.category || 'Saved phrase')}</div>
+        <p class="draft-toolkit-text">${escHtml(preview)}</p>
+        <div class="response-actions">
+          <button class="copy-btn" data-text="${escAttr(content)}">Copy</button>
+          <button class="use-btn" data-text="${escAttr(content)}">Use ↗</button>
+          <button class="draft-toolkit-improve-btn" data-text="${escAttr(content)}" type="button">Improve</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 // ── Profile pill ──────────────────────────────────────────────
 
 function renderProfile(profile) {
@@ -316,8 +349,10 @@ async function connectBeckettFromPanel() {
   const settings = await msg('GET_SETTINGS');
   state.plan = settings.plan || 'beta';
   state.beckettToken = settings.beckettToken || null;
+  state.toolkitItems = settings.toolkitItems || [];
   applyPlan();
   renderAuthState();
+  renderDraftToolkit();
   applyWorkspace(state.activeWorkspace);
   setEmptyStateForCurrentTab();
 
@@ -729,6 +764,14 @@ document.addEventListener('click', e => {
     document.querySelectorAll('.draft-chip').forEach(chip => {
       chip.classList.toggle('active', chip.dataset.revision === revision);
     });
+    generateDraft();
+  }
+  if (e.target.matches('.draft-toolkit-improve-btn[data-text]')) {
+    const text = e.target.dataset.text;
+    applyWorkspace('draft');
+    applyDraftTask('improve');
+    $('draftText').value = text;
+    $('draftGoal').value = $('draftGoal').value || 'Make this saved phrase fit the current conversation.';
     generateDraft();
   }
 });

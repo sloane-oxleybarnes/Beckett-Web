@@ -62,7 +62,43 @@ function buildSystem(mode, isSafePerson, linkedInContext, voiceContext, userCont
   return parts.join('\n\n');
 }
 
-export function buildMessagePrompt({ messageText, thread, sender, platform, channelType, mode, linkedInContext, isSafePerson, voiceContext, currentUser }) {
+export function buildCoachingProfileContext(profile, toolkitItems = []) {
+  const lines = [];
+  if (profile?.communicationPreferences?.length) {
+    lines.push(`What the user wants Beckett to help with: ${profile.communicationPreferences.join(', ')}.`);
+  }
+  if (profile?.coachingTone) lines.push(`Preferred coaching tone: ${profile.coachingTone}.`);
+  if (profile?.strengths?.length) {
+    lines.push(`Communication strengths to preserve: ${profile.strengths.join(', ')}.`);
+  }
+  if (profile?.workplaceTriggers?.length) {
+    lines.push(`Moments to handle carefully: ${profile.workplaceTriggers.join(', ')}.`);
+  }
+  const neuroContext = [
+    ...(profile?.neurodivergentContext || []).filter(item => item !== 'Something else'),
+    profile?.neurodivergentContextOther || null,
+  ].filter(Boolean);
+  if (neuroContext.length) lines.push(`Optional neurodivergent context: ${neuroContext.join(', ')}.`);
+
+  const toolkitLines = (toolkitItems || [])
+    .map(item => {
+      const content = String(item?.content || '').replace(/\s+/g, ' ').trim();
+      if (!content) return null;
+      const label = item?.label || item?.category || 'Saved phrase';
+      return `- ${label}: "${content.length > 220 ? content.slice(0, 217).trim() + '...' : content}"`;
+    })
+    .filter(Boolean)
+    .slice(0, 5);
+  if (toolkitLines.length) {
+    lines.push(`Saved Communication Toolkit phrases the user may want to reuse or adapt:\n${toolkitLines.join('\n')}`);
+  }
+
+  return lines.length
+    ? `User coaching profile. Use this to adjust tone, pacing, explanations, assumptions, and suggested wording. Do not mention this profile unless it is useful.\n${lines.join('\n')}`
+    : '';
+}
+
+export function buildMessagePrompt({ messageText, thread, sender, platform, channelType, mode, linkedInContext, isSafePerson, voiceContext, currentUser, coachingProfileContext }) {
   // Resolve the user's display name — prefer LinkedIn name, fall back to deriving from thread or email
   const userName = currentUser?.name ||
     (thread?.find(m => m.isCurrentUser)?.sender) ||
@@ -85,7 +121,7 @@ export function buildMessagePrompt({ messageText, thread, sender, platform, chan
     ? { userIdentifier, userEmail: currentUser?.email || '', participantList }
     : null;
 
-  const system = buildSystem(mode, isSafePerson, mode === 'business' ? linkedInContext : null, voiceContext || '', userContext);
+  const system = `${buildSystem(mode, isSafePerson, mode === 'business' ? linkedInContext : null, voiceContext || '', userContext)}${coachingProfileContext ? `\n\n${coachingProfileContext}` : ''}`;
 
   const userLabel = userIdentifier ? `${userIdentifier} (you)` : 'you';
   const contextBlock = thread?.length > 1
@@ -121,8 +157,8 @@ Respond ONLY with valid JSON, no markdown:
   return { system, user };
 }
 
-export function buildMeetingPrompt({ transcript, meetingType, mode, linkedInContext }) {
-  const system = buildSystem(mode, false, mode === 'business' ? linkedInContext : null, '');
+export function buildMeetingPrompt({ transcript, meetingType, mode, linkedInContext, coachingProfileContext }) {
+  const system = `${buildSystem(mode, false, mode === 'business' ? linkedInContext : null, '')}${coachingProfileContext ? `\n\n${coachingProfileContext}` : ''}`;
 
   const user = `Meeting type: ${meetingType || 'video call'} | Mode: ${mode}
 
@@ -150,8 +186,9 @@ export function buildDraftAssistPrompt({
   linkedInContext,
   isSafePerson,
   voiceContext,
+  coachingProfileContext,
 }) {
-  const system = `${buildSystem(mode, isSafePerson, mode === 'business' ? linkedInContext : null, voiceContext || '')}
+  const system = `${buildSystem(mode, isSafePerson, mode === 'business' ? linkedInContext : null, voiceContext || '')}${coachingProfileContext ? `\n\n${coachingProfileContext}` : ''}
 
 You are helping the user write or revise a message inside Gmail or Slack. Use conversation context only as evidence; do not invent facts, promises, deadlines, relationships, or reactions that are not visible. Make the message ready to send, natural, and matched to the platform.`;
 
@@ -200,12 +237,12 @@ export function buildDraftFromScratchPrompt(input = {}) {
   });
 }
 
-export function buildMeetingBriefPrompt({ meetingTitle, attendees, recentThreads, mode }) {
+export function buildMeetingBriefPrompt({ meetingTitle, attendees, recentThreads, mode, coachingProfileContext }) {
   const toneNote = mode === 'business'
     ? 'Professional and concise. Bullet points are fine here.'
     : 'Warm and practical. Keep it conversational.';
 
-  const system = `You are Beckett. Generate a pre-meeting brief for the user.\n${toneNote}\n${BECKETT_BOUNDARY_GUIDANCE}`;
+  const system = `You are Beckett. Generate a pre-meeting brief for the user.\n${toneNote}\n${BECKETT_BOUNDARY_GUIDANCE}${coachingProfileContext ? `\n\n${coachingProfileContext}` : ''}`;
 
   const user = `Meeting: "${meetingTitle}"
 Attendees: ${(attendees || []).join(', ')}
@@ -223,12 +260,12 @@ Keep the whole brief under 200 words. Be specific, not generic.`;
   return { system, user };
 }
 
-export function buildDebriefPrompt({ transcript, meetingTitle, attendees, mode }) {
+export function buildDebriefPrompt({ transcript, meetingTitle, attendees, mode, coachingProfileContext }) {
   const toneNote = mode === 'business'
     ? 'Professional, constructive, direct.'
     : 'Warm, honest, supportive.';
 
-  const system = `You are Beckett. The user just finished a meeting and wants a quick debrief.\n${toneNote}\n${BECKETT_BOUNDARY_GUIDANCE}`;
+  const system = `You are Beckett. The user just finished a meeting and wants a quick debrief.\n${toneNote}\n${BECKETT_BOUNDARY_GUIDANCE}${coachingProfileContext ? `\n\n${coachingProfileContext}` : ''}`;
 
   const user = `Meeting: "${meetingTitle || 'Meeting'}"
 Attendees: ${attendees || 'unknown'}

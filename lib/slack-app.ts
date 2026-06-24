@@ -4,6 +4,7 @@ import { callAnthropic } from "@/lib/anthropic";
 import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
+import { formatCoachingProfileForPrompt } from "@/lib/coaching-profile";
 import { getPublicSiteUrl } from "@/lib/deployment-env";
 import { supabaseAdmin } from "@/lib/server-admin";
 
@@ -53,6 +54,11 @@ export type SlackConnectedUser = {
   missingUserScopes: string[];
   communicationPreferences: string[];
   coachingTone: string | null;
+  strengths: string[];
+  workplaceTriggers: string[];
+  neurodivergentContext: string[];
+  neurodivergentContextOther: string | null;
+  toolkitItems: { course_id?: string | null; category?: string | null; label?: string | null; content?: string | null }[];
 };
 
 type SlackVerificationResult =
@@ -304,7 +310,9 @@ export async function lookupSlackConnectedUser(teamId: string, slackUserId: stri
 
   const { data: profile, error: profileError } = await supabaseAdmin
     .from("profiles")
-    .select("id, email, display_name, first_name, full_name, plan, communication_preferences, coaching_tone")
+    .select(
+      "id, email, display_name, first_name, full_name, plan, communication_preferences, coaching_tone, strengths, workplace_triggers, neurodivergent_context, neurodivergent_context_other"
+    )
     .eq("id", integration.user_id)
     .maybeSingle();
 
@@ -315,6 +323,13 @@ export async function lookupSlackConnectedUser(teamId: string, slackUserId: stri
   const authedUser = metadataRecord(metadata.authed_user);
   const grantedUserScopes = splitSlackScopes(metadata.granted_user_scopes || authedUser.scope || metadata.user_scope);
   const missingUserScopes = REQUIRED_SLACK_USER_SCOPES.filter((scope) => !grantedUserScopes.includes(scope));
+  const { data: toolkitItems } = await supabaseAdmin
+    .from("course_toolkit_items")
+    .select("course_id, category, label, content, updated_at")
+    .eq("user_id", profile.id)
+    .is("deleted_at", null)
+    .order("updated_at", { ascending: false })
+    .limit(6);
 
   return {
     id: profile.id,
@@ -329,6 +344,13 @@ export async function lookupSlackConnectedUser(teamId: string, slackUserId: stri
       ? profile.communication_preferences
       : [],
     coachingTone: profile.coaching_tone || null,
+    strengths: Array.isArray(profile.strengths) ? profile.strengths : [],
+    workplaceTriggers: Array.isArray(profile.workplace_triggers) ? profile.workplace_triggers : [],
+    neurodivergentContext: Array.isArray(profile.neurodivergent_context)
+      ? profile.neurodivergent_context
+      : [],
+    neurodivergentContextOther: profile.neurodivergent_context_other || null,
+    toolkitItems: toolkitItems || [],
   } satisfies SlackConnectedUser;
 }
 
@@ -516,10 +538,18 @@ Do not add generic privacy or shared-channel warnings just because Slack context
 Only mention privacy, shared-channel, or workplace policy risk when the user's request is about posting in a public/shared channel, the context clearly includes sensitive personal information, or the requested message could create a concrete workplace safety or policy concern.
 ${beckettBoundaryPrompt()}`;
 
-  const preferenceLine = user.communicationPreferences.length
-    ? `What this user wants Beckett to help with: ${user.communicationPreferences.join(", ")}.`
-    : "The user has not set specific Beckett help preferences.";
-  const toneLine = user.coachingTone ? `Preferred coaching tone: ${user.coachingTone}.` : "";
+  const coachingProfileContext = formatCoachingProfileForPrompt(
+    {
+      display_name: user.name,
+      communication_preferences: user.communicationPreferences,
+      coaching_tone: user.coachingTone,
+      strengths: user.strengths,
+      workplace_triggers: user.workplaceTriggers,
+      neurodivergent_context: user.neurodivergentContext,
+      neurodivergent_context_other: user.neurodivergentContextOther,
+    },
+    user.toolkitItems
+  );
   const responseDetailLine =
     responseDetail === "quick"
       ? "Response length: Quick answer. Keep it concise: 2-4 practical bullets, plus suggested wording only if useful. Keep the answer under 900 characters."
@@ -534,8 +564,7 @@ ${beckettBoundaryPrompt()}`;
     : contextStatus === "unavailable"
       ? "\n\nNo recent Slack context was available. Answer from the user's request without implying you saw surrounding messages."
       : "";
-  const userPrompt = `${preferenceLine}
-${toneLine}
+  const userPrompt = `${coachingProfileContext || "The user has not set specific Beckett coaching preferences yet."}
 ${responseDetailLine}
 ${contextLine}
 ${slackIntentInstruction(intent)}

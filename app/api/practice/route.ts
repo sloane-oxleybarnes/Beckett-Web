@@ -4,6 +4,7 @@ import { callAnthropic } from '@/lib/anthropic'
 import { AiUsageLimitError, recordAiUsage } from '@/lib/ai-usage'
 import { trackBetaEvent } from '@/lib/beta-events'
 import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
+import { fetchCoachingProfileContext } from '@/lib/coaching-profile'
 
 function modeInstruction(mode?: string) {
   if (mode === 'professional') {
@@ -39,6 +40,8 @@ export async function POST(req: NextRequest) {
   if (plan !== 'pro' && plan !== 'beta') {
     return NextResponse.json({ error: 'Practice requires a Pro or Beta plan.' }, { status: 403 })
   }
+  const { promptContext } = await fetchCoachingProfileContext(supabase, session.user.id, { toolkitLimit: 6 })
+  const profilePrompt = promptContext ? `\n\n${promptContext}` : ''
 
   const body = await req.json() as {
     action: 'turn' | 'debrief' | 'inline_feedback' | 'assistant_feedback' | 'suggested_prompts' | 'recommend_format' | 'draft_feedback' | 'intervention_check' | 'prep_tips'
@@ -90,7 +93,7 @@ export async function POST(req: NextRequest) {
     if (!messages?.length) return NextResponse.json({ error: 'messages required' }, { status: 400 })
     const modeNote = modeInstruction(mode)
     const lenNote = lengthInstruction(messageCount)
-    const instructions = [modeNote, beckettBoundaryPrompt(), lenNote].filter(Boolean).join('\n\n')
+    const instructions = [modeNote, beckettBoundaryPrompt(), promptContext, lenNote].filter(Boolean).join('\n\n')
     const fullSystem = system
       ? (instructions ? `${system}\n\n${instructions}` : system)
       : instructions || null
@@ -106,7 +109,7 @@ export async function POST(req: NextRequest) {
       : 'Include emotional and relational observations.'
 
     const system = `You are a communication coach giving brief, honest in-the-moment feedback. ${toneNote}
-${beckettBoundaryPrompt()}`
+${beckettBoundaryPrompt()}${profilePrompt}`
     const user = `Context: ${context || 'a practice conversation'}
 
 The user just said: "${userMessage}"
@@ -124,6 +127,7 @@ In one short sentence (max 20 words), note how they came across. Be direct and s
 
     const system = `You are a communication coach previewing a message before it is sent. ${toneNote}
 ${beckettBoundaryPrompt()}
+${profilePrompt}
 Return only valid JSON.`
     const user = `The user is practicing a conversation with ${person || 'someone'} about: ${situation || 'a difficult topic'}. Their goal: ${goal || 'not specified'}.
 
@@ -161,7 +165,7 @@ Rules:
       : 'Focus on emotional and relational dynamics.'
 
     const system = `You are Beckett, a communication coach giving a brief note about the other person's response. ${toneNote}
-${beckettBoundaryPrompt()}`
+${beckettBoundaryPrompt()}${profilePrompt}`
     const user = `The user is practicing a conversation with ${person || 'someone'}.
 Situation: ${situation || 'not specified'}
 Goal: ${goal || 'not specified'}
@@ -189,6 +193,7 @@ Analyze whether this conversation would be more effective in person or over text
     const result = await callMeteredAnthropic(
       `You analyze communication scenarios and return JSON recommendations.
 ${beckettBoundaryPrompt()}
+${profilePrompt}
 Return only valid JSON.`,
       [{ role: 'user', content: user }],
       120
@@ -249,6 +254,7 @@ ${channelRules}
     const result = await callMeteredAnthropic(
       `You generate channel-specific conversation suggestions.
 ${beckettBoundaryPrompt()}
+${profilePrompt}
 Return only valid JSON.`,
       [{ role: 'user', content: user }],
       channel === 'email' ? 320 : 180
@@ -284,6 +290,7 @@ Return only valid JSON.`,
 
     const system = `You are Beckett, a practical communication coach preparing someone for a realistic practice conversation. Your guidance should feel like a smart friend who has seen this exact kind of conversation before.
 ${beckettBoundaryPrompt()}
+${profilePrompt}
 Return only valid JSON.`
     const user = `Generate tailored "before you start" prep notes for this practice scenario.
 
@@ -358,6 +365,7 @@ Return ONLY valid JSON — one of these three forms:
     const result = await callMeteredAnthropic(
       `You monitor practice conversations and return JSON.
 ${beckettBoundaryPrompt()}
+${profilePrompt}
 Return only valid JSON.`,
       [{ role: 'user', content: user }],
       100
@@ -377,6 +385,7 @@ Return only valid JSON.`,
 
     const system = `You are Beckett, giving honest feedback after a practice conversation. ${modeNote}
 ${beckettBoundaryPrompt()}
+${profilePrompt}
 Always respond with valid JSON only — no extra text.`
     const user = `You were just playing the role of ${personDescription} in a practice conversation.
 The situation: "${situation}"

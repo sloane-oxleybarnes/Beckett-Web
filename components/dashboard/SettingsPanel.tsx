@@ -545,6 +545,22 @@ export default function SettingsPage() {
           Choose how Beckett coaches, explains, and drafts with you. Personal profile details
           live in About Me.
         </p>
+        <div className="mb-5 grid gap-3 md:grid-cols-2">
+          <div className="rounded-sm border border-primary/15 bg-primary-light/35 p-3">
+            <p className="text-sm font-medium text-ink">Help focus</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink-mid">
+              Beckett uses these choices to decide what to emphasize, like directness,
+              social context, next steps, warmth, or concision.
+            </p>
+          </div>
+          <div className="rounded-sm border border-primary/15 bg-primary-light/35 p-3">
+            <p className="text-sm font-medium text-ink">Coaching tone</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink-mid">
+              Beckett uses this to change how feedback is delivered across Slack,
+              Practice, courses, and extension drafting.
+            </p>
+          </div>
+        </div>
         <form onSubmit={saveCoachingSettings} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-ink mb-2">What I Want Beckett to Help Me With</label>

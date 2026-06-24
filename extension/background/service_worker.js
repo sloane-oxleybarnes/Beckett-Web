@@ -7,6 +7,7 @@ import {
   buildPracticeSystemPrompt,
   buildPracticeDebriefPrompt,
   buildVoiceContext,
+  buildCoachingProfileContext,
   BECKETT_BOUNDARY_GUIDANCE,
 } from '../utils/prompts.js';
 import { getGmailMessage, getGmailProfile, getGmailThread, parseThreadMessages, searchGmailMessages } from '../utils/gmail.js';
@@ -247,12 +248,27 @@ async function handleTriggerAnalyze(payload, sendResponse) {
       return;
     }
 
-    const { lumenMode, plan, voice_samples, currentUserEmail, slackUserName, beckettUserName, beckettUserEmail, slackToken, slackUserId, beckettSlackConnected, beckettSlackUserId } = await chrome.storage.local.get([
-      'lumenMode', 'plan', 'voice_samples', 'currentUserEmail', 'slackUserName', 'beckettUserName', 'beckettUserEmail', 'slackToken', 'slackUserId', 'beckettSlackConnected', 'beckettSlackUserId',
+    const {
+      lumenMode,
+      plan,
+      voice_samples,
+      currentUserEmail,
+      slackUserName,
+      beckettUserName,
+      beckettUserEmail,
+      slackToken,
+      slackUserId,
+      beckettSlackConnected,
+      beckettSlackUserId,
+      beckettCoachingProfile,
+      beckettToolkitItems,
+    } = await chrome.storage.local.get([
+      'lumenMode', 'plan', 'voice_samples', 'currentUserEmail', 'slackUserName', 'beckettUserName', 'beckettUserEmail', 'slackToken', 'slackUserId', 'beckettSlackConnected', 'beckettSlackUserId', 'beckettCoachingProfile', 'beckettToolkitItems',
     ]);
     const mode = payload.mode || lumenMode || 'business';
     const isPro = plan === 'pro' || plan === 'beta';
     const voiceContext = isPro ? buildVoiceContext(voice_samples, mode) : '';
+    const coachingProfileContext = buildCoachingProfileContext(beckettCoachingProfile, beckettToolkitItems);
 
     // Enrich Gmail thread via API — fetches all messages including collapsed ones
     let thread = ctx.thread || null;
@@ -317,6 +333,7 @@ async function handleTriggerAnalyze(payload, sendResponse) {
       isSafePerson: analysisContext.isSafePerson || false,
       voiceContext,
       currentUser,
+      coachingProfileContext,
     });
 
     const contextSource = ctx.platform === 'slack'
@@ -463,7 +480,7 @@ function getContentScriptForUrl(url) {
 
 async function handleMeeting(payload, tabId, sendResponse) {
   try {
-    const { lumenMode, plan } = await chrome.storage.local.get(['lumenMode', 'plan']);
+    const { lumenMode, plan, beckettCoachingProfile, beckettToolkitItems } = await chrome.storage.local.get(['lumenMode', 'plan', 'beckettCoachingProfile', 'beckettToolkitItems']);
     const isPro = plan === 'pro' || plan === 'beta';
     if (!isPro) { sendResponse({ error: 'Meeting guidance is a Pro feature.' }); return; }
 
@@ -472,6 +489,7 @@ async function handleMeeting(payload, tabId, sendResponse) {
       ...payload,
       mode,
       linkedInContext: null,
+      coachingProfileContext: buildCoachingProfileContext(beckettCoachingProfile, beckettToolkitItems),
     });
 
     const result = await callBeckettJson('analyze_message', prompt, 1000, { platform: 'meeting', mode });
@@ -500,8 +518,8 @@ async function handleDraftFromScratch(payload, sendResponse) {
 
 async function handleDraftAssist(payload = {}, sendResponse) {
   try {
-    const { lumenMode, voice_samples } = await chrome.storage.local.get([
-      'lumenMode', 'voice_samples',
+    const { lumenMode, voice_samples, beckettCoachingProfile, beckettToolkitItems } = await chrome.storage.local.get([
+      'lumenMode', 'voice_samples', 'beckettCoachingProfile', 'beckettToolkitItems',
     ]);
     const mode = payload.mode || lumenMode || 'business';
     const voiceContext = buildVoiceContext(voice_samples, mode);
@@ -517,6 +535,7 @@ async function handleDraftAssist(payload = {}, sendResponse) {
       linkedInContext: null,
       isSafePerson: !!payload.isSafePerson,
       voiceContext,
+      coachingProfileContext: buildCoachingProfileContext(beckettCoachingProfile, beckettToolkitItems),
     });
 
     const result = await callBeckettJson('draft_from_scratch', prompt, 1200, {
@@ -559,7 +578,11 @@ function normalizeDraftAssistResult(result) {
 
 async function handleMeetingBrief(payload, sendResponse) {
   try {
-    const { lumenMode } = await chrome.storage.local.get('lumenMode');
+    const { lumenMode, beckettCoachingProfile, beckettToolkitItems } = await chrome.storage.local.get([
+      'lumenMode',
+      'beckettCoachingProfile',
+      'beckettToolkitItems',
+    ]);
     const mode = lumenMode || 'business';
 
     let recentThreads = '';
@@ -575,6 +598,7 @@ async function handleMeetingBrief(payload, sendResponse) {
       attendees: payload.attendees,
       recentThreads,
       mode,
+      coachingProfileContext: buildCoachingProfileContext(beckettCoachingProfile, beckettToolkitItems),
     });
 
     const result = await callBeckettText('meeting_brief', prompt, 900, { mode });
@@ -592,7 +616,11 @@ async function handleDebrief(payload, sendResponse) {
       return;
     }
 
-    const { lumenMode } = await chrome.storage.local.get('lumenMode');
+    const { lumenMode, beckettCoachingProfile, beckettToolkitItems } = await chrome.storage.local.get([
+      'lumenMode',
+      'beckettCoachingProfile',
+      'beckettToolkitItems',
+    ]);
     const mode = lumenMode || 'business';
 
     const prompt = buildDebriefPrompt({
@@ -600,6 +628,7 @@ async function handleDebrief(payload, sendResponse) {
       meetingTitle: meetingType || 'Meeting',
       attendees: '',
       mode,
+      coachingProfileContext: buildCoachingProfileContext(beckettCoachingProfile, beckettToolkitItems),
     });
 
     const result = await callBeckettText('meeting_debrief', prompt, 1000, { mode });
@@ -634,6 +663,11 @@ async function handleAskAboutContext(payload, sendResponse) {
   try {
     const { question, context, lastResult, mode } = payload;
     const visibleThread = context?.thread || [];
+    const { beckettCoachingProfile, beckettToolkitItems } = await chrome.storage.local.get([
+      'beckettCoachingProfile',
+      'beckettToolkitItems',
+    ]);
+    const coachingProfileContext = buildCoachingProfileContext(beckettCoachingProfile, beckettToolkitItems);
 
     const threadSummary = visibleThread
       .slice(-20)
@@ -653,7 +687,8 @@ async function handleAskAboutContext(payload, sendResponse) {
       'Do not invent replies, reactions, agreement, comfort, rapport, intent, or relationship dynamics that are not visible.',
       'If someone has not responded to a message yet, say that clearly. Do not describe how they reacted to it.',
       'The previous analysis is non-authoritative context and may be incomplete. Never use it to add facts that are not present in the thread.',
-      'When the evidence is limited, say what you can and cannot tell.'
+      'When the evidence is limited, say what you can and cannot tell.',
+      coachingProfileContext,
     ].join(' ');
 
     const user = `Platform: ${context?.platform || 'unknown'} | Sender: ${context?.sender || 'unknown'}
@@ -1030,7 +1065,7 @@ async function getSettings() {
   const keys = [
     'plan', 'lumenMode',
     'safe_people', 'voice_samples',
-    'slackToken', 'slackUserId', 'slackUserName', 'beckettSlackConnected', 'beckettSlackUserId', 'beckettSlackTeamName', 'currentUserEmail', 'beckettToken', 'beckettUserName', 'beckettUserEmail',
+    'slackToken', 'slackUserId', 'slackUserName', 'beckettSlackConnected', 'beckettSlackUserId', 'beckettSlackTeamName', 'currentUserEmail', 'beckettToken', 'beckettUserName', 'beckettUserEmail', 'beckettCoachingProfile', 'beckettToolkitItems',
   ];
   const data = await chrome.storage.local.get(keys);
   if (data.beckettToken) {
@@ -1042,6 +1077,8 @@ async function getSettings() {
       data.beckettSlackConnected = !!profile.integrations?.slack?.connected;
       data.beckettSlackUserId = profile.integrations?.slack?.userId || '';
       data.beckettSlackTeamName = profile.integrations?.slack?.teamName || '';
+      data.beckettCoachingProfile = profile.coachingProfile || null;
+      data.beckettToolkitItems = profile.toolkitItems || [];
     }
   }
   const samples = data.voice_samples || [];
@@ -1062,6 +1099,8 @@ async function getSettings() {
     beckettToken: data.beckettToken || null,
     beckettUserName: data.beckettUserName || '',
     beckettUserEmail: data.beckettUserEmail || '',
+    coachingProfile: data.beckettCoachingProfile || null,
+    toolkitItems: data.beckettToolkitItems || [],
   };
 }
 
@@ -1075,6 +1114,8 @@ async function syncBeckettProfile(token) {
     ...(profile.name && { beckettUserName: profile.name }),
     ...(profile.email && { beckettUserEmail: profile.email }),
     ...(profile.plan && { plan: profile.plan }),
+    beckettCoachingProfile: profile.coachingProfile || null,
+    beckettToolkitItems: profile.toolkitItems || [],
     beckettSlackConnected: !!profile.integrations?.slack?.connected,
     beckettSlackUserId: profile.integrations?.slack?.userId || '',
     beckettSlackTeamName: profile.integrations?.slack?.teamName || '',

@@ -8,6 +8,13 @@ type ToolkitInput = {
   content?: string;
 };
 
+type ToolkitUpdate = {
+  id?: string;
+  category?: string;
+  label?: string;
+  content?: string;
+};
+
 function cleanText(value: unknown, max = 1000) {
   if (typeof value !== "string") return "";
   const trimmed = value.trim();
@@ -36,6 +43,41 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ items: data || [] });
+}
+
+export async function PATCH(req: NextRequest) {
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = (await req.json().catch(() => ({}))) as ToolkitUpdate;
+  const id = cleanText(body.id, 80);
+  const label = cleanText(body.label, 160);
+  const content = cleanText(body.content, 1000);
+  const category = cleanText(body.category, 120);
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  if (!label || !content) {
+    return NextResponse.json({ error: "label and content required" }, { status: 400 });
+  }
+
+  const update: Record<string, string> = {
+    label,
+    content,
+    updated_at: new Date().toISOString(),
+  };
+  if (category) update.category = category;
+
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("course_toolkit_items")
+    .update(update)
+    .eq("id", id)
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .select("id, course_id, category, label, content, created_at, updated_at")
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ item: data });
 }
 
 export async function POST(req: NextRequest) {

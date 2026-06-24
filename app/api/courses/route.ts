@@ -4,6 +4,7 @@ import { callAnthropic } from '@/lib/anthropic'
 import { AiUsageLimitError, recordAiUsage } from '@/lib/ai-usage'
 import { trackBetaEvent } from '@/lib/beta-events'
 import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
+import { fetchCoachingProfileContext } from '@/lib/coaching-profile'
 
 export async function POST(req: NextRequest) {
   const diagnostic: { action?: string; courseId?: string | null; userId?: string } = {}
@@ -23,6 +24,8 @@ export async function POST(req: NextRequest) {
   if (plan !== 'pro' && plan !== 'beta') {
     return NextResponse.json({ error: 'Courses require a Pro or Beta plan.' }, { status: 403 })
   }
+  const { promptContext } = await fetchCoachingProfileContext(supabase, session.user.id, { toolkitLimit: 6 })
+  const profilePrompt = promptContext ? `\n\n${promptContext}` : ''
 
   const body = await req.json() as {
     action: 'turn' | 'check_ghost' | 'ghost_analysis' | 'mini_convo' | 'draft_feedback' | 'debrief'
@@ -73,8 +76,8 @@ export async function POST(req: NextRequest) {
       ? 'Keep your reply to 1-2 sentences — short and natural, like a real text message.'
       : 'Keep your reply to 1-2 sentences maximum. Real people text briefly.'
     const fullSystem = system
-      ? `${system}\n\n${beckettBoundaryPrompt()}\n\n${lengthNote}`
-      : `${beckettBoundaryPrompt()}\n\n${lengthNote}`
+      ? `${system}\n\n${beckettBoundaryPrompt()}${profilePrompt}\n\n${lengthNote}`
+      : `${beckettBoundaryPrompt()}${profilePrompt}\n\n${lengthNote}`
     const text = await callMeteredAnthropic(fullSystem, messages as { role: 'user' | 'assistant'; content: string }[], 150)
     return NextResponse.json({ text: text.trim().replace(/^[""“”]|[""“”]$/g, '') })
   }
@@ -100,6 +103,7 @@ Return ONLY valid JSON: { "ghost": boolean, "hardIntervention": null | "brief 1-
     const result = await callMeteredAnthropic(
       `You assess dating app conversations.
 ${beckettBoundaryPrompt()}
+${profilePrompt}
 Return only valid JSON.`,
       [{ role: 'user', content: prompt }],
       100
@@ -124,7 +128,7 @@ As Beckett, write 2-3 sentences of honest, compassionate analysis of why the con
 
     const note = await callMeteredAnthropic(
       `You are Beckett, a communication coach. Be honest and constructive.
-${beckettBoundaryPrompt()}`,
+${beckettBoundaryPrompt()}${profilePrompt}`,
       [{ role: 'user', content: prompt }],
       150
     )
@@ -149,6 +153,7 @@ Return ONLY valid JSON: { "messages": [{ "role": "user" | "assistant", "content"
     const result = await callMeteredAnthropic(
       `You generate realistic ${isDating ? 'dating app' : 'workplace'} conversation previews.
 ${beckettBoundaryPrompt()}
+${profilePrompt}
 Return only valid JSON.`,
       [{ role: 'user', content: prompt }],
       400
@@ -169,7 +174,7 @@ Return only valid JSON.`,
     const context = draftContext || 'The user is practicing asking someone out on a dating app.'
     const note = await callMeteredAnthropic(
       `You are Beckett, a communication coach. ${context}
-${beckettBoundaryPrompt()}`,
+${beckettBoundaryPrompt()}${profilePrompt}`,
       [{ role: 'user', content: `The user wrote: "${userMessage}"\n\nIn one sentence (max 20 words), give honest specific feedback on this message. Return only the sentence.` }],
       80
     )
@@ -184,6 +189,7 @@ ${beckettBoundaryPrompt()}`,
     const isDating = practiceKind === 'dating'
     const system = `You are Beckett, giving honest feedback after a ${isDating ? 'dating app' : 'workplace'} practice conversation.
 ${beckettBoundaryPrompt()}
+${profilePrompt}
 Always respond with valid JSON only — no extra text.`
     const user = `You were playing the role of ${matchName || (isDating ? 'a dating app match' : 'the other person')} (${matchDescription || (isDating ? 'a dating app match' : 'a workplace conversation partner')}) in a practice conversation.
 

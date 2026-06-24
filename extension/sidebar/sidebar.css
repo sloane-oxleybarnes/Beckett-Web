@@ -548,7 +548,7 @@ body {
 
 .response-actions { display: flex; gap: 6px; }
 
-.copy-btn, .use-btn {
+.copy-btn, .use-btn, .draft-toolkit-improve-btn {
   flex: 1;
   padding: 5px 8px;
   border: none;
@@ -560,8 +560,8 @@ body {
   transition: opacity 0.15s;
 }
 
-.copy-btn { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
-.copy-btn:hover { background: var(--border); }
+.copy-btn, .draft-toolkit-improve-btn { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
+.copy-btn:hover, .draft-toolkit-improve-btn:hover { background: var(--border); }
 .use-btn { background: var(--primary); color: #fff; }
 .use-btn:hover { background: var(--primary-dark); }
 
@@ -767,6 +767,37 @@ body {
 
 .draft-result-card {
   border-color: var(--primary-mid);
+}
+
+.draft-toolkit-card {
+  background: var(--surface);
+}
+
+.draft-toolkit-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.draft-toolkit-item:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.draft-toolkit-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.draft-toolkit-text {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-muted);
 }
 
 .draft-note-empty {

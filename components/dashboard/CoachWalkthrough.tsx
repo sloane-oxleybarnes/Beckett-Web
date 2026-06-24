@@ -61,7 +61,7 @@ const walkthroughSteps: WalkthroughStep[] = [
     eyebrow: "About Me",
     title: "Your coaching profile shapes the support.",
     body:
-      "About Me stores strengths, triggers, communication preferences, neurodivergent context, and your communication toolkit. You can edit or delete items.",
+      "About Me stores strengths, triggers, neurodivergent context, and your communication toolkit. Beckett uses this to adjust practice, drafting, and feedback.",
     target: '[data-tour="nav-about-me"]',
     targetLabel: "Open About Me from the sidebar",
   },
@@ -69,7 +69,7 @@ const walkthroughSteps: WalkthroughStep[] = [
     eyebrow: "Settings",
     title: "You stay in control.",
     body:
-      "Settings is where account details, connected tools, beta diagnostics, and deletion requests live. Nothing here is locked away from you.",
+      "Settings is where account details, connected tools, Beckett's coaching settings, beta diagnostics, and deletion requests live.",
     target: '[data-tour="nav-settings"]',
     targetLabel: "Settings is always in the sidebar",
   },

@@ -21,6 +21,7 @@ type ToolkitItem = {
   label: string;
   content: string;
   created_at: string;
+  updated_at?: string;
 };
 
 const toolkitCourseTitles: Record<string, string> = {
@@ -60,6 +61,14 @@ function mergeCustomEntries(list: string[], value: string, max?: number) {
 function getCustomValues(values: string[], presetOptions: string[]) {
   const presets = new Set(presetOptions.map((item) => item.toLowerCase()));
   return values.filter((value) => !presets.has(value.toLowerCase()));
+}
+
+function toolkitCourseTitle(courseId: string) {
+  return toolkitCourseTitles[courseId] || courseId.replace(/-/g, " ");
+}
+
+function toolkitCategoryLabel(category: string) {
+  return category.replace(/[-_]/g, " ");
 }
 
 function OptionButton({
@@ -252,7 +261,13 @@ export default function AboutPage() {
   const [toolkitItems, setToolkitItems] = useState<ToolkitItem[]>([]);
   const [deletingToolkitId, setDeletingToolkitId] = useState<string | null>(null);
   const [toolkitFilter, setToolkitFilter] = useState("all");
+  const [toolkitSearch, setToolkitSearch] = useState("");
   const [showAllToolkit, setShowAllToolkit] = useState(false);
+  const [editingToolkitId, setEditingToolkitId] = useState<string | null>(null);
+  const [editingToolkitLabel, setEditingToolkitLabel] = useState("");
+  const [editingToolkitContent, setEditingToolkitContent] = useState("");
+  const [savingToolkitId, setSavingToolkitId] = useState<string | null>(null);
+  const [copiedToolkitId, setCopiedToolkitId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -326,7 +341,7 @@ export default function AboutPage() {
   }
 
   function addCustomStrengths() {
-    setStrengths((current) => mergeCustomEntries(current, customStrengths, 3));
+    setStrengths((current) => mergeCustomEntries(current, customStrengths));
     setCustomStrengths("");
   }
 
@@ -351,6 +366,47 @@ export default function AboutPage() {
     if (res.ok) setToolkitItems((current) => current.filter((item) => item.id !== id));
   }
 
+  function startEditingToolkitItem(item: ToolkitItem) {
+    setEditingToolkitId(item.id);
+    setEditingToolkitLabel(item.label);
+    setEditingToolkitContent(item.content);
+  }
+
+  function cancelEditingToolkitItem() {
+    setEditingToolkitId(null);
+    setEditingToolkitLabel("");
+    setEditingToolkitContent("");
+  }
+
+  async function saveToolkitItem(item: ToolkitItem) {
+    if (!editingToolkitLabel.trim() || !editingToolkitContent.trim()) return;
+    setSavingToolkitId(item.id);
+    const res = await fetch("/api/course-toolkit", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: item.id,
+        category: item.category,
+        label: editingToolkitLabel,
+        content: editingToolkitContent,
+      }),
+    });
+    setSavingToolkitId(null);
+    if (res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { item?: ToolkitItem };
+      if (data.item) {
+        setToolkitItems((current) => current.map((existing) => existing.id === item.id ? data.item! : existing));
+      }
+      cancelEditingToolkitItem();
+    }
+  }
+
+  async function copyToolkitItem(item: ToolkitItem) {
+    await navigator.clipboard.writeText(item.content).catch(() => {});
+    setCopiedToolkitId(item.id);
+    setTimeout(() => setCopiedToolkitId((current) => current === item.id ? null : current), 1500);
+  }
+
   const toolkitFilters = [
     { id: "all", label: "All" },
     ...Array.from(new Set(toolkitItems.map((item) => item.course_id))).map((courseId) => ({
@@ -358,8 +414,22 @@ export default function AboutPage() {
       label: toolkitCourseTitles[courseId] || courseId.replace(/-/g, " "),
     })),
   ];
-  const filteredToolkitItems = toolkitItems.filter((item) => toolkitFilter === "all" || item.course_id === toolkitFilter);
-  const visibleToolkitItems = showAllToolkit ? filteredToolkitItems : filteredToolkitItems.slice(0, 4);
+  const normalizedToolkitSearch = toolkitSearch.trim().toLowerCase();
+  const filteredToolkitItems = toolkitItems.filter((item) => {
+    const matchesCourse = toolkitFilter === "all" || item.course_id === toolkitFilter;
+    const matchesSearch = !normalizedToolkitSearch ||
+      [item.label, item.content, item.category, toolkitCourseTitle(item.course_id)]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedToolkitSearch);
+    return matchesCourse && matchesSearch;
+  });
+  const visibleToolkitItems = showAllToolkit ? filteredToolkitItems : filteredToolkitItems.slice(0, 8);
+  const groupedToolkitItems = visibleToolkitItems.reduce<Record<string, ToolkitItem[]>>((groups, item) => {
+    const key = item.course_id || "other";
+    groups[key] = [...(groups[key] || []), item];
+    return groups;
+  }, {});
 
   if (loading) {
     return (
@@ -378,22 +448,59 @@ export default function AboutPage() {
         About Me
       </h1>
       <p className="text-ink-mid text-sm mb-8">
-        Help Beckett understand how you communicate. This shapes practice sessions
-        and feedback.
+        Help Beckett understand how you communicate. This shapes practice sessions,
+        message analysis, drafting, Slack coaching, and course feedback.
       </p>
 
       <form onSubmit={save} className="space-y-5">
+        <div className="grid gap-3 md:grid-cols-3">
+          {[
+            {
+              title: "Strengths",
+              body: "Beckett preserves what already works in your communication instead of coaching around a generic ideal.",
+            },
+            {
+              title: "Triggers",
+              body: "Beckett adjusts explanations and suggested wording around moments that can spike stress or ambiguity.",
+            },
+            {
+              title: "Toolkit",
+              body: "Saved phrases can be reused or adapted in Practice, Slack, courses, and Draft/Edit support.",
+            },
+          ].map((item) => (
+            <div key={item.title} className="rounded-card border border-primary/15 bg-primary-light/35 p-4">
+              <p className="text-sm font-medium text-ink">{item.title}</p>
+              <p className="mt-1 text-xs leading-relaxed text-ink-mid">{item.body}</p>
+            </div>
+          ))}
+        </div>
+
         <div className="bg-white border border-border rounded-card p-5">
           <div className="mb-4">
             <h2 className="text-sm font-medium text-ink mb-1">Communication toolkit</h2>
             <p className="text-xs text-ink-light">
-              Phrases and questions you created in Beckett courses. Delete anything you do not want to keep.
+              Phrases and questions you created in Beckett courses. Search, edit, copy, or delete anything here.
             </p>
           </div>
           {toolkitItems.length === 0 ? (
             <p className="text-sm text-ink-light">Nothing saved yet. Course phrases will appear here after you build them.</p>
           ) : (
             <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                <input
+                  value={toolkitSearch}
+                  onChange={(e) => {
+                    setToolkitSearch(e.target.value);
+                    setShowAllToolkit(false);
+                  }}
+                  placeholder="Search saved phrases"
+                  className="w-full rounded-sm border border-border bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <p className="text-xs text-ink-light">
+                  {filteredToolkitItems.length} saved
+                </p>
+              </div>
+
               <div className="flex flex-wrap gap-2">
                 {toolkitFilters.map((filter) => (
                   <button
@@ -413,26 +520,91 @@ export default function AboutPage() {
                   </button>
                 ))}
               </div>
-              {visibleToolkitItems.map((item) => (
-                <div key={item.id} className="rounded-card border border-border bg-bg p-4">
-                  <div className="mb-2 flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-medium text-primary">{toolkitCourseTitles[item.course_id] || item.course_id.replace(/-/g, " ")}</p>
-                      <p className="text-[11px] uppercase tracking-wide text-ink-light">{item.label}</p>
+
+              {filteredToolkitItems.length === 0 ? (
+                <p className="rounded-card border border-dashed border-border bg-bg p-4 text-sm text-ink-light">
+                  No saved phrases match that search.
+                </p>
+              ) : (
+                Object.entries(groupedToolkitItems).map(([courseId, items]) => (
+                  <div key={courseId} className="space-y-3">
+                    <div className="flex items-center gap-2 border-b border-border pb-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-primary">
+                        {toolkitCourseTitle(courseId)}
+                      </p>
+                      <span className="text-xs text-ink-light">{items.length}</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => deleteToolkitItem(item.id)}
-                      disabled={deletingToolkitId === item.id}
-                      className="text-xs text-ink-light hover:text-red-600 disabled:opacity-50"
-                    >
-                      {deletingToolkitId === item.id ? "Deleting..." : "Delete"}
-                    </button>
+                    {items.map((item) => {
+                      const isEditing = editingToolkitId === item.id;
+                      return (
+                        <div key={item.id} className="rounded-card border border-border bg-bg p-4">
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[11px] uppercase tracking-wide text-ink-light">
+                                {toolkitCategoryLabel(item.category)}
+                              </p>
+                              {isEditing ? (
+                                <input
+                                  value={editingToolkitLabel}
+                                  onChange={(e) => setEditingToolkitLabel(e.target.value)}
+                                  className="mt-1 w-full rounded-sm border border-border bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+                                />
+                              ) : (
+                                <p className="text-sm font-medium text-ink">{item.label}</p>
+                              )}
+                            </div>
+                            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => copyToolkitItem(item)}
+                                className="text-xs text-primary hover:underline"
+                              >
+                                {copiedToolkitId === item.id ? "Copied" : "Copy"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => isEditing ? cancelEditingToolkitItem() : startEditingToolkitItem(item)}
+                                className="text-xs text-ink-light hover:text-primary"
+                              >
+                                {isEditing ? "Cancel" : "Edit"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteToolkitItem(item.id)}
+                                disabled={deletingToolkitId === item.id}
+                                className="text-xs text-ink-light hover:text-red-600 disabled:opacity-50"
+                              >
+                                {deletingToolkitId === item.id ? "Deleting..." : "Delete"}
+                              </button>
+                            </div>
+                          </div>
+                          {isEditing ? (
+                            <div className="space-y-3">
+                              <textarea
+                                value={editingToolkitContent}
+                                onChange={(e) => setEditingToolkitContent(e.target.value)}
+                                rows={4}
+                                className="w-full rounded-sm border border-border bg-white px-3 py-2 text-sm leading-relaxed text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => saveToolkitItem(item)}
+                                disabled={savingToolkitId === item.id || !editingToolkitLabel.trim() || !editingToolkitContent.trim()}
+                                className="rounded-pill bg-primary px-4 py-2 text-xs font-medium text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {savingToolkitId === item.id ? "Saving..." : "Save phrase"}
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="text-sm leading-relaxed text-ink">{item.content}</p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                  <p className="text-sm leading-relaxed text-ink">{item.content}</p>
-                </div>
-              ))}
-              {filteredToolkitItems.length > 4 && (
+                ))
+              )}
+              {filteredToolkitItems.length > 8 && (
                 <button
                   type="button"
                   onClick={() => setShowAllToolkit((current) => !current)}
