@@ -202,6 +202,14 @@ $('gmailReconnectBtn').onclick = () => {
   chrome.runtime.sendMessage({ type: 'OPEN_SETTINGS' });
 };
 
+$('analysisDetailsToggle').onclick = () => {
+  const panel = $('analysisMeta');
+  const toggle = $('analysisDetailsToggle');
+  const open = panel.hidden;
+  panel.hidden = !open;
+  toggle.setAttribute('aria-expanded', String(open));
+};
+
 // ── Voice calibration badge ───────────────────────────────────
 
 function updateVoiceBadge() {
@@ -279,6 +287,8 @@ function clearResults() {
   $('askSection').hidden = true;
   $('askAnswerCard').hidden = true;
   $('contactStrip').hidden = true;
+  $('analysisDetails').hidden = true;
+  $('analysisDetailsToggle').setAttribute('aria-expanded', 'false');
   $('analysisMeta').hidden = true;
   $('slackReconnectBtn').hidden = true;
   $('gmailReconnectCard').hidden = true;
@@ -312,11 +322,15 @@ function showResults(data, isSafePerson) {
 }
 
 function renderAnalysisMetadata(metadata) {
+  const detailsShell = $('analysisDetails');
   const card = $('analysisMeta');
   const text = $('analysisMetaText');
+  const summary = $('analysisDetailsSummary');
+  const toggle = $('analysisDetailsToggle');
   const reconnect = $('slackReconnectBtn');
   const gmailReconnectCard = $('gmailReconnectCard');
   if (!metadata) {
+    detailsShell.hidden = true;
     card.hidden = true;
     gmailReconnectCard.hidden = true;
     return;
@@ -350,7 +364,17 @@ function renderAnalysisMetadata(metadata) {
   }
 
   text.textContent = details.join(' · ');
-  card.hidden = false;
+  summary.textContent = buildAnalysisDetailsSummary(metadata, sourceLabel, count);
+  detailsShell.hidden = false;
+  card.hidden = true;
+  toggle.setAttribute('aria-expanded', 'false');
+}
+
+function buildAnalysisDetailsSummary(metadata, sourceLabel, count) {
+  if (metadata.platform === 'slack' && metadata.slackConnected === false) return 'Reconnect available';
+  if (metadata.contextStatus === 'full_thread') return `Full thread${count ? ` · ${count}` : ''}`;
+  if (metadata.contextStatus === 'visible_context') return 'Visible context';
+  return sourceLabel;
 }
 
 function contextStatusLabel(status) {

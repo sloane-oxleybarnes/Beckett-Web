@@ -107,14 +107,6 @@
       <!-- Message analysis results -->
       <div id="results" hidden>
 
-        <div class="analysis-meta" id="analysisMeta" hidden>
-          <div>
-            <div class="card-label">Analysis details</div>
-            <p class="analysis-meta-text" id="analysisMetaText"></p>
-          </div>
-          <button class="btn-text" id="slackReconnectBtn" hidden>Reconnect Slack</button>
-        </div>
-
         <div class="gmail-reconnect-card" id="gmailReconnectCard" hidden>
           <div>
             <div class="card-label" id="gmailReconnectTitle">Reconnect Gmail</div>
@@ -176,6 +168,26 @@
           <div class="feedback-improve-actions">
             <button class="btn-save" id="submitFeedbackText">Send</button>
             <button class="btn-text" id="dismissFeedback">Dismiss</button>
+          </div>
+        </div>
+
+        <div class="analysis-details" id="analysisDetails" hidden>
+          <button
+            class="analysis-details-toggle"
+            id="analysisDetailsToggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="analysisMeta"
+          >
+            <span>Analysis details</span>
+            <span class="analysis-details-summary" id="analysisDetailsSummary">Context info</span>
+          </button>
+          <div class="analysis-meta" id="analysisMeta" hidden>
+            <div>
+              <div class="card-label">Context used</div>
+              <p class="analysis-meta-text" id="analysisMetaText"></p>
+            </div>
+            <button class="btn-text" id="slackReconnectBtn" hidden>Reconnect Slack</button>
           </div>
         </div>
       </div>

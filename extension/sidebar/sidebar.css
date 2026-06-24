@@ -312,6 +312,46 @@ body {
 
 /* ── Analysis metadata ───────────────────────────────────────── */
 
+.analysis-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.analysis-details-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 7px 9px;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+
+.analysis-details-toggle:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.analysis-details-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-light);
+  font-weight: 500;
+}
+
 .analysis-meta {
   display: flex;
   align-items: center;
