@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AddToSlackButton from "@/components/integrations/AddToSlackButton";
 
@@ -9,7 +8,6 @@ type WalkthroughStep = {
   title: string;
   body: string;
   target?: string;
-  targetLabel?: string;
   slackConnect?: boolean;
 };
 
@@ -32,8 +30,7 @@ const walkthroughSteps: WalkthroughStep[] = [
     title: "Use Start here when you are not sure what to do next.",
     body:
       "If you have a real conversation coming up, start with Practice. If nothing is urgent, pick a Skill and build a repeatable tool.",
-    target: '[data-tour="start-practice"]',
-    targetLabel: "Click Practice a conversation",
+    target: '[data-tour="start-here"]',
   },
   {
     eyebrow: "Practice",
@@ -41,23 +38,20 @@ const walkthroughSteps: WalkthroughStep[] = [
     body:
       "Beckett asks who you are talking to, how you know them, their style, and what conversation you want to practice before the roleplay starts.",
     target: '[data-tour="nav-practice"]',
-    targetLabel: "Practice also lives in the sidebar",
   },
   {
     eyebrow: "Skills",
     title: "Skills are coached workshops.",
     body:
       "Skills are for common patterns, like introducing yourself to a new colleague or asking for clarity at work. You can save progress and come back later.",
-    target: '[data-tour="start-skills"]',
-    targetLabel: "Click Pick a skill",
+    target: '[data-tour="nav-skills"]',
   },
   {
     eyebrow: "Connections",
     title: "Connect the tools Beckett can coach in.",
     body:
-      "The setup checklist shows Chrome extension, Gmail, and Slack status. Once Slack is connected, type /beckett in Slack Desktop for private rewrite, decode, draft, prep, tone, and follow-up help.",
+      "Beckett currently integrates with Chrome extension, Gmail, and Slack. Connect all of these features to use Beckett in all of your work settings.",
     target: '[data-tour="beta-setup"]',
-    targetLabel: "Check setup status here",
     slackConnect: true,
   },
   {
@@ -66,7 +60,6 @@ const walkthroughSteps: WalkthroughStep[] = [
     body:
       "About Me stores strengths, triggers, communication preferences, neurodivergent context, and your communication toolkit. You can edit or delete items.",
     target: '[data-tour="nav-about-me"]',
-    targetLabel: "Open About Me from the sidebar",
   },
   {
     eyebrow: "Settings",
@@ -74,7 +67,6 @@ const walkthroughSteps: WalkthroughStep[] = [
     body:
       "Settings is where account details, connected tools, beta diagnostics, and deletion requests live. Nothing here is locked away from you.",
     target: '[data-tour="nav-settings"]',
-    targetLabel: "Settings is always in the sidebar",
   },
 ];
 
@@ -200,7 +192,7 @@ export default function CoachWalkthrough({ shouldShow }: CoachWalkthroughProps) 
       {targetRect && (
         <>
           <div
-            className="pointer-events-none fixed z-[81] rounded-card border-2 border-primary bg-primary-light/25 shadow-[0_0_0_9999px_rgba(186,117,23,0.12)] transition-all"
+            className="pointer-events-none fixed z-[81] rounded-card border-2 border-primary bg-transparent shadow-[0_0_0_9999px_rgba(24,20,16,0.10)] ring-4 ring-primary/15 transition-all"
             style={{
               top: targetRect.top - 8,
               left: targetRect.left - 8,
@@ -253,43 +245,10 @@ export default function CoachWalkthrough({ shouldShow }: CoachWalkthroughProps) 
               {current.body}
             </p>
 
-            {current.targetLabel && (
-              <div className="mt-5 rounded-card border border-primary/20 bg-primary-light/40 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-primary">Where to click</p>
-                <p className="mt-1 text-sm text-ink">{current.targetLabel}</p>
-              </div>
-            )}
-
             {current.slackConnect && (
               <div className="mt-4 rounded-card border border-border bg-bg/70 p-3">
                 <p className="mb-2 text-xs font-medium text-ink">Connect Slack from Beckett</p>
                 <AddToSlackButton href="/api/slack/connect" onClick={() => void finish()} />
-              </div>
-            )}
-
-            {isLast && (
-              <div className="mt-5 grid gap-2 sm:grid-cols-3">
-                <Link
-                  href="/dashboard/practice"
-                  onClick={() => void finish()}
-                  className="rounded-pill bg-primary px-4 py-2 text-center text-xs font-medium text-white hover:bg-primary-dark"
-                >
-                  Start practice
-                </Link>
-                <Link
-                  href="/dashboard/skills"
-                  onClick={() => void finish()}
-                  className="rounded-pill border border-border bg-white px-4 py-2 text-center text-xs font-medium text-ink hover:bg-primary-light"
-                >
-                  Explore skills
-                </Link>
-                <button
-                  type="button"
-                  onClick={finish}
-                  className="rounded-pill border border-border bg-white px-4 py-2 text-xs font-medium text-ink hover:bg-primary-light"
-                >
-                  Stay here
-                </button>
               </div>
             )}
 

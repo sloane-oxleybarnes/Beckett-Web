@@ -124,7 +124,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       </section>
 
       <section className={`mb-6 grid gap-5 ${setupComplete ? "" : "lg:grid-cols-[1fr_1fr]"}`}>
-        <div className="rounded-card border border-primary/20 bg-primary-light/40 p-6">
+        <div data-tour="start-here" className="rounded-card border border-primary/20 bg-primary-light/40 p-6">
           <p className="text-xs font-medium uppercase tracking-wide text-primary">Start here</p>
           <h2 className="mt-2 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>
             What should I do next?
