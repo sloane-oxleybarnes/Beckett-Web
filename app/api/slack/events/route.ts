@@ -30,17 +30,18 @@ type SlackEventEnvelope = {
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
-  const verification = verifySlackRequest(req, rawBody);
-  if (!verification.ok) {
-    return NextResponse.json({ error: verification.message }, { status: verification.status });
-  }
-
   const body = JSON.parse(rawBody || "{}") as SlackEventEnvelope;
+
   if (body.type === "url_verification" && body.challenge) {
     return new NextResponse(body.challenge, {
       status: 200,
       headers: { "content-type": "text/plain; charset=utf-8" },
     });
+  }
+
+  const verification = verifySlackRequest(req, rawBody);
+  if (!verification.ok) {
+    return NextResponse.json({ error: verification.message }, { status: verification.status });
   }
 
   const event = body.event;
