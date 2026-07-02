@@ -1,7 +1,7 @@
 {
   "display_information": {
     "name": "Beckett Staging",
-    "description": "Workplace communication coaching for Slack testing.",
+    "description": "Neurodivergent workplace communication coaching in Slack.",
     "background_color": "#f3e6cf"
   },
   "features": {
@@ -12,7 +12,7 @@
     "slash_commands": [
       {
         "command": "/beckett",
-        "description": "Ask Beckett for workplace communication coaching.",
+        "description": "Decode, draft, or prep for workplace conversations.",
         "url": "https://beckett-git-staging-sloane-s-projects1.vercel.app/api/slack/commands",
         "should_escape": false
       }
@@ -22,7 +22,7 @@
         "name": "Ask Beckett",
         "type": "message",
         "callback_id": "beckett_message_context",
-        "description": "Get private coaching on this Slack message."
+        "description": "Get private coaching on this Slack message or thread."
       }
     ]
   },

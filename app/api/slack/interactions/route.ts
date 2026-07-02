@@ -32,6 +32,8 @@ type SlackInteractionPayload = {
     text?: string;
     user?: string;
     username?: string;
+    ts?: string;
+    thread_ts?: string;
     attachments?: Array<{ text?: string; fallback?: string }>;
   };
   channel?: { id?: string; name?: string };
@@ -86,15 +88,21 @@ function parseSlashActionValue(value: string): { requestId: string; intent: Slac
   try {
     const parsed = JSON.parse(value) as { requestId?: unknown; intent?: unknown };
     if (typeof parsed.requestId !== "string") return null;
-    const intent =
-      parsed.intent === "rewrite" ||
-      parsed.intent === "decode" ||
-      parsed.intent === "draft" ||
-      parsed.intent === "prep" ||
-      parsed.intent === "tone" ||
-      parsed.intent === "followup"
-        ? parsed.intent
-        : "general";
+    const validIntents: SlackCoachingIntent[] = [
+      "rewrite",
+      "decode",
+      "draft",
+      "prep",
+      "tone",
+      "followup",
+      "respond",
+      "clarity",
+      "boundary",
+      "practice",
+    ];
+    const intent = validIntents.includes(parsed.intent as SlackCoachingIntent)
+      ? (parsed.intent as SlackCoachingIntent)
+      : "general";
 
     return { requestId: parsed.requestId, intent };
   } catch {
@@ -329,6 +337,62 @@ async function handleSlashButtonResponse({
   });
 }
 
+async function sendMessageShortcutResponse({
+  origin,
+  payload,
+  messageText,
+}: {
+  origin: string;
+  payload: SlackInteractionPayload;
+  messageText: string;
+}) {
+  const teamId = payload.team?.id || "";
+  const slackUserId = payload.user?.id || "";
+  const responseUrl = payload.response_url || "";
+
+  try {
+    const user = await lookupSlackConnectedUser(teamId, slackUserId);
+    if (!user) {
+      await postSlackResponse(responseUrl, slackConnectText(origin));
+      return;
+    }
+
+    if (!isAllowedSlackPlan(user)) {
+      await postSlackResponse(responseUrl, "Beckett Slack coaching is available for beta and pro users.");
+      return;
+    }
+
+    const channelContext = await fetchSlackConversationContext({
+      accessToken: user.accessToken,
+      channelId: payload.channel?.id,
+      channelName: payload.channel?.name,
+      messageTs: payload.message?.ts,
+      threadTs: payload.message?.thread_ts,
+    });
+    const combinedContext = [
+      "Selected Slack message:",
+      messageText,
+      channelContext.text ? `\n${channelContext.text}` : "",
+    ].filter(Boolean).join("\n");
+    const response = await runSlackCoaching({
+      user,
+      action: "message_shortcut",
+      prompt: buildShortcutPrompt(payload),
+      sourceLabel: "slack_message_shortcut",
+      messageText: combinedContext,
+      contextStatus: channelContext.status,
+      contextFailureReason: channelContext.failureReason,
+      contextMessageCount: channelContext.messageCount,
+      intent: "respond",
+    });
+
+    const contextNote = slackContextUserNote(channelContext);
+    await postSlackResponse(responseUrl, contextNote ? `${contextNote}\n\n${response}` : response);
+  } catch (error) {
+    await postSlackResponse(responseUrl, `Beckett could not finish that request: ${handleSlackAiError(error)}`);
+  }
+}
+
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const verification = verifySlackRequest(req, rawBody);
@@ -385,30 +449,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  try {
-    const user = await lookupSlackConnectedUser(teamId, slackUserId);
-    if (!user) {
-      await postSlackResponse(responseUrl, slackConnectText(req.nextUrl.origin));
-      return NextResponse.json({ ok: true });
-    }
-
-    if (!isAllowedSlackPlan(user)) {
-      await postSlackResponse(responseUrl, "Beckett Slack coaching is available for beta and pro users.");
-      return NextResponse.json({ ok: true });
-    }
-
-    const response = await runSlackCoaching({
-      user,
-      action: "message_shortcut",
-      prompt: buildShortcutPrompt(payload),
-      sourceLabel: "slack_message_shortcut",
+  await postSlackResponse(responseUrl, "Beckett is reading this Slack context privately...");
+  scheduleSlackBackgroundTask(
+    "Slack message shortcut response failed",
+    sendMessageShortcutResponse({
+      origin: req.nextUrl.origin,
+      payload,
       messageText,
-    });
-
-    await postSlackResponse(responseUrl, response);
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    await postSlackResponse(responseUrl, `Beckett could not finish that request: ${handleSlackAiError(error)}`);
-    return NextResponse.json({ ok: true });
-  }
+    })
+  );
+  return NextResponse.json({ ok: true });
 }

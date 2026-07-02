@@ -6,10 +6,12 @@ This is the staging-first Slack app path for using Beckett inside Slack Desktop.
 
 - Slash command: `/beckett`
 - Message shortcut: `Ask Beckett`
+- Hackathon positioning: Beckett prepares neurodivergent workers for the conversations that matter at work
 - Signed Slack request verification with `SLACK_SIGNING_SECRET`
 - Beckett account matching through the existing `user_integrations` Slack connection
 - Ephemeral coaching responses so Beckett does not post into public Slack channels
 - Recent context in public channels, private channels, DMs, and group DMs after the user reconnects with the staging scopes
+- Tool-style agent layer for `analyze_slack_thread`, `draft_slack_reply`, `coach_for_clarity`, `prep_difficult_conversation`, `summarize_relationship_context`, and `explain_tone_without_over_inference`
 
 ## Staging Setup
 
@@ -39,14 +41,27 @@ Use Slack Desktop or the Slack web app:
    - Expected: Beckett shows Quick answer and Longer explanation buttons, then returns rewrite-focused coaching after a button click.
 3. Run `/beckett decode "Sure, sounds fine."`, `/beckett draft ask my manager for clearer priorities this week`, `/beckett prep I need to give a teammate feedback`, `/beckett tone "I need this by Friday."`, and `/beckett followup remind Avery about the readout`.
    - Expected: Each command keeps the same private Quick/Longer flow and returns coaching that matches the selected task.
-4. Run `/beckett is this too direct? "I need this by Friday."`.
+4. Run `/beckett respond help me answer this without sounding defensive`, `/beckett boundary I cannot take on another project this week`, `/beckett clarity I do not know what "clean this up" means`, and `/beckett practice my 1:1 with my manager about workload`.
+   - Expected: Beckett returns neurodivergent-friendly workplace coaching with visible uncertainty boundaries and concrete wording.
+5. Run `/beckett is this too direct? "I need this by Friday."`.
    - Expected: Freeform prompts still work.
-5. Use the message shortcut on a real Slack message.
-   - Expected: Beckett returns an ephemeral note about tone, context, and what to say next.
-6. Test with a Slack account that has not connected Slack in Beckett Settings.
+6. Use the message shortcut on a real Slack message.
+   - Expected: Beckett returns an ephemeral note about what is visible, what is only a possible interpretation, what to do next, and reply options.
+7. Test with a Slack account that has not connected Slack in Beckett Settings.
    - Expected: Beckett asks the user to connect Slack first.
-7. Test `/beckett` in a private channel and a group DM after reconnecting.
+8. Test `/beckett` in a private channel and a group DM after reconnecting.
    - Expected: Beckett can include recent context; if Slack denies access, Beckett still answers from the prompt and says context was unavailable.
+
+## Hackathon Demo Story
+
+1. A user sees a vague manager Slack thread before a 1:1.
+2. The user clicks `Ask Beckett`.
+3. Beckett explains what is visible, what is uncertain, and what not to over-read.
+4. Beckett suggests the next move and 2-3 private reply options.
+5. The user runs `/beckett prep I need to talk to my manager about workload in my 1:1`.
+6. Beckett produces talking points, an opening line, likely pushback, and a follow-up draft.
+
+Closing line: Beckett helps neurodivergent workers communicate clearly inside the tools where work already happens.
 
 ## Production Notes
 

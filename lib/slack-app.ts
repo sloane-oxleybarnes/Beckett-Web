@@ -7,6 +7,7 @@ import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { formatCoachingProfileForPrompt } from "@/lib/coaching-profile";
 import { getPublicSiteUrl } from "@/lib/deployment-env";
 import { supabaseAdmin } from "@/lib/server-admin";
+import { selectSlackAgentTool, slackAgentToolInstruction } from "@/lib/slack-agent-tools";
 
 const MAX_SLACK_TEXT_LENGTH = 2800;
 const MAX_SLACK_CONTEXT_MESSAGES = 8;
@@ -19,7 +20,18 @@ export const SLACK_SLASH_LONGER_ACTION_ID = "beckett_slash_longer";
 export const REQUIRED_SLACK_USER_SCOPES = ["channels:history", "groups:history", "im:history", "mpim:history", "users:read"];
 
 export type SlackResponseDetail = "quick" | "longer";
-export type SlackCoachingIntent = "general" | "rewrite" | "decode" | "draft" | "prep" | "tone" | "followup";
+export type SlackCoachingIntent =
+  | "general"
+  | "rewrite"
+  | "decode"
+  | "draft"
+  | "prep"
+  | "tone"
+  | "followup"
+  | "respond"
+  | "clarity"
+  | "boundary"
+  | "practice";
 export type SlackBlock = Record<string, unknown>;
 export type SlackContextStatus = "available" | "unavailable";
 export type SlackContextFailureReason =
@@ -81,6 +93,7 @@ type SlackHistoryMessage = {
   text?: string;
   subtype?: string;
   ts?: string;
+  thread_ts?: string;
 };
 
 type SlackUserInfo = {
@@ -266,6 +279,14 @@ export function slackAskedLabel(intent: SlackCoachingIntent = "general") {
       return "You asked Beckett to check tone:";
     case "followup":
       return "You asked Beckett to follow up:";
+    case "respond":
+      return "You asked Beckett to help you respond:";
+    case "clarity":
+      return "You asked Beckett to help you ask for clarity:";
+    case "boundary":
+      return "You asked Beckett to help with a boundary:";
+    case "practice":
+      return "You asked Beckett to help you practice:";
     default:
       return "You asked:";
   }
@@ -291,6 +312,14 @@ function slackIntentInstruction(intent: SlackCoachingIntent) {
       return "Slack task: Check how the wording may land. Identify tone risks, then offer a cleaner version if useful.";
     case "followup":
       return "Slack task: Help write or improve a follow-up. Keep it specific, low-pressure, and clear about the next step.";
+    case "respond":
+      return "Slack task: Help the user respond to the Slack context. Explain the strategy briefly, then provide 2-3 ready-to-use reply options labeled Direct but kind, Warm and collaborative, and Concise.";
+    case "clarity":
+      return "Slack task: Help the user ask for clarity. Identify the missing information, draft a specific answerable question, and remove unnecessary apologies.";
+    case "boundary":
+      return "Slack task: Help the user set a workplace boundary. Keep it firm, kind, specific, and realistic for Slack.";
+    case "practice":
+      return "Slack task: Prepare the user to practice a difficult workplace conversation. Give an opening line, likely pushback, and a short rehearsal plan.";
     default:
       return "Slack task: General Beckett coaching. Answer the user's specific request directly.";
   }
@@ -414,23 +443,43 @@ export async function fetchSlackConversationContext({
   accessToken,
   channelId,
   channelName,
+  messageTs,
+  threadTs,
 }: {
   accessToken: string | null;
   channelId?: string | null;
   channelName?: string | null;
+  messageTs?: string | null;
+  threadTs?: string | null;
 }) {
   if (!accessToken) return slackUnavailable("missing_token");
   if (!channelId) return slackUnavailable("missing_channel");
 
-  const data = await slackApiFetch<{ messages?: SlackHistoryMessage[] }>(
-    accessToken,
-    "conversations.history",
-    new URLSearchParams({
-      channel: channelId,
-      limit: String(MAX_SLACK_CONTEXT_MESSAGES),
-      inclusive: "true",
-    })
-  ).catch(() => null);
+  const fetchRecentHistory = () =>
+    slackApiFetch<{ messages?: SlackHistoryMessage[] }>(
+      accessToken,
+      "conversations.history",
+      new URLSearchParams({
+        channel: channelId,
+        limit: String(MAX_SLACK_CONTEXT_MESSAGES),
+        inclusive: "true",
+      })
+    ).catch(() => null);
+
+  const replyTs = threadTs || messageTs || null;
+  const replyData = replyTs
+    ? await slackApiFetch<{ messages?: SlackHistoryMessage[] }>(
+        accessToken,
+        "conversations.replies",
+        new URLSearchParams({
+          channel: channelId,
+          ts: replyTs,
+          limit: String(MAX_SLACK_CONTEXT_MESSAGES),
+          inclusive: "true",
+        })
+      ).catch(() => null)
+    : null;
+  const data = replyData?.ok ? replyData : await fetchRecentHistory();
 
   if (!data?.ok) {
     const reason =
@@ -452,7 +501,8 @@ export async function fetchSlackConversationContext({
   if (!formatted.length) return slackUnavailable("no_messages");
 
   const label = channelName ? `#${channelName}` : "this Slack conversation";
-  const context = [`Recent Slack context from ${label} (oldest to newest):`, ...formatted].join("\n");
+  const contextLabel = replyData?.ok ? `Slack thread context from ${label}` : `Recent Slack context from ${label}`;
+  const context = [`${contextLabel} (oldest to newest):`, ...formatted].join("\n");
   return {
     text:
       context.length <= MAX_SLACK_CONTEXT_LENGTH
@@ -524,18 +574,36 @@ export async function runSlackCoaching({
       contextMessageCount: contextMessageCount || 0,
       responseDetail: responseDetail || null,
       intent,
+      agentTool: selectSlackAgentTool({
+        intent,
+        action,
+        hasSlackContext: Boolean(messageText || contextStatus === "available"),
+      }),
     },
+  });
+
+  const agentTool = selectSlackAgentTool({
+    intent,
+    action,
+    hasSlackContext: Boolean(messageText || contextStatus === "available"),
   });
 
   const system = `You are Beckett, a workplace and workplace-adjacent communication coach for neurodivergent professionals.
 You are responding inside Slack, so be concise, practical, and easy to scan.
 Help the user understand tone, subtext, context, next steps, and possible replies.
 Do not claim certainty about another person's intent. Use phrases like "may" or "likely" when interpreting tone.
+Do not hallucinate reactions, comfort, rapport, agreement, annoyance, or pushback that is not visible in the provided Slack text.
+Always separate "what is visible" from "possible interpretation" when decoding a Slack message or thread.
+If the user is over-reading an ambiguous message, say what is not knowable from the thread.
 Avoid generic encouragement. Give concrete language the user could use.
 Format with short headings and bullets. Do not use markdown tables.
 Do not repeat the user's request at the top of the answer; Beckett will add that outside the AI response.
+For reply drafting, include 2-3 Slack-ready options when useful: Direct but kind, Warm and collaborative, and Concise.
+For difficult conversation prep, include talking points, an opening sentence, likely pushback, and a short follow-up draft.
+Beckett suggests and coaches; it does not tell the user to act automatically.
 Do not add generic privacy or shared-channel warnings just because Slack context includes both personal and work topics.
 Only mention privacy, shared-channel, or workplace policy risk when the user's request is about posting in a public/shared channel, the context clearly includes sensitive personal information, or the requested message could create a concrete workplace safety or policy concern.
+${slackAgentToolInstruction(agentTool)}
 ${beckettBoundaryPrompt()}`;
 
   const coachingProfileContext = formatCoachingProfileForPrompt(
@@ -589,6 +657,7 @@ ${prompt}${messageLine}`;
       contextMessageCount: contextMessageCount || 0,
       responseDetail: responseDetail || null,
       intent,
+      agentTool,
     },
   });
 

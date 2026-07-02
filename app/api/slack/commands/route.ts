@@ -8,7 +8,18 @@ const MAX_SLACK_ASKED_PROMPT_LENGTH = 650;
 const SLACK_SLASH_QUICK_ACTION_ID = "beckett_slash_quick";
 const SLACK_SLASH_LONGER_ACTION_ID = "beckett_slash_longer";
 
-type SlackCoachingIntent = "general" | "rewrite" | "decode" | "draft" | "prep" | "tone" | "followup";
+type SlackCoachingIntent =
+  | "general"
+  | "rewrite"
+  | "decode"
+  | "draft"
+  | "prep"
+  | "tone"
+  | "followup"
+  | "respond"
+  | "clarity"
+  | "boundary"
+  | "practice";
 type SlackBlock = Record<string, unknown>;
 type SlackMessageOptions = {
   blocks?: SlackBlock[];
@@ -165,6 +176,14 @@ function slackAskedLabel(intent: SlackCoachingIntent = "general") {
       return "You asked Beckett to check tone:";
     case "followup":
       return "You asked Beckett to follow up:";
+    case "respond":
+      return "You asked Beckett to help you respond:";
+    case "clarity":
+      return "You asked Beckett to help you ask for clarity:";
+    case "boundary":
+      return "You asked Beckett to help with a boundary:";
+    case "practice":
+      return "You asked Beckett to help you practice:";
     default:
       return "You asked:";
   }
@@ -217,6 +236,10 @@ const slashSubcommands: Record<
   string,
   { intent: Exclude<SlackCoachingIntent, "general">; missingText: string }
 > = {
+  respond: {
+    intent: "respond",
+    missingText: "Add what you need help responding to after `/beckett respond`.",
+  },
   rewrite: {
     intent: "rewrite",
     missingText: 'Add the draft message after `/beckett rewrite`, like `/beckett rewrite "Any update on this?"`.',
@@ -232,6 +255,18 @@ const slashSubcommands: Record<
   prep: {
     intent: "prep",
     missingText: "Add the conversation you want to prepare for after `/beckett prep`.",
+  },
+  practice: {
+    intent: "practice",
+    missingText: "Add the conversation you want to practice after `/beckett practice`.",
+  },
+  clarity: {
+    intent: "clarity",
+    missingText: "Add what feels unclear after `/beckett clarity`.",
+  },
+  boundary: {
+    intent: "boundary",
+    missingText: "Add the boundary you need help setting after `/beckett boundary`.",
   },
   tone: {
     intent: "tone",
@@ -287,8 +322,12 @@ function helpText(command = "/beckett") {
     "",
     `Try \`${command} rewrite "Any update on this?"\``,
     `Try \`${command} decode "Sure, sounds fine."\``,
+    `Try \`${command} respond help me answer this without sounding defensive\``,
     `Try \`${command} draft ask my manager for clearer priorities this week\``,
     `Try \`${command} prep I need to tell a teammate their handoffs are too vague\``,
+    `Try \`${command} boundary I cannot take on another project this week\``,
+    `Try \`${command} clarity I do not know what "clean this up" means\``,
+    `Try \`${command} practice my 1:1 with my manager about workload\``,
     `Try \`${command} tone "I need this by Friday."\``,
     `Try \`${command} followup remind Avery about the readout\``,
     "",
