@@ -61,6 +61,7 @@ export type SlackConnectedUser = {
   name: string | null;
   plan: string | null;
   accessToken: string | null;
+  botAccessToken: string | null;
   teamName: string | null;
   grantedUserScopes: string[];
   missingUserScopes: string[];
@@ -366,6 +367,7 @@ export async function lookupSlackConnectedUser(teamId: string, slackUserId: stri
     name: profile.display_name || profile.first_name || profile.full_name || null,
     plan: profile.plan || "free",
     accessToken: integration.access_token || null,
+    botAccessToken: typeof metadata.access_token === "string" ? metadata.access_token : null,
     teamName: integration.external_team_name || null,
     grantedUserScopes,
     missingUserScopes,
@@ -381,6 +383,52 @@ export async function lookupSlackConnectedUser(teamId: string, slackUserId: stri
     neurodivergentContextOther: profile.neurodivergent_context_other || null,
     toolkitItems: toolkitItems || [],
   } satisfies SlackConnectedUser;
+}
+
+export async function slackApiPost<T>(accessToken: string, method: string, body: Record<string, unknown>) {
+  const res = await fetch(`https://slack.com/api/${method}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify(body),
+  });
+  return res.json().catch(() => ({})) as Promise<T & { ok?: boolean; error?: string }>;
+}
+
+export async function postSlackAgentMessage({
+  botAccessToken,
+  slackUserId,
+  text,
+  title,
+}: {
+  botAccessToken: string | null;
+  slackUserId: string;
+  text: string;
+  title: string;
+}) {
+  if (!botAccessToken) return { ok: false, error: "missing_bot_token" };
+
+  const opened = await slackApiPost<{ channel?: { id?: string } }>(botAccessToken, "conversations.open", {
+    users: slackUserId,
+  });
+  const channelId = opened.channel?.id;
+  if (!opened.ok || !channelId) return { ok: false, error: opened.error || "dm_open_failed" };
+
+  const posted = await slackApiPost<{ ts?: string }>(botAccessToken, "chat.postMessage", {
+    channel: channelId,
+    text: truncateSlackText(text),
+  });
+  if (!posted.ok || !posted.ts) return { ok: false, error: posted.error || "agent_post_failed" };
+
+  await slackApiPost(botAccessToken, "assistant.threads.setTitle", {
+    channel_id: channelId,
+    thread_ts: posted.ts,
+    title: title.slice(0, 80),
+  }).catch(() => null);
+
+  return { ok: true, channelId, ts: posted.ts };
 }
 
 export function isAllowedSlackPlan(user: SlackConnectedUser) {
@@ -544,7 +592,7 @@ export async function runSlackCoaching({
   intent = "general",
 }: {
   user: SlackConnectedUser;
-  action: "slash_command" | "message_shortcut";
+  action: "slash_command" | "message_shortcut" | "agent_message";
   prompt: string;
   sourceLabel: string;
   messageText?: string | null;

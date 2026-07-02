@@ -22,7 +22,8 @@ Instead of acting like a generic chatbot or writing assistant, Beckett guides th
 3. Beckett explains what is visible in the thread, what is only a possible interpretation, and what not to over-read.
 4. Beckett suggests a next step and 2-3 reply options: Direct but kind, Warm and collaborative, and Concise.
 5. The user runs `/beckett prep I need to talk to my manager about workload in my 1:1`.
-6. Beckett creates talking points, an opening line, likely pushback, and a follow-up draft.
+6. Beckett opens a short modal to gather the person, goal, evidence, and likely pushback.
+7. Beckett moves the coaching into the Slack Agent/Split View Messages surface with talking points, an opening line, likely pushback, a practice prompt, and a follow-up draft.
 
 ## Demo Workspace Threads
 
@@ -63,9 +64,12 @@ flowchart LR
   C --> D["Beckett account + Slack integration lookup"]
   D --> E["Slack agent tool selector"]
   E --> F["Anthropic coaching call with Beckett guardrails"]
-  F --> G["Private ephemeral Slack response"]
+  F --> G["Slack Agent/Split View coach panel"]
+  F --> I["Private ephemeral fallback"]
   D --> H["Optional recent Slack context"]
   H --> E
+  B --> J["Prep modal intake"]
+  J --> E
 ```
 
 ## Privacy Notes
@@ -75,6 +79,7 @@ flowchart LR
 - Beckett does not store full Slack history by default.
 - Beckett separates visible evidence from possible interpretation.
 - Beckett does not infer diagnosis or hidden intent.
+- Modal intake is used only to collect the context Beckett needs for the requested prep session.
 
 ## Demo Script
 
@@ -86,6 +91,8 @@ Demo:
 3. Highlight that Beckett names visible evidence and uncertainty separately.
 4. Show reply options.
 5. Run `/beckett prep I need to talk to my manager about workload in my 1:1`.
-6. Show talking points, opening line, likely pushback, and follow-up draft.
+6. Show the `Prep with Beckett` modal.
+7. Submit context and show the coaching in the Slack Agent/Split View panel.
+8. Show talking points, opening line, likely pushback, practice prompt, and follow-up draft.
 
 Close: "Beckett helps neurodivergent workers communicate clearly inside the tools where work already happens."

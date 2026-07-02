@@ -5,6 +5,7 @@ import {
   handleSlackAiError,
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
+  postSlackAgentMessage,
   postSlackResponse,
   runSlackCoaching,
   scheduleSlackBackgroundTask,
@@ -28,6 +29,13 @@ type SlackInteractionPayload = {
   team?: { id?: string; domain?: string };
   user?: { id?: string; username?: string };
   actions?: Array<{ action_id?: string; value?: string }>;
+  view?: {
+    callback_id?: string;
+    private_metadata?: string;
+    state?: {
+      values?: Record<string, Record<string, { type?: string; value?: string }>>;
+    };
+  };
   message?: {
     text?: string;
     user?: string;
@@ -37,6 +45,16 @@ type SlackInteractionPayload = {
     attachments?: Array<{ text?: string; fallback?: string }>;
   };
   channel?: { id?: string; name?: string };
+};
+
+type SlackPrepModalMetadata = {
+  intent?: "prep";
+  prompt?: string;
+  responseUrl?: string;
+  teamId?: string;
+  userId?: string;
+  channelId?: string;
+  channelName?: string;
 };
 
 type SlackPendingRequest = {
@@ -61,6 +79,19 @@ function parseInteractionPayload(rawBody: string): SlackInteractionPayload | nul
   } catch {
     return null;
   }
+}
+
+function parsePrepModalMetadata(value?: string): SlackPrepModalMetadata {
+  if (!value) return {};
+  try {
+    return JSON.parse(value) as SlackPrepModalMetadata;
+  } catch {
+    return {};
+  }
+}
+
+function modalValue(payload: SlackInteractionPayload, blockId: string, actionId = "value") {
+  return payload.view?.state?.values?.[blockId]?.[actionId]?.value?.trim() || "";
 }
 
 function buildShortcutPrompt(payload: SlackInteractionPayload) {
@@ -393,6 +424,107 @@ async function sendMessageShortcutResponse({
   }
 }
 
+async function sendPrepModalResponse({
+  origin,
+  payload,
+}: {
+  origin: string;
+  payload: SlackInteractionPayload;
+}) {
+  const metadata = parsePrepModalMetadata(payload.view?.private_metadata);
+  const teamId = payload.team?.id || metadata.teamId || "";
+  const slackUserId = payload.user?.id || metadata.userId || "";
+  const responseUrl = metadata.responseUrl || "";
+
+  try {
+    if (!teamId || !slackUserId) {
+      await postSlackResponse(responseUrl, "Beckett could not read the Slack workspace and user context.");
+      return;
+    }
+
+    const user = await lookupSlackConnectedUser(teamId, slackUserId);
+    if (!user) {
+      await postSlackResponse(responseUrl, slackConnectText(origin));
+      return;
+    }
+
+    if (!isAllowedSlackPlan(user)) {
+      await postSlackResponse(responseUrl, "Beckett Slack coaching is available for beta and pro users.");
+      return;
+    }
+
+    const talkingTo = modalValue(payload, "talking_to");
+    const conversation = modalValue(payload, "conversation") || metadata.prompt || "";
+    const outcome = modalValue(payload, "outcome");
+    const evidence = modalValue(payload, "evidence");
+    const pushback = modalValue(payload, "pushback");
+    const prompt = [
+      "Prepare me for this difficult workplace conversation using the modal intake.",
+      `Who I am talking to: ${talkingTo || "not specified"}`,
+      `Conversation: ${conversation || "not specified"}`,
+      `Desired outcome: ${outcome || "not specified"}`,
+      `Evidence/context: ${evidence || "not specified"}`,
+      `Worried about pushback: ${pushback || "not specified"}`,
+      "",
+      "Return sections for Conversation goal, Talking points, Opening sentence, Likely pushback, Practice prompt, and Follow-up draft.",
+      "Make this ready for Slack Split View coaching. If you provide wording, make it easy to copy.",
+    ].join("\n");
+
+    const channelContext = await fetchSlackConversationContext({
+      accessToken: user.accessToken,
+      channelId: metadata.channelId,
+      channelName: metadata.channelName,
+    });
+    const response = await runSlackCoaching({
+      user,
+      action: "slash_command",
+      prompt,
+      sourceLabel: "/beckett:prep:modal",
+      messageText: channelContext.text,
+      contextStatus: channelContext.status,
+      contextFailureReason: channelContext.failureReason,
+      contextMessageCount: channelContext.messageCount,
+      responseDetail: "longer",
+      intent: "prep",
+    });
+
+    const contextNote = slackContextUserNote(channelContext);
+    const agentText = [
+      "*Beckett prep*",
+      contextNote ? `${contextNote}\n` : "",
+      response,
+    ].filter(Boolean).join("\n");
+    const agentDelivery = await postSlackAgentMessage({
+      botAccessToken: user.botAccessToken,
+      slackUserId,
+      title: conversation ? `Prep: ${conversation}` : "Beckett prep",
+      text: agentText,
+    });
+
+    if (agentDelivery.ok) {
+      await postSlackResponse(
+        responseUrl,
+        "I moved this into Beckett’s coach panel so you can keep working through it privately."
+      );
+      return;
+    }
+
+    const fallbackIntro = "I prepared this privately here because the Beckett coach panel was not available.";
+    await postSlackResponse(
+      responseUrl,
+      [
+        fallbackIntro,
+        "",
+        "*Beckett prep*",
+        contextNote ? `${contextNote}\n` : "",
+        response,
+      ].filter(Boolean).join("\n")
+    );
+  } catch (error) {
+    await postSlackResponse(responseUrl, `Beckett could not finish that prep: ${handleSlackAiError(error)}`);
+  }
+}
+
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const verification = verifySlackRequest(req, rawBody);
@@ -402,6 +534,17 @@ export async function POST(req: NextRequest) {
 
   const payload = parseInteractionPayload(rawBody);
   if (!payload) return NextResponse.json({ error: "Invalid Slack payload." }, { status: 400 });
+
+  if (payload.type === "view_submission" && payload.view?.callback_id === "beckett_prep_modal") {
+    scheduleSlackBackgroundTask(
+      "Slack prep modal response failed",
+      sendPrepModalResponse({
+        origin: req.nextUrl.origin,
+        payload,
+      })
+    );
+    return NextResponse.json({ response_action: "clear" });
+  }
 
   if (payload.type === "block_actions") {
     const detailAction = getSlashDetailAction(payload);

@@ -12,6 +12,7 @@ This is the staging-first Slack app path for using Beckett inside Slack Desktop.
 - Ephemeral coaching responses so Beckett does not post into public Slack channels
 - Recent context in public channels, private channels, DMs, and group DMs after the user reconnects with the staging scopes
 - Tool-style agent layer for `analyze_slack_thread`, `draft_slack_reply`, `coach_for_clarity`, `prep_difficult_conversation`, `summarize_relationship_context`, and `explain_tone_without_over_inference`
+- Modal intake for `/beckett prep ...`, followed by Beckett coaching in the Slack Agent/Split View Messages surface when available
 
 ## Staging Setup
 
@@ -26,10 +27,12 @@ This is the staging-first Slack app path for using Beckett inside Slack Desktop.
 6. In Slack app settings, confirm these URLs:
    - Slash command request URL: `https://YOUR-STAGING-URL/api/slack/commands`
    - Interactivity request URL: `https://YOUR-STAGING-URL/api/slack/interactions`
+   - Event subscriptions request URL: `https://YOUR-STAGING-URL/api/slack/events`
    - OAuth redirect URL: `https://YOUR-STAGING-URL/api/slack/callback`
-7. Install the Slack app into the test workspace.
-8. Sign into Beckett staging and connect Slack from Settings so the Slack user ID maps to a Beckett user.
-9. After changing scopes, reinstall/reconnect Slack from Beckett Settings so `groups:history` and `mpim:history` are granted.
+7. In Slack app settings, enable **Agents**. Use the Agent messaging experience when prompted.
+8. Install or reinstall the Slack app into the test workspace.
+9. Sign into Beckett staging and connect Slack from Settings so the Slack user ID maps to a Beckett user.
+10. After changing scopes, reinstall/reconnect Slack from Beckett Settings so the bot receives `assistant:write`, `im:write`, and `im:history`, and the user receives `groups:history` and `mpim:history`.
 
 ## Testing
 
@@ -40,7 +43,7 @@ Use Slack Desktop or the Slack web app:
 2. Run `/beckett rewrite "Any update on this?"`.
    - Expected: Beckett shows Quick answer and Longer explanation buttons, then returns rewrite-focused coaching after a button click.
 3. Run `/beckett decode "Sure, sounds fine."`, `/beckett draft ask my manager for clearer priorities this week`, `/beckett prep I need to give a teammate feedback`, `/beckett tone "I need this by Friday."`, and `/beckett followup remind Avery about the readout`.
-   - Expected: Each command keeps the same private Quick/Longer flow and returns coaching that matches the selected task.
+   - Expected: Non-prep commands keep the same private Quick/Longer flow. `/beckett prep ...` opens a `Prep with Beckett` modal.
 4. Run `/beckett respond help me answer this without sounding defensive`, `/beckett boundary I cannot take on another project this week`, `/beckett clarity I do not know what "clean this up" means`, and `/beckett practice my 1:1 with my manager about workload`.
    - Expected: Beckett returns neurodivergent-friendly workplace coaching with visible uncertainty boundaries and concrete wording.
 5. Run `/beckett is this too direct? "I need this by Friday."`.
@@ -51,6 +54,10 @@ Use Slack Desktop or the Slack web app:
    - Expected: Beckett asks the user to connect Slack first.
 8. Test `/beckett` in a private channel and a group DM after reconnecting.
    - Expected: Beckett can include recent context; if Slack denies access, Beckett still answers from the prompt and says context was unavailable.
+9. Submit the `Prep with Beckett` modal from `/beckett prep I need to ask my manager for a promotion`.
+   - Expected: Beckett moves the coaching into the app Messages/Split View surface. If that surface is unavailable, Beckett sends a private fallback response beginning `I prepared this privately here because the Beckett coach panel was not available.`
+10. Open the Beckett app Messages/Split View surface and send a follow-up message.
+   - Expected: Beckett replies privately in the same agent thread.
 
 ## Hackathon Demo Story
 
@@ -59,7 +66,8 @@ Use Slack Desktop or the Slack web app:
 3. Beckett explains what is visible, what is uncertain, and what not to over-read.
 4. Beckett suggests the next move and 2-3 private reply options.
 5. The user runs `/beckett prep I need to talk to my manager about workload in my 1:1`.
-6. Beckett produces talking points, an opening line, likely pushback, and a follow-up draft.
+6. Beckett opens a modal to gather context.
+7. Beckett moves the coaching into the Split View/Messages coach panel with talking points, an opening line, likely pushback, and a follow-up draft.
 
 Closing line: Beckett helps neurodivergent workers communicate clearly inside the tools where work already happens.
 
@@ -68,3 +76,4 @@ Closing line: Beckett helps neurodivergent workers communicate clearly inside th
 - Do not reuse staging Slack app secrets in production.
 - Do not promote this to production until the slash command and message shortcut are stable with real beta users.
 - Slack requires command and shortcut requests to be acknowledged quickly. These endpoints keep responses concise, but a future queue/background job would make longer AI responses more resilient.
+- Slack Agent/Split View features require the **Agents** feature to be enabled in Slack app settings and may require reinstalling the app after the manifest adds agent scopes/events.

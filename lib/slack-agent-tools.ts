@@ -54,7 +54,7 @@ export function selectSlackAgentTool({
 }: {
   intent: SlackCoachingIntent;
   hasSlackContext: boolean;
-  action: "slash_command" | "message_shortcut";
+  action: "slash_command" | "message_shortcut" | "agent_message";
 }): SlackAgentToolName {
   if (intent === "prep") return "prep_difficult_conversation";
   if (intent === "draft" || intent === "rewrite" || intent === "followup") return "draft_slack_reply";
