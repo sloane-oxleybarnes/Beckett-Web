@@ -69,6 +69,17 @@ type SlackMessageOptions = {
   responseType?: "ephemeral" | "in_channel";
 };
 
+type SlackActionElement = Record<string, unknown>;
+
+type BeckettBlockOptions = {
+  title?: string;
+  subtitle?: string;
+  prompt?: string;
+  body?: string;
+  footer?: string;
+  actions?: SlackActionElement[];
+};
+
 export type SlackConnectedUser = {
   id: string;
   email: string | null;
@@ -227,6 +238,103 @@ function buildSlackMessagePayload(text: string, options: SlackMessageOptions = {
   };
 }
 
+function splitSlackSectionText(text: string, maxLength = 2850) {
+  const chunks: string[] = [];
+  let remaining = text.trim();
+  while (remaining.length > maxLength) {
+    const slice = remaining.slice(0, maxLength);
+    const breakAt = Math.max(slice.lastIndexOf("\n\n"), slice.lastIndexOf("\n"), slice.lastIndexOf(". "));
+    const cutoff = breakAt > maxLength * 0.5 ? breakAt + 1 : maxLength;
+    chunks.push(remaining.slice(0, cutoff).trim());
+    remaining = remaining.slice(cutoff).trim();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
+
+export function cleanSlackDisplayText(text: string) {
+  return text
+    .replace(/\*\*([^*\n][^*]*?)\*\*/g, "$1")
+    .replace(/(^|\s)\*([^*\n][^*]*?)\*(?=\s|$|[.,!?;:])/g, "$1$2")
+    .replace(/\*/g, "")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function buildBeckettBlocks({
+  title = "Beckett",
+  subtitle = "Communication coach",
+  prompt,
+  body,
+  footer,
+  actions,
+}: BeckettBlockOptions): SlackBlock[] {
+  const blocks: SlackBlock[] = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: title.slice(0, 150) },
+    },
+  ];
+
+  if (subtitle) {
+    blocks.push({
+      type: "context",
+      elements: [{ type: "plain_text", text: subtitle.slice(0, 300) }],
+    });
+  }
+
+  if (prompt) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `_${escapeSlackMrkdwn(cleanSlackDisplayText(prompt)).slice(0, 900)}_`,
+      },
+    });
+  }
+
+  if (body) {
+    blocks.push({ type: "divider" });
+    for (const chunk of splitSlackSectionText(cleanSlackDisplayText(body))) {
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: chunk },
+      });
+    }
+  }
+
+  if (actions?.length) {
+    blocks.push({ type: "actions", elements: actions });
+  }
+
+  if (footer) {
+    blocks.push({
+      type: "context",
+      elements: [{ type: "plain_text", text: cleanSlackDisplayText(footer).slice(0, 300) }],
+    });
+  }
+
+  return blocks.slice(0, 48);
+}
+
+export function buildBeckettPayload({
+  title,
+  subtitle,
+  prompt,
+  body,
+  footer,
+  actions,
+}: BeckettBlockOptions) {
+  const cleanedBody = cleanSlackDisplayText(body || "");
+  const fallback = [title || "Beckett", subtitle, prompt, cleanedBody, footer].filter(Boolean).join("\n\n");
+  return {
+    text: truncateSlackText(cleanSlackDisplayText(fallback || "Beckett is ready.")),
+    blocks: buildBeckettBlocks({ title, subtitle, prompt, body: cleanedBody, footer, actions }),
+  };
+}
+
 export function slackMessageResponse(text: string, options: SlackMessageOptions & { status?: number } = {}) {
   return NextResponse.json(buildSlackMessagePayload(text, options), { status: options.status || 200 });
 }
@@ -317,9 +425,30 @@ export function slackAskedLabel(intent: SlackCoachingIntent = "general") {
 }
 
 export function formatAskedResponse(prompt: string, response: string, intent: SlackCoachingIntent = "general") {
-  const header = [`*${slackAskedLabel(intent)}*`, `>${formatAskedPrompt(prompt)}`, ""].join("\n");
+  const header = [slackAskedLabel(intent), `>${formatAskedPrompt(prompt)}`, ""].join("\n");
   const availableAnswerLength = Math.max(800, MAX_SLACK_TEXT_LENGTH - header.length - 2);
-  return `${header}\n${fitSlackAnswer(response, availableAnswerLength)}`;
+  return cleanSlackDisplayText(`${header}\n${fitSlackAnswer(response, availableAnswerLength)}`);
+}
+
+export function buildAskedResponsePayload({
+  prompt,
+  response,
+  intent = "general",
+  footer,
+}: {
+  prompt: string;
+  response: string;
+  intent?: SlackCoachingIntent;
+  footer?: string;
+}) {
+  const label = slackAskedLabel(intent).replace(/:$/, "");
+  return buildBeckettPayload({
+    title: "Beckett",
+    subtitle: label,
+    prompt,
+    body: fitSlackAnswer(response, MAX_LONGER_SLACK_ANSWER_LENGTH),
+    footer,
+  });
 }
 
 function slackIntentInstruction(intent: SlackCoachingIntent) {
@@ -502,9 +631,15 @@ export async function postSlackAgentMessage({
   if (!opened.ok || !opened.channelId) return opened;
   const channelId = opened.channelId;
 
+  const payload = buildBeckettPayload({
+    title: "Beckett",
+    subtitle: title,
+    body: text,
+  });
+
   const posted = await slackApiPost<{ ts?: string }>(botAccessToken, "chat.postMessage", {
     channel: channelId,
-    text: truncateSlackText(text),
+    ...payload,
   });
   if (!posted.ok || !posted.ts) return { ok: false, error: posted.error || "agent_post_failed" };
 
@@ -916,7 +1051,9 @@ Always separate "what is visible" from "possible interpretation" when decoding a
 When broader Slack history is included, clearly distinguish active-thread facts from relevant prior history. Prior history can shape preparation, but it does not prove current intent.
 If the user is over-reading an ambiguous message, say what is not knowable from the thread.
 Avoid generic encouragement. Give concrete language the user could use.
-Format with short headings and bullets. Do not use markdown tables.
+Format with short plain-language section labels and bullets. Do not use markdown tables, markdown bold markers, or literal asterisks.
+For decode/respond work, prefer these section labels when they fit: Possible read, Next move, Draft options.
+For preparation work, prefer these section labels when they fit: Prep notes, Talking points, Opening sentence, Likely pushback, Follow-up draft.
 Do not repeat the user's request at the top of the answer; Beckett will add that outside the AI response.
 For reply drafting, include 2-3 Slack-ready options when useful: Direct but kind, Warm and collaborative, and Concise.
 For difficult conversation prep, include talking points, an opening sentence, likely pushback, and a short follow-up draft.

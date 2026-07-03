@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  buildBeckettPayload,
   buildSlackCoachingContext,
   configureSlackAgentSurface,
   fetchSlackConversationContext,
@@ -196,11 +197,18 @@ async function respondToAgentMessage({
       intent: "general",
       responseDetail: "longer",
     });
+    const payload = buildBeckettPayload({
+      title: "Beckett",
+      subtitle: "Communication coach",
+      prompt: text,
+      body: response,
+      footer: coachingContext.broaderSearchUsed ? "Used relevant Slack history for context." : undefined,
+    });
 
     await slackApiPost(user.botAccessToken, "chat.postMessage", {
       channel: channelId,
       thread_ts: threadTs,
-      text: response,
+      ...payload,
     });
 
     await slackApiPost(user.botAccessToken, "assistant.threads.setStatus", {
@@ -209,10 +217,15 @@ async function respondToAgentMessage({
       status: "",
     }).catch(() => null);
   } catch (error) {
+    const payload = buildBeckettPayload({
+      title: "Beckett",
+      subtitle: "Could not finish that request",
+      body: handleSlackAiError(error),
+    });
     await slackApiPost(user.botAccessToken, "chat.postMessage", {
       channel: channelId,
       thread_ts: threadTs,
-      text: `Beckett could not finish that request: ${handleSlackAiError(error)}`,
+      ...payload,
     });
   }
 }

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  buildAskedResponsePayload,
+  buildBeckettPayload,
   buildSlackCoachingContext,
   fetchSlackConversationContext,
-  formatAskedResponse,
   handleSlackAiError,
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
@@ -322,10 +323,13 @@ async function sendPendingSlashResponse({
     });
 
     const contextNote = slackContextUserNote(coachingContext);
-    await replaceSlackInteraction(
-      responseUrl,
-      formatAskedResponse(pending.prompt, contextNote ? `${contextNote}\n\n${response}` : response, intent)
-    );
+    const responsePayload = buildAskedResponsePayload({
+      prompt: pending.prompt,
+      response,
+      intent,
+      footer: contextNote || (coachingContext.broaderSearchUsed ? "Used relevant Slack history for context." : undefined),
+    });
+    await replaceSlackInteraction(responseUrl, responsePayload.text, responsePayload.blocks);
     console.info("Slack slash final response posted", {
       requestId,
       intent,
@@ -435,7 +439,14 @@ async function sendMessageShortcutResponse({
     });
 
     const contextNote = slackContextUserNote(coachingContext);
-    await postSlackResponse(responseUrl, contextNote ? `${contextNote}\n\n${response}` : response);
+    const responsePayload = buildBeckettPayload({
+      title: "Beckett",
+      subtitle: "Message coaching",
+      prompt,
+      body: response,
+      footer: contextNote || (coachingContext.broaderSearchUsed ? "Used relevant Slack history for context." : undefined),
+    });
+    await postSlackResponse(responseUrl, responsePayload.text, { blocks: responsePayload.blocks });
   } catch (error) {
     await postSlackResponse(responseUrl, `Beckett could not finish that request: ${handleSlackAiError(error)}`);
   }
@@ -514,7 +525,6 @@ async function sendPrepModalResponse({
 
     const contextNote = slackContextUserNote(coachingContext);
     const agentText = [
-      "*Beckett prep*",
       contextNote ? `${contextNote}\n` : "",
       response,
     ].filter(Boolean).join("\n");
@@ -528,27 +538,36 @@ async function sendPrepModalResponse({
     if (agentDelivery.ok) {
       await postSlackResponse(
         responseUrl,
-        [
-          "I moved this into your private Beckett conversation.",
-          "To use the sidebar view for the demo, open Beckett from Slack’s app/sidebar area and continue there.",
-        ].join("\n")
+        "I moved this into your private Beckett conversation.",
+        {
+          blocks: buildBeckettPayload({
+            title: "Beckett",
+            subtitle: "Prep is ready",
+            body: "I moved this into your private Beckett conversation. To use the sidebar view for the demo, open Beckett from Slack’s app/sidebar area and continue there.",
+          }).blocks,
+        }
       );
       return;
     }
 
     const fallbackIntro = "I prepared this privately here because the Beckett coach panel was not available.";
+    const fallbackPayload = buildBeckettPayload({
+      title: "Beckett",
+      subtitle: "Prep notes",
+      body: [fallbackIntro, contextNote || "", response].filter(Boolean).join("\n\n"),
+    });
     await postSlackResponse(
       responseUrl,
-      [
-        fallbackIntro,
-        "",
-        "*Beckett prep*",
-        contextNote ? `${contextNote}\n` : "",
-        response,
-      ].filter(Boolean).join("\n")
+      fallbackPayload.text,
+      { blocks: fallbackPayload.blocks }
     );
   } catch (error) {
-    await postSlackResponse(responseUrl, `Beckett could not finish that prep: ${handleSlackAiError(error)}`);
+    const payload = buildBeckettPayload({
+      title: "Beckett",
+      subtitle: "Could not finish that prep",
+      body: handleSlackAiError(error),
+    });
+    await postSlackResponse(responseUrl, payload.text, { blocks: payload.blocks });
   }
 }
 

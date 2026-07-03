@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 const MAX_SLACK_TEXT_LENGTH = 2800;
-const MAX_SLACK_ASKED_PROMPT_LENGTH = 650;
 const SLACK_SLASH_QUICK_ACTION_ID = "beckett_slash_quick";
 const SLACK_SLASH_LONGER_ACTION_ID = "beckett_slash_longer";
 
@@ -66,6 +65,15 @@ type SlackPrepModalMetadata = {
 };
 
 type SlackViewBlock = Record<string, unknown>;
+type SlackActionElement = Record<string, unknown>;
+type BeckettBlockOptions = {
+  title?: string;
+  subtitle?: string;
+  prompt?: string;
+  body?: string;
+  footer?: string;
+  actions?: SlackActionElement[];
+};
 
 function safeCompare(value: string, expected: string) {
   const valueBuffer = Buffer.from(value, "utf8");
@@ -126,6 +134,96 @@ function buildSlackMessagePayload(text: string, options: SlackMessageOptions = {
   };
 }
 
+function splitSlackSectionText(text: string, maxLength = 2850) {
+  const chunks: string[] = [];
+  let remaining = text.trim();
+  while (remaining.length > maxLength) {
+    const slice = remaining.slice(0, maxLength);
+    const breakAt = Math.max(slice.lastIndexOf("\n\n"), slice.lastIndexOf("\n"), slice.lastIndexOf(". "));
+    const cutoff = breakAt > maxLength * 0.5 ? breakAt + 1 : maxLength;
+    chunks.push(remaining.slice(0, cutoff).trim());
+    remaining = remaining.slice(cutoff).trim();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
+
+function cleanSlackDisplayText(text: string) {
+  return text
+    .replace(/\*\*([^*\n][^*]*?)\*\*/g, "$1")
+    .replace(/(^|\s)\*([^*\n][^*]*?)\*(?=\s|$|[.,!?;:])/g, "$1$2")
+    .replace(/\*/g, "")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function buildBeckettBlocks({
+  title = "Beckett",
+  subtitle = "Communication coach",
+  prompt,
+  body,
+  footer,
+  actions,
+}: BeckettBlockOptions): SlackBlock[] {
+  const blocks: SlackBlock[] = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: title.slice(0, 150) },
+    },
+  ];
+
+  if (subtitle) {
+    blocks.push({
+      type: "context",
+      elements: [{ type: "plain_text", text: subtitle.slice(0, 300) }],
+    });
+  }
+
+  if (prompt) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `_${escapeSlackMrkdwn(cleanSlackDisplayText(prompt)).slice(0, 900)}_`,
+      },
+    });
+  }
+
+  if (body) {
+    blocks.push({ type: "divider" });
+    for (const chunk of splitSlackSectionText(cleanSlackDisplayText(body))) {
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: chunk },
+      });
+    }
+  }
+
+  if (actions?.length) {
+    blocks.push({ type: "actions", elements: actions });
+  }
+
+  if (footer) {
+    blocks.push({
+      type: "context",
+      elements: [{ type: "plain_text", text: cleanSlackDisplayText(footer).slice(0, 300) }],
+    });
+  }
+
+  return blocks.slice(0, 48);
+}
+
+function buildBeckettPayload({ title, subtitle, prompt, body, footer, actions }: BeckettBlockOptions) {
+  const cleanedBody = cleanSlackDisplayText(body || "");
+  const fallback = [title || "Beckett", subtitle, prompt, cleanedBody, footer].filter(Boolean).join("\n\n");
+  return {
+    text: truncateSlackText(cleanSlackDisplayText(fallback || "Beckett is ready.")),
+    blocks: buildBeckettBlocks({ title, subtitle, prompt, body: cleanedBody, footer, actions }),
+  };
+}
+
 function slackMessageResponse(text: string, options: SlackMessageOptions & { status?: number } = {}) {
   return NextResponse.json(buildSlackMessagePayload(text, options), { status: options.status || 200 });
 }
@@ -164,15 +262,6 @@ function scheduleSlackBackgroundTask(label: string, task: Promise<void>) {
 
 function escapeSlackMrkdwn(text: string) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function formatAskedPrompt(prompt: string) {
-  const normalized = prompt.replace(/\s+/g, " ").trim();
-  const truncated =
-    normalized.length <= MAX_SLACK_ASKED_PROMPT_LENGTH
-      ? normalized
-      : `${normalized.slice(0, MAX_SLACK_ASKED_PROMPT_LENGTH - 12).trim()}...`;
-  return escapeSlackMrkdwn(truncated);
 }
 
 function slackAskedLabel(intent: SlackCoachingIntent = "general") {
@@ -336,61 +425,58 @@ function buildButtonValue(requestId: string, intent: SlackCoachingIntent) {
   return JSON.stringify({ requestId, intent });
 }
 
-function helpText(command = "/beckett") {
-  return [
-    "*Beckett is ready in Slack.*",
-    "",
-    `Try \`${command} rewrite "Any update on this?"\``,
-    `Try \`${command} decode "Sure, sounds fine."\``,
-    `Try \`${command} respond help me answer this without sounding defensive\``,
-    `Try \`${command} draft ask my manager for clearer priorities this week\``,
-    `Try \`${command} prep I need to tell a teammate their handoffs are too vague\``,
-    `Try \`${command} boundary I cannot take on another project this week\``,
-    `Try \`${command} clarity I do not know what "clean this up" means\``,
-    `Try \`${command} practice my 1:1 with my manager about workload\``,
-    `Try \`${command} tone "I need this by Friday."\``,
-    `Try \`${command} followup remind Avery about the readout\``,
-    "",
-    "For help with a specific Slack message, use the message shortcut: *Ask Beckett about this message*.",
-  ].join("\n");
+function helpPayload(command = "/beckett") {
+  return buildBeckettPayload({
+    title: "Beckett",
+    subtitle: "Communication coach",
+    body: [
+      "Use Beckett when a Slack message feels unclear, a reply needs careful wording, or you want to prepare for a workplace conversation.",
+      "",
+      "Try these:",
+      `${command} rewrite "Any update on this?"`,
+      `${command} decode "Sure, sounds fine."`,
+      `${command} respond help me answer this without sounding defensive`,
+      `${command} draft ask my manager for clearer priorities this week`,
+      `${command} prep I need to tell a teammate their handoffs are too vague`,
+      `${command} boundary I cannot take on another project this week`,
+      `${command} clarity I do not know what "clean this up" means`,
+      `${command} practice my 1:1 with my manager about workload`,
+      `${command} tone "I need this by Friday."`,
+      `${command} followup remind Avery about the readout`,
+      "",
+      "For a specific Slack message, use the message shortcut: Ask Beckett about this message.",
+    ].join("\n"),
+  });
 }
 
 function buildChoiceBlocks(prompt: string, requestId: string, intent: SlackCoachingIntent): SlackBlock[] {
-  return [
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: [`*${slackAskedLabel(intent)}*`, `>${formatAskedPrompt(prompt)}`, "", "*How much help do you want?*"].join(
-          "\n"
-        ),
+  return buildBeckettBlocks({
+    title: "Beckett",
+    subtitle: slackAskedLabel(intent).replace(/:$/, ""),
+    prompt,
+    body: "How much help would you like?",
+    actions: [
+      {
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: "Quick answer",
+        },
+        style: "primary",
+        action_id: SLACK_SLASH_QUICK_ACTION_ID,
+        value: buildButtonValue(requestId, intent),
       },
-    },
-    {
-      type: "actions",
-      elements: [
-        {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Quick answer",
-          },
-          style: "primary",
-          action_id: SLACK_SLASH_QUICK_ACTION_ID,
-          value: buildButtonValue(requestId, intent),
+      {
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: "Longer explanation",
         },
-        {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Longer explanation",
-          },
-          action_id: SLACK_SLASH_LONGER_ACTION_ID,
-          value: buildButtonValue(requestId, intent),
-        },
-      ],
-    },
-  ];
+        action_id: SLACK_SLASH_LONGER_ACTION_ID,
+        value: buildButtonValue(requestId, intent),
+      },
+    ],
+  });
 }
 
 function textInputBlock({
@@ -435,7 +521,7 @@ function buildPrepModalView(prompt: string, metadata: SlackPrepModalMetadata) {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "*Let’s get Beckett enough context to coach you well.* This stays private to you.",
+          text: "Beckett will use this context to help you prepare. This stays private to you.",
         },
       },
       textInputBlock({
@@ -616,7 +702,7 @@ async function sendSlashChoiceCard({
 
     await postSlackResponse(
       responseUrl,
-      `${slackAskedLabel(parsed.intent)} ${parsed.prompt}\n\nHow much help do you want?`,
+      "Beckett can help with this Slack request. Choose the level of support you want.",
       {
         replaceOriginal: true,
         blocks: buildChoiceBlocks(parsed.prompt, requestId, parsed.intent),
@@ -652,7 +738,10 @@ export async function POST(req: NextRequest) {
     return slackErrorResponse("Slack did not include the workspace and user context.");
   }
 
-  if (!text) return slackTextResponse(helpText(payload.command));
+  if (!text) {
+    const help = helpPayload(payload.command);
+    return slackMessageResponse(help.text, { blocks: help.blocks });
+  }
 
   const parsed = parseBeckettText(text);
   if (parsed.missingText) return slackTextResponse(parsed.missingText);
