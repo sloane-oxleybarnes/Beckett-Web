@@ -587,14 +587,35 @@ async function openPrepModal({
   const responseUrl = payload.response_url || "";
   const { supabaseAdmin } = await import("@/lib/server-admin");
 
-  if (!payload.team_id || !payload.user_id) return slackErrorResponse("Slack did not include the workspace and user context.");
-  if (!payload.trigger_id) return slackTextResponse("Beckett could not open the prep form because Slack did not send a modal trigger.");
+  if (!payload.team_id || !payload.user_id) {
+    await postSlackResponse(responseUrl, "Beckett could not read the Slack workspace and user context.", {
+      replaceOriginal: true,
+    });
+    return;
+  }
+  if (!payload.trigger_id) {
+    await postSlackResponse(responseUrl, "Beckett could not open the prep form because Slack did not send a modal trigger.", {
+      replaceOriginal: true,
+    });
+    return;
+  }
 
   const user = await lookupSlackConnectedUser(supabaseAdmin, payload.team_id, payload.user_id);
-  if (!user) return slackTextResponse(slackConnectText(origin));
-  if (!isAllowedSlackPlan(user)) return slackTextResponse("Beckett Slack coaching is available for beta and pro users.");
+  if (!user) {
+    await postSlackResponse(responseUrl, slackConnectText(origin), { replaceOriginal: true });
+    return;
+  }
+  if (!isAllowedSlackPlan(user)) {
+    await postSlackResponse(responseUrl, "Beckett Slack coaching is available for beta and pro users.", {
+      replaceOriginal: true,
+    });
+    return;
+  }
   if (!user.botAccessToken) {
-    return slackTextResponse("Beckett could not open the prep form because the Slack bot token is missing. Reinstall the Slack app, then reconnect Slack in Beckett Settings.");
+    await postSlackResponse(responseUrl, "Beckett could not open the prep form because the Slack bot token is missing. Reinstall the Slack app, then reconnect Slack in Beckett Settings.", {
+      replaceOriginal: true,
+    });
+    return;
   }
 
   const modalMetadata: SlackPrepModalMetadata = {
@@ -616,10 +637,13 @@ async function openPrepModal({
       userPresent: Boolean(payload.user_id),
       promptLength: parsed.prompt.length,
     });
-    return slackTextResponse("Beckett could not open the prep form. I can still prep privately here if you run `/beckett prep` again.");
+    await postSlackResponse(responseUrl, "Beckett could not open the prep form. I can still prep privately here if you run `/beckett prep` again.", {
+      replaceOriginal: true,
+    });
+    return;
   }
 
-  return slackTextResponse("Opening Beckett’s prep form...");
+  await postSlackResponse(responseUrl, "Opening Beckett’s prep form...", { replaceOriginal: true });
 }
 
 async function sendSlashChoiceCard({
@@ -759,11 +783,15 @@ export async function POST(req: NextRequest) {
   });
 
   if (parsed.intent === "prep") {
-    return openPrepModal({
-      origin: req.nextUrl.origin,
-      payload,
-      parsed,
-    });
+    scheduleSlackBackgroundTask(
+      "Slack prep modal open failed",
+      openPrepModal({
+        origin: req.nextUrl.origin,
+        payload,
+        parsed,
+      })
+    );
+    return slackTextResponse("Opening Beckett’s prep form...");
   }
 
   scheduleSlackBackgroundTask(
