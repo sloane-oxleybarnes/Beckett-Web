@@ -4,7 +4,7 @@
 
 ## What Beckett reads
 
-Beckett reads Gmail, Slack, and Chrome extension context only when you connect those tools and ask Beckett for coaching, or when you turn on an analysis setting yourself. Requests go through Beckett's backend so beta usage limits, account access, and coaching requests can be handled.
+Beckett reads Gmail, Slack, and Chrome extension context only when you connect those tools and ask Beckett for coaching, or when you turn on an analysis setting yourself. In Slack, Beckett may search relevant Slack history across the channels, DMs, group DMs, and private channels you have authorized so it can understand the topic and people involved, not just the active thread. Requests go through Beckett's backend so beta usage limits, account access, and coaching requests can be handled.
 
 ## What Beckett stores locally
 
@@ -17,7 +17,7 @@ Beckett stores the following data locally in your browser using Chrome's storage
 
 ## What Beckett stores on its backend
 
-Beckett stores account details, beta access status, onboarding answers, connection status, usage counts, timestamps, contacts you choose to add, coaching settings, and feedback/debugging details needed to operate the beta. Beckett does not store full Gmail or Slack message history by default. Feedback reports may include message content only when you choose to include it.
+Beckett stores account details, beta access status, onboarding answers, connection status, usage counts, timestamps, contacts you choose to add, coaching settings, and feedback/debugging details needed to operate the beta. Beckett does not store full Gmail or Slack message history by default, including Slack search results used for a coaching response. Feedback reports may include message content only when you choose to include it.
 
 This may include personal information such as your name and email address, authentication and connection information, user-provided communication preferences, and workplace or workplace-adjacent communication context you choose to send for coaching.
 
@@ -57,7 +57,7 @@ Beckett uses Google API data only to provide or improve user-facing workplace an
 
 ## Beckett AI requests
 
-When you analyze a message, the relevant context is sent to Beckett's backend to generate the coaching response. Beckett stores usage metadata for beta limits and debugging, not full message threads by default.
+When you analyze a message, the relevant context is sent to Beckett's backend to generate the coaching response. In Slack, that context may include active-thread context and relevant live search results for the topic or people involved. Beckett stores usage metadata for beta limits and debugging, not full message threads or raw Slack search results by default.
 
 ## Contact
 

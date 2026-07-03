@@ -12,12 +12,25 @@ import { selectSlackAgentTool, slackAgentToolInstruction } from "@/lib/slack-age
 const MAX_SLACK_TEXT_LENGTH = 2800;
 const MAX_SLACK_CONTEXT_MESSAGES = 8;
 const MAX_SLACK_CONTEXT_LENGTH = 2600;
+const MAX_SLACK_BROAD_CONTEXT_LENGTH = 2600;
+const MAX_SLACK_BROAD_CONTEXT_RESULTS = 12;
 const MAX_SLACK_ASKED_PROMPT_LENGTH = 650;
 const MAX_QUICK_SLACK_ANSWER_LENGTH = 1200;
 const MAX_LONGER_SLACK_ANSWER_LENGTH = 2000;
 export const SLACK_SLASH_QUICK_ACTION_ID = "beckett_slash_quick";
 export const SLACK_SLASH_LONGER_ACTION_ID = "beckett_slash_longer";
-export const REQUIRED_SLACK_USER_SCOPES = ["channels:history", "groups:history", "im:history", "mpim:history", "users:read"];
+export const REQUIRED_SLACK_USER_SCOPES = [
+  "channels:history",
+  "groups:history",
+  "im:history",
+  "mpim:history",
+  "users:read",
+  "search:read.public",
+  "search:read.private",
+  "search:read.im",
+  "search:read.mpim",
+  "search:read.users",
+];
 
 export type SlackResponseDetail = "quick" | "longer";
 export type SlackCoachingIntent =
@@ -47,6 +60,7 @@ export type SlackConversationContext = {
   status: SlackContextStatus;
   failureReason: SlackContextFailureReason | null;
   messageCount: number;
+  broaderSearchUsed?: boolean;
 };
 
 type SlackMessageOptions = {
@@ -108,6 +122,15 @@ type SlackUserInfo = {
       real_name?: string;
     };
   };
+};
+
+type SlackSearchContextResponse = {
+  ok?: boolean;
+  error?: string;
+  results?: unknown[];
+  matches?: unknown[];
+  messages?: { matches?: unknown[] };
+  items?: unknown[];
 };
 
 const slackUserNameCache = new Map<string, string>();
@@ -524,6 +547,80 @@ async function slackApiFetch<T>(accessToken: string, method: string, params: URL
   return res.json().catch(() => ({})) as Promise<T & { ok?: boolean; error?: string }>;
 }
 
+function compactText(value: string, maxLength: number) {
+  const text = stripSlackMarkup(value).replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 18).trim()} [trimmed]`;
+}
+
+function pickString(value: unknown, keys: string[]): string {
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  for (const key of keys) {
+    const candidate = record[key];
+    if (typeof candidate === "string" && candidate.trim()) return candidate;
+  }
+  return "";
+}
+
+function extractSearchText(result: unknown): string {
+  if (!result || typeof result !== "object") return "";
+  const record = result as Record<string, unknown>;
+  const directText = pickString(record, ["text", "snippet", "summary", "title"]);
+  const contentText =
+    typeof record.content === "object" && record.content
+      ? pickString(record.content, ["text", "snippet", "summary", "title"])
+      : "";
+  const messageText =
+    typeof record.message === "object" && record.message
+      ? pickString(record.message, ["text", "snippet", "summary"])
+      : "";
+  const contextMessages = Array.isArray(record.context_messages)
+    ? record.context_messages
+        .map((item) => (typeof item === "object" && item ? pickString(item, ["text", "snippet", "summary"]) : ""))
+        .filter(Boolean)
+        .join(" / ")
+    : "";
+
+  return [directText, contentText, messageText, contextMessages].filter(Boolean).join(" / ");
+}
+
+function extractSearchLabel(result: unknown) {
+  if (!result || typeof result !== "object") return "Slack result";
+  const record = result as Record<string, unknown>;
+  const channel = metadataRecord(record.channel);
+  const user = metadataRecord(record.user);
+  const channelName = pickString(channel, ["name", "id"]);
+  const userName = pickString(user, ["name", "real_name", "id"]);
+  const source = pickString(record, ["source", "type"]);
+  return channelName ? `#${channelName}` : userName ? userName : source || "Slack result";
+}
+
+function getSearchResults(data: SlackSearchContextResponse | null) {
+  if (!data?.ok) return [];
+  if (Array.isArray(data.results)) return data.results;
+  if (Array.isArray(data.matches)) return data.matches;
+  if (Array.isArray(data.messages?.matches)) return data.messages.matches;
+  if (Array.isArray(data.items)) return data.items;
+  return [];
+}
+
+function buildBroaderSearchQuery(prompt: string, activeContext?: string | null) {
+  const base = [prompt, activeContext ? activeContext.replace(/\n/g, " ") : ""].join(" ");
+  const withoutSlackSyntax = stripSlackMarkup(base);
+  const words = withoutSlackSyntax
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\w@#.-]/g, ""))
+    .filter((word) => word.length > 2);
+  const priority = words.filter((word) =>
+    /manager|raise|promotion|salary|workload|feedback|priority|project|blocker|review|1:1|one-on-one/i.test(word)
+  );
+  const names = words.filter((word) => /^[A-Z][a-z]+/.test(word)).slice(0, 6);
+  const combined = [...priority, ...names, ...words.slice(0, 18)];
+  const deduped = Array.from(new Set(combined)).slice(0, 24).join(" ");
+  return deduped || prompt.slice(0, 240);
+}
+
 async function lookupSlackUserName(accessToken: string, userId: string) {
   const cacheKey = `${accessToken.slice(-8)}:${userId}`;
   const cached = slackUserNameCache.get(cacheKey);
@@ -631,11 +728,113 @@ export async function fetchSlackConversationContext({
   } satisfies SlackConversationContext;
 }
 
+export async function fetchSlackBroaderContext({
+  accessToken,
+  prompt,
+  activeContext,
+  contextChannelId,
+  actionToken,
+}: {
+  accessToken: string | null;
+  prompt: string;
+  activeContext?: string | null;
+  contextChannelId?: string | null;
+  actionToken?: string | null;
+}) {
+  if (!accessToken) return slackUnavailable("missing_token");
+
+  const query = buildBroaderSearchQuery(prompt, activeContext);
+  const body: Record<string, unknown> = {
+    query,
+    content_types: "messages,users",
+    channel_types: "public_channel,private_channel,mpim,im",
+    include_context_messages: true,
+    limit: MAX_SLACK_BROAD_CONTEXT_RESULTS,
+  };
+  if (contextChannelId) body.context_channel_id = contextChannelId;
+  if (actionToken) body.action_token = actionToken;
+
+  const data = await slackApiPost<SlackSearchContextResponse>(accessToken, "assistant.search.context", body).catch(
+    () => null
+  );
+  if (!data?.ok) {
+    return slackUnavailable(data?.error === "missing_scope" ? "missing_scope" : "slack_api_error");
+  }
+
+  const formatted = getSearchResults(data)
+    .map((result) => {
+      const text = compactText(extractSearchText(result), 380);
+      if (!text) return null;
+      return `${extractSearchLabel(result)}: ${text}`;
+    })
+    .filter(Boolean)
+    .slice(0, MAX_SLACK_BROAD_CONTEXT_RESULTS) as string[];
+
+  if (!formatted.length) return slackUnavailable("no_messages");
+
+  const context = ["Relevant prior Slack history from live search:", ...formatted].join("\n");
+  return {
+    text:
+      context.length <= MAX_SLACK_BROAD_CONTEXT_LENGTH
+        ? context
+        : `${context.slice(0, MAX_SLACK_BROAD_CONTEXT_LENGTH - 40).trim()}\n[Broader context trimmed]`,
+    status: "available",
+    failureReason: null,
+    messageCount: formatted.length,
+    broaderSearchUsed: true,
+  } satisfies SlackConversationContext;
+}
+
+export async function buildSlackCoachingContext({
+  user,
+  prompt,
+  activeContext,
+  contextChannelId,
+  actionToken,
+}: {
+  user: SlackConnectedUser;
+  prompt: string;
+  activeContext?: SlackConversationContext | null;
+  contextChannelId?: string | null;
+  actionToken?: string | null;
+}) {
+  const broaderContext = await fetchSlackBroaderContext({
+    accessToken: user.accessToken,
+    prompt,
+    activeContext: activeContext?.text,
+    contextChannelId,
+    actionToken,
+  });
+
+  const sections = [
+    activeContext?.text ? `Active Slack context:\n${activeContext.text}` : "",
+    broaderContext.text ? `Relevant prior Slack history:\n${broaderContext.text}` : "",
+  ].filter(Boolean);
+  const primaryStatus: SlackContextStatus =
+    activeContext?.status === "available" || broaderContext.status === "available" ? "available" : "unavailable";
+  const failureReason =
+    primaryStatus === "available"
+      ? broaderContext.status === "unavailable"
+        ? broaderContext.failureReason
+        : activeContext?.failureReason || null
+      : broaderContext.failureReason || activeContext?.failureReason || "slack_api_error";
+
+  return {
+    text: sections.join("\n\n") || null,
+    status: primaryStatus,
+    failureReason,
+    messageCount: (activeContext?.messageCount || 0) + (broaderContext.messageCount || 0),
+    broaderSearchUsed: broaderContext.status === "available",
+    activeContext,
+    broaderContext,
+  };
+}
+
 export function slackContextUserNote(context: SlackConversationContext) {
   if (context.status === "available") return "";
   switch (context.failureReason) {
     case "missing_scope":
-      return "_I could not read recent Slack context because this Slack connection is missing the newest private-channel permissions. Reconnect Slack from Beckett Settings when you want private-channel context included._";
+      return "_I could not read broader Slack context because this Slack connection is missing the newest search/private-channel permissions. Reconnect Slack from Beckett Settings when you want broader context included._";
     case "not_in_channel":
     case "channel_not_found":
       return "_I could not read recent Slack context for this conversation, so I am answering from what you asked._";
@@ -657,6 +856,7 @@ export async function runSlackCoaching({
   contextStatus,
   contextFailureReason,
   contextMessageCount,
+  broaderSearchUsed,
   responseDetail,
   intent = "general",
 }: {
@@ -668,6 +868,7 @@ export async function runSlackCoaching({
   contextStatus?: SlackContextStatus;
   contextFailureReason?: SlackContextFailureReason | null;
   contextMessageCount?: number;
+  broaderSearchUsed?: boolean;
   responseDetail?: SlackResponseDetail;
   intent?: SlackCoachingIntent;
 }) {
@@ -689,6 +890,7 @@ export async function runSlackCoaching({
       contextStatus: contextStatus || null,
       contextFailureReason: contextFailureReason || null,
       contextMessageCount: contextMessageCount || 0,
+      broaderSearchUsed: Boolean(broaderSearchUsed),
       responseDetail: responseDetail || null,
       intent,
       agentTool: selectSlackAgentTool({
@@ -711,6 +913,7 @@ Help the user understand tone, subtext, context, next steps, and possible replie
 Do not claim certainty about another person's intent. Use phrases like "may" or "likely" when interpreting tone.
 Do not hallucinate reactions, comfort, rapport, agreement, annoyance, or pushback that is not visible in the provided Slack text.
 Always separate "what is visible" from "possible interpretation" when decoding a Slack message or thread.
+When broader Slack history is included, clearly distinguish active-thread facts from relevant prior history. Prior history can shape preparation, but it does not prove current intent.
 If the user is over-reading an ambiguous message, say what is not knowable from the thread.
 Avoid generic encouragement. Give concrete language the user could use.
 Format with short headings and bullets. Do not use markdown tables.
@@ -742,10 +945,10 @@ ${beckettBoundaryPrompt()}`;
         ? "Response length: Longer explanation. Give more context about likely tone/subtext, what to watch for, next steps, and suggested wording. Keep it scannable in Slack and under 1700 characters."
         : "Response length: Default Slack coaching response. Be concise but useful.";
   const contextLine = contextStatus
-    ? `Slack context status: ${contextStatus}${contextFailureReason ? ` (${contextFailureReason})` : ""}.`
+    ? `Slack context status: ${contextStatus}${contextFailureReason ? ` (${contextFailureReason})` : ""}. Broader Slack search used: ${broaderSearchUsed ? "yes" : "no"}.`
     : "";
   const messageLine = messageText
-    ? `\n\nSlack message/context:\n${messageText}`
+    ? `\n\nSlack context packet:\n${messageText}`
     : contextStatus === "unavailable"
       ? "\n\nNo recent Slack context was available. Answer from the user's request without implying you saw surrounding messages."
       : "";
@@ -772,6 +975,7 @@ ${prompt}${messageLine}`;
       contextStatus: contextStatus || null,
       contextFailureReason: contextFailureReason || null,
       contextMessageCount: contextMessageCount || 0,
+      broaderSearchUsed: Boolean(broaderSearchUsed),
       responseDetail: responseDetail || null,
       intent,
       agentTool,

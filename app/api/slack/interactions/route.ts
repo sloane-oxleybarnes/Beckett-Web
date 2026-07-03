@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  buildSlackCoachingContext,
   fetchSlackConversationContext,
   formatAskedResponse,
   handleSlackAiError,
@@ -291,28 +292,36 @@ async function sendPendingSlashResponse({
       channelId: pending.slack_channel_id,
       channelName: pending.slack_channel_name,
     });
+    const coachingContext = await buildSlackCoachingContext({
+      user,
+      prompt: pending.prompt,
+      activeContext: channelContext,
+      contextChannelId: pending.slack_channel_id,
+    });
     console.info("Slack slash channel context fetched", {
       requestId,
       intent,
       responseDetail,
-      contextStatus: channelContext.status,
-      contextFailureReason: channelContext.failureReason,
-      contextMessageCount: channelContext.messageCount,
+      contextStatus: coachingContext.status,
+      contextFailureReason: coachingContext.failureReason,
+      contextMessageCount: coachingContext.messageCount,
+      broaderSearchUsed: coachingContext.broaderSearchUsed,
     });
     const response = await runSlackCoaching({
       user,
       action: "slash_command",
       prompt: pending.prompt,
       sourceLabel: `/beckett:${intent}:${responseDetail}`,
-      messageText: channelContext.text,
-      contextStatus: channelContext.status,
-      contextFailureReason: channelContext.failureReason,
-      contextMessageCount: channelContext.messageCount,
+      messageText: coachingContext.text,
+      contextStatus: coachingContext.status,
+      contextFailureReason: coachingContext.failureReason,
+      contextMessageCount: coachingContext.messageCount,
+      broaderSearchUsed: coachingContext.broaderSearchUsed,
       responseDetail,
       intent,
     });
 
-    const contextNote = slackContextUserNote(channelContext);
+    const contextNote = slackContextUserNote(coachingContext);
     await replaceSlackInteraction(
       responseUrl,
       formatAskedResponse(pending.prompt, contextNote ? `${contextNote}\n\n${response}` : response, intent)
@@ -400,24 +409,32 @@ async function sendMessageShortcutResponse({
       messageTs: payload.message?.ts,
       threadTs: payload.message?.thread_ts,
     });
+    const prompt = buildShortcutPrompt(payload);
+    const coachingContext = await buildSlackCoachingContext({
+      user,
+      prompt,
+      activeContext: channelContext,
+      contextChannelId: payload.channel?.id,
+    });
     const combinedContext = [
       "Selected Slack message:",
       messageText,
-      channelContext.text ? `\n${channelContext.text}` : "",
+      coachingContext.text ? `\n${coachingContext.text}` : "",
     ].filter(Boolean).join("\n");
     const response = await runSlackCoaching({
       user,
       action: "message_shortcut",
-      prompt: buildShortcutPrompt(payload),
+      prompt,
       sourceLabel: "slack_message_shortcut",
       messageText: combinedContext,
-      contextStatus: channelContext.status,
-      contextFailureReason: channelContext.failureReason,
-      contextMessageCount: channelContext.messageCount,
+      contextStatus: coachingContext.status,
+      contextFailureReason: coachingContext.failureReason,
+      contextMessageCount: coachingContext.messageCount,
+      broaderSearchUsed: coachingContext.broaderSearchUsed,
       intent: "respond",
     });
 
-    const contextNote = slackContextUserNote(channelContext);
+    const contextNote = slackContextUserNote(coachingContext);
     await postSlackResponse(responseUrl, contextNote ? `${contextNote}\n\n${response}` : response);
   } catch (error) {
     await postSlackResponse(responseUrl, `Beckett could not finish that request: ${handleSlackAiError(error)}`);
@@ -475,20 +492,27 @@ async function sendPrepModalResponse({
       channelId: metadata.channelId,
       channelName: metadata.channelName,
     });
+    const coachingContext = await buildSlackCoachingContext({
+      user,
+      prompt,
+      activeContext: channelContext,
+      contextChannelId: metadata.channelId,
+    });
     const response = await runSlackCoaching({
       user,
       action: "slash_command",
       prompt,
       sourceLabel: "/beckett:prep:modal",
-      messageText: channelContext.text,
-      contextStatus: channelContext.status,
-      contextFailureReason: channelContext.failureReason,
-      contextMessageCount: channelContext.messageCount,
+      messageText: coachingContext.text,
+      contextStatus: coachingContext.status,
+      contextFailureReason: coachingContext.failureReason,
+      contextMessageCount: coachingContext.messageCount,
+      broaderSearchUsed: coachingContext.broaderSearchUsed,
       responseDetail: "longer",
       intent: "prep",
     });
 
-    const contextNote = slackContextUserNote(channelContext);
+    const contextNote = slackContextUserNote(coachingContext);
     const agentText = [
       "*Beckett prep*",
       contextNote ? `${contextNote}\n` : "",

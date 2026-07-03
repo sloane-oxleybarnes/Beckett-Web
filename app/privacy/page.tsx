@@ -7,7 +7,7 @@ const sections = [
     title: "What Beckett reads",
     body: [
       "During beta, Beckett can use Gmail, Slack, and Chrome extension context only when you connect those tools and ask Beckett for coaching, or when you turn on an analysis setting yourself.",
-      "For Gmail, Beckett uses read-only access so it can understand email threads and help draft replies. For Slack, Beckett uses connected workspace context so it can understand recent DMs, channels, or threads you ask it to analyze.",
+      "For Gmail, Beckett uses read-only access so it can understand email threads and help draft replies. For Slack, Beckett uses connected workspace context and may search relevant Slack history across authorized channels, DMs, group DMs, and private channels when you ask for coaching.",
       "Beckett is not meant to read your work communication in the background without your action.",
     ],
   },
@@ -16,7 +16,7 @@ const sections = [
     body: [
       "Beckett stores account details, beta access status, onboarding answers, connection status, usage counts, timestamps, contacts you choose to add, and coaching settings.",
       "This can include personal information such as your name and email address, authentication and connection information, user-provided communication preferences, and workplace communication context you choose to send for coaching.",
-      "Beckett does not store full Gmail or Slack message history by default. For product analytics and CRM, Beckett uses counts, timestamps, connection status, and safe event names, not raw message content.",
+      "Beckett does not store full Gmail or Slack message history by default, including raw Slack search results used for a coaching response. For product analytics and CRM, Beckett uses counts, timestamps, connection status, and safe event names, not raw message content.",
       "Beckett may store short summaries or metadata when needed to make the product work, debug beta issues, or remember your preferences.",
     ],
   },

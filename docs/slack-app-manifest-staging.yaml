@@ -45,6 +45,11 @@ oauth_config:
       - im:history
       - mpim:history
       - users:read
+      - search:read.public
+      - search:read.private
+      - search:read.im
+      - search:read.mpim
+      - search:read.users
 settings:
   event_subscriptions:
     request_url: https://www.meetbeckett.co/api/slack/events

@@ -5,7 +5,18 @@ import { trackBetaEvent } from "@/lib/beta-events";
 import { getPublicSiteUrl } from "@/lib/deployment-env";
 import { getSlackOAuthWorkerUrl } from "@/lib/slack-oauth";
 
-const REQUIRED_SLACK_USER_SCOPES = ["channels:history", "groups:history", "im:history", "mpim:history", "users:read"];
+const REQUIRED_SLACK_USER_SCOPES = [
+  "channels:history",
+  "groups:history",
+  "im:history",
+  "mpim:history",
+  "users:read",
+  "search:read.public",
+  "search:read.private",
+  "search:read.im",
+  "search:read.mpim",
+  "search:read.users",
+];
 
 export async function GET(req: NextRequest) {
   const supabase = createSupabaseServerClient();

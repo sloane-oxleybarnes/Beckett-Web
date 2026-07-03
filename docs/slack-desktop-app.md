@@ -10,7 +10,7 @@ This is the staging-first Slack app path for using Beckett inside Slack Desktop.
 - Signed Slack request verification with `SLACK_SIGNING_SECRET`
 - Beckett account matching through the existing `user_integrations` Slack connection
 - Ephemeral coaching responses so Beckett does not post into public Slack channels
-- Recent context in public channels, private channels, DMs, and group DMs after the user reconnects with the staging scopes
+- Active context plus relevant live Slack search across authorized public channels, private channels, DMs, and group DMs after the user reconnects with the latest scopes
 - Tool-style agent layer for `analyze_slack_thread`, `draft_slack_reply`, `coach_for_clarity`, `prep_difficult_conversation`, `summarize_relationship_context`, and `explain_tone_without_over_inference`
 - Modal intake for `/beckett prep ...`, followed by Beckett coaching in the Slack Agent/Split View Messages surface when available
 
@@ -32,7 +32,7 @@ This is the staging-first Slack app path for using Beckett inside Slack Desktop.
 7. In Slack app settings, enable **Agents**. Use the Agent messaging experience when prompted.
 8. Install or reinstall the Slack app into the test workspace.
 9. Sign into Beckett staging and connect Slack from Settings so the Slack user ID maps to a Beckett user.
-10. After changing scopes, reinstall/reconnect Slack from Beckett Settings so the bot receives `assistant:write`, `im:write`, and `im:history`, and the user receives `groups:history` and `mpim:history`.
+10. After changing scopes, reinstall/reconnect Slack from Beckett Settings so the bot receives `assistant:write`, `im:write`, and `im:history`, and the user receives `groups:history`, `mpim:history`, and the `search:read.*` scopes.
 
 ## Testing
 
@@ -53,11 +53,13 @@ Use Slack Desktop or the Slack web app:
 7. Test with a Slack account that has not connected Slack in Beckett Settings.
    - Expected: Beckett asks the user to connect Slack first.
 8. Test `/beckett` in a private channel and a group DM after reconnecting.
-   - Expected: Beckett can include recent context; if Slack denies access, Beckett still answers from the prompt and says context was unavailable.
+   - Expected: Beckett can include active context and relevant prior Slack history; if Slack denies access, Beckett still answers from the prompt and says broader context was unavailable.
 9. Submit the `Prep with Beckett` modal from `/beckett prep I need to ask my manager for a promotion`.
    - Expected: Beckett sends the coaching to the private Beckett conversation and prompts the user to open Beckett from Slack's app/sidebar area for the sidebar view.
 10. Open the Beckett app Messages/Split View surface and send a follow-up message.
    - Expected: Beckett shows suggested prompts at the top of the Messages surface and replies privately in the same agent thread.
+11. In the Beckett sidebar, ask `Help me prepare to ask my manager for a raise`.
+   - Expected: Beckett uses relevant Slack history across authorized conversations, labels what came from prior history, and avoids claiming intent or reactions not visible in retrieved context.
 
 ## Hackathon Demo Story
 

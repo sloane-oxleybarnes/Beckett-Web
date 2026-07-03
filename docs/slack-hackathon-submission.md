@@ -13,7 +13,7 @@ Beckett prepares neurodivergent workers for the conversations that matter at wor
 
 Beckett is a private workplace communication coach in Slack. It helps neurodivergent professionals decode confusing Slack threads, avoid over-reading ambiguous tone, draft replies that match their intent, and prepare for difficult conversations before they happen.
 
-Instead of acting like a generic chatbot or writing assistant, Beckett guides the user through conversation strategy: what is visible, what is uncertain, what the next step should be, and how to say it clearly. Responses are private and ephemeral by default, and Beckett does not store full Slack history by default.
+Instead of acting like a generic chatbot or writing assistant, Beckett guides the user through conversation strategy: what is visible, what is uncertain, what the next step should be, and how to say it clearly. Responses are private and ephemeral by default. Beckett can search relevant Slack history when the user asks for coaching, but it does not store full Slack history or raw Slack search results by default.
 
 ## Demo Workflow
 
@@ -62,12 +62,13 @@ flowchart LR
   A["Slack message shortcut or /beckett command"] --> B["Next.js Slack endpoint"]
   B --> C["Slack request signature verification"]
   C --> D["Beckett account + Slack integration lookup"]
-  D --> E["Slack agent tool selector"]
-  E --> F["Anthropic coaching call with Beckett guardrails"]
-  F --> G["Slack Agent/Split View coach panel"]
-  F --> I["Private ephemeral fallback"]
-  D --> H["Optional recent Slack context"]
+  D --> H["Active Slack context"]
+  D --> E["Live Slack context search"]
   H --> E
+  E --> F["Slack agent tool selector"]
+  F --> G["Anthropic coaching call with Beckett guardrails"]
+  G --> I["Slack Agent/Split View coach panel"]
+  G --> K["Private ephemeral fallback"]
   B --> J["Prep modal intake"]
   J --> E
 ```
@@ -76,7 +77,7 @@ flowchart LR
 
 - Beckett responds privately by default.
 - Beckett does not post into the channel unless the user chooses to copy or send wording.
-- Beckett does not store full Slack history by default.
+- Beckett does not store full Slack history or raw Slack search results by default.
 - Beckett separates visible evidence from possible interpretation.
 - Beckett does not infer diagnosis or hidden intent.
 - Modal intake is used only to collect the context Beckett needs for the requested prep session.

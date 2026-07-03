@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  buildSlackCoachingContext,
   configureSlackAgentSurface,
+  fetchSlackConversationContext,
   handleSlackAiError,
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
@@ -27,8 +29,26 @@ type SlackEventEnvelope = {
     text?: string;
     ts?: string;
     thread_ts?: string;
+    action_token?: string;
+    context?: {
+      entities?: Array<{
+        type?: string;
+        value?: string;
+        team_id?: string;
+      }>;
+    };
   };
 };
+
+function extractActiveSlackContext(event: NonNullable<SlackEventEnvelope["event"]>) {
+  const channelEntity = event.context?.entities?.find((entity) =>
+    entity.type?.includes("channel_id") && entity.value
+  );
+  return {
+    channelId: channelEntity?.value || null,
+    actionToken: event.action_token || null,
+  };
+}
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -85,6 +105,8 @@ export async function POST(req: NextRequest) {
       channelId: event.channel,
       threadTs: event.thread_ts || event.ts || "",
       text: event.text,
+      activeChannelId: extractActiveSlackContext(event).channelId,
+      actionToken: extractActiveSlackContext(event).actionToken,
     })
   );
 
@@ -116,12 +138,16 @@ async function respondToAgentMessage({
   channelId,
   threadTs,
   text,
+  activeChannelId,
+  actionToken,
 }: {
   teamId: string;
   slackUserId: string;
   channelId: string;
   threadTs: string;
   text: string;
+  activeChannelId?: string | null;
+  actionToken?: string | null;
 }) {
   const user = await lookupSlackConnectedUser(teamId, slackUserId);
   if (!user?.botAccessToken) return;
@@ -142,11 +168,31 @@ async function respondToAgentMessage({
       status: "thinking through the conversation...",
     }).catch(() => null);
 
+    const activeContext = activeChannelId
+      ? await fetchSlackConversationContext({
+          accessToken: user.accessToken,
+          channelId: activeChannelId,
+        })
+      : null;
+
+    const coachingContext = await buildSlackCoachingContext({
+      user,
+      prompt: text,
+      activeContext,
+      contextChannelId: activeChannelId,
+      actionToken,
+    });
+
     const response = await runSlackCoaching({
       user,
       action: "agent_message",
       prompt: text,
       sourceLabel: "slack_agent_message",
+      messageText: coachingContext.text,
+      contextStatus: coachingContext.status,
+      contextFailureReason: coachingContext.failureReason,
+      contextMessageCount: coachingContext.messageCount,
+      broaderSearchUsed: coachingContext.broaderSearchUsed,
       intent: "general",
       responseDetail: "longer",
     });
