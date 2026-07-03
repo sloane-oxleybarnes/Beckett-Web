@@ -55,9 +55,9 @@ Use Slack Desktop or the Slack web app:
 8. Test `/beckett` in a private channel and a group DM after reconnecting.
    - Expected: Beckett can include recent context; if Slack denies access, Beckett still answers from the prompt and says context was unavailable.
 9. Submit the `Prep with Beckett` modal from `/beckett prep I need to ask my manager for a promotion`.
-   - Expected: Beckett moves the coaching into the app Messages/Split View surface. If that surface is unavailable, Beckett sends a private fallback response beginning `I prepared this privately here because the Beckett coach panel was not available.`
+   - Expected: Beckett sends the coaching to the private Beckett conversation and prompts the user to open Beckett from Slack's app/sidebar area for the sidebar view.
 10. Open the Beckett app Messages/Split View surface and send a follow-up message.
-   - Expected: Beckett replies privately in the same agent thread.
+   - Expected: Beckett shows suggested prompts at the top of the Messages surface and replies privately in the same agent thread.
 
 ## Hackathon Demo Story
 
@@ -67,7 +67,7 @@ Use Slack Desktop or the Slack web app:
 4. Beckett suggests the next move and 2-3 private reply options.
 5. The user runs `/beckett prep I need to talk to my manager about workload in my 1:1`.
 6. Beckett opens a modal to gather context.
-7. Beckett moves the coaching into the Split View/Messages coach panel with talking points, an opening line, likely pushback, and a follow-up draft.
+7. The user opens Beckett in Slack's sidebar/Messages surface to continue with suggested prompts and follow-up coaching.
 
 Closing line: Beckett helps neurodivergent workers communicate clearly inside the tools where work already happens.
 

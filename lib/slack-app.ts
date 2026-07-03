@@ -397,6 +397,71 @@ export async function slackApiPost<T>(accessToken: string, method: string, body:
   return res.json().catch(() => ({})) as Promise<T & { ok?: boolean; error?: string }>;
 }
 
+async function openSlackAgentChannel(botAccessToken: string, slackUserId: string) {
+  const opened = await slackApiPost<{ channel?: { id?: string } }>(botAccessToken, "conversations.open", {
+    users: slackUserId,
+  });
+  const channelId = opened.channel?.id;
+  if (!opened.ok || !channelId) return { ok: false, error: opened.error || "dm_open_failed" };
+  return { ok: true, channelId };
+}
+
+export async function setSlackAgentSuggestedPrompts({
+  botAccessToken,
+  channelId,
+  title = "What would you like to work through with Beckett?",
+}: {
+  botAccessToken: string | null;
+  channelId: string;
+  title?: string;
+}) {
+  if (!botAccessToken || !channelId) return { ok: false, error: "missing_agent_context" };
+
+  return slackApiPost(botAccessToken, "assistant.threads.setSuggestedPrompts", {
+    channel_id: channelId,
+    title,
+    prompts: [
+      {
+        title: "Prep for a difficult conversation",
+        message: "Help me prepare for a difficult workplace conversation.",
+      },
+      {
+        title: "Decode this Slack thread",
+        message: "Help me understand what is visible in this Slack thread and what I should not over-read.",
+      },
+      {
+        title: "Draft a clearer reply",
+        message: "Help me write a direct but kind Slack reply.",
+      },
+      {
+        title: "Ask for clarity",
+        message: "Help me ask a clarifying question without over-apologizing.",
+      },
+    ],
+  });
+}
+
+export async function configureSlackAgentSurface({
+  botAccessToken,
+  slackUserId,
+  channelId,
+}: {
+  botAccessToken: string | null;
+  slackUserId: string;
+  channelId?: string | null;
+}) {
+  if (!botAccessToken) return { ok: false, error: "missing_bot_token" };
+  const targetChannelId = channelId || (await openSlackAgentChannel(botAccessToken, slackUserId)).channelId;
+  if (!targetChannelId) return { ok: false, error: "agent_channel_unavailable" };
+
+  await setSlackAgentSuggestedPrompts({
+    botAccessToken,
+    channelId: targetChannelId,
+  });
+
+  return { ok: true, channelId: targetChannelId };
+}
+
 export async function postSlackAgentMessage({
   botAccessToken,
   slackUserId,
@@ -410,11 +475,9 @@ export async function postSlackAgentMessage({
 }) {
   if (!botAccessToken) return { ok: false, error: "missing_bot_token" };
 
-  const opened = await slackApiPost<{ channel?: { id?: string } }>(botAccessToken, "conversations.open", {
-    users: slackUserId,
-  });
-  const channelId = opened.channel?.id;
-  if (!opened.ok || !channelId) return { ok: false, error: opened.error || "dm_open_failed" };
+  const opened = await openSlackAgentChannel(botAccessToken, slackUserId);
+  if (!opened.ok || !opened.channelId) return opened;
+  const channelId = opened.channelId;
 
   const posted = await slackApiPost<{ ts?: string }>(botAccessToken, "chat.postMessage", {
     channel: channelId,
@@ -426,6 +489,12 @@ export async function postSlackAgentMessage({
     channel_id: channelId,
     thread_ts: posted.ts,
     title: title.slice(0, 80),
+  }).catch(() => null);
+
+  await setSlackAgentSuggestedPrompts({
+    botAccessToken,
+    channelId,
+    title: "Keep working with Beckett",
   }).catch(() => null);
 
   return { ok: true, channelId, ts: posted.ts };

@@ -504,7 +504,10 @@ async function sendPrepModalResponse({
     if (agentDelivery.ok) {
       await postSlackResponse(
         responseUrl,
-        "I moved this into Beckett’s coach panel so you can keep working through it privately."
+        [
+          "I moved this into your private Beckett conversation.",
+          "To use the sidebar view for the demo, open Beckett from Slack’s app/sidebar area and continue there.",
+        ].join("\n")
       );
       return;
     }

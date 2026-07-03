@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  configureSlackAgentSurface,
   handleSlackAiError,
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
@@ -17,6 +18,7 @@ type SlackEventEnvelope = {
   team_id?: string;
   event?: {
     type?: string;
+    tab?: string;
     channel_type?: string;
     channel?: string;
     user?: string;
@@ -46,6 +48,23 @@ export async function POST(req: NextRequest) {
 
   const event = body.event;
   if (
+    body.type === "event_callback" &&
+    event?.type === "app_home_opened" &&
+    event.user &&
+    (!event.tab || event.tab === "messages")
+  ) {
+    scheduleSlackBackgroundTask(
+      "Slack agent surface setup failed",
+      setupAgentSurface({
+        teamId: body.team_id || "",
+        slackUserId: event.user,
+        channelId: event.channel,
+      })
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  if (
     body.type !== "event_callback" ||
     event?.type !== "message" ||
     event.channel_type !== "im" ||
@@ -70,6 +89,25 @@ export async function POST(req: NextRequest) {
   );
 
   return NextResponse.json({ ok: true });
+}
+
+async function setupAgentSurface({
+  teamId,
+  slackUserId,
+  channelId,
+}: {
+  teamId: string;
+  slackUserId: string;
+  channelId?: string;
+}) {
+  const user = await lookupSlackConnectedUser(teamId, slackUserId);
+  if (!user?.botAccessToken || !isAllowedSlackPlan(user)) return;
+
+  await configureSlackAgentSurface({
+    botAccessToken: user.botAccessToken,
+    slackUserId,
+    channelId,
+  });
 }
 
 async function respondToAgentMessage({
