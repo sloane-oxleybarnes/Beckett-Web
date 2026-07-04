@@ -123,18 +123,28 @@ function initialAnswers(
   flowType: GuidedFlowType,
   source?: { channelId?: string | null; channelName?: string | null }
 ): GuidedAnswers {
+  const sourceAudience =
+    flowType === "respond" || flowType === "rewrite" || flowType === "decode"
+      ? source?.channelName
+        ? `#${source.channelName}`
+        : source?.channelId
+          ? "this Slack conversation"
+          : ""
+      : "";
   return {
     initial_request: normalizeText(text),
     person: flowType === "prep" || flowType === "practice" ? inferPerson(text) : "",
     conversation_type: inferConversationType(text),
     source_channel_id: source?.channelId || undefined,
     source_channel_name: source?.channelName || undefined,
+    audience: sourceAudience || undefined,
     extra_context: [],
   };
 }
 
 function nextStepForAnswers(flowType: GuidedFlowType, answers: GuidedAnswers): GuidedStep | null {
   if (flowType === "respond" || flowType === "rewrite") {
+    if (answers.source_channel_id) return null;
     if (!answers.audience) return "ask_audience";
     return null;
   }
@@ -567,7 +577,12 @@ async function firstSidebarResponse(input: GuidedFlowInput, session: SlackAgentS
     return completeSession(input, session);
   }
   if (session.flow_type === "respond" || session.flow_type === "rewrite") {
-    return askForStep(session);
+    const nextStep = nextStepForAnswers(session.flow_type, session.answers);
+    if (nextStep) {
+      const updated = await updateSession(session.id, { step: nextStep });
+      return askForStep(updated);
+    }
+    return completeSession(input, session);
   }
   if (session.flow_type === "practice") {
     const nextStep = nextStepForAnswers("practice", session.answers);
