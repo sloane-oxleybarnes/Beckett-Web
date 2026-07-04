@@ -68,6 +68,7 @@ type GuidedFlowInput = {
   threadTs: string;
   text: string;
   activeChannelId?: string | null;
+  activeContext?: SlackConversationContext | null;
   actionToken?: string | null;
 };
 
@@ -727,13 +728,15 @@ async function completeSession(input: GuidedFlowInput, session: SlackAgentSessio
   const prompt = promptForFlow(session, followupText);
   const contextChannelId = input.activeChannelId || session.answers.source_channel_id || null;
   const contextChannelName = session.answers.source_channel_name || null;
-  const activeContext = contextChannelId
-    ? await fetchSlackConversationContext({
-        accessToken: input.user.accessToken,
-        channelId: contextChannelId,
-        channelName: contextChannelName,
-      })
-    : null;
+  const activeContext =
+    input.activeContext ||
+    (contextChannelId
+      ? await fetchSlackConversationContext({
+          accessToken: input.user.accessToken,
+          channelId: contextChannelId,
+          channelName: contextChannelName,
+        })
+      : null);
   const missingContextMessage = missingCurrentConversationMessage(session.flow_type, session, activeContext);
   if (missingContextMessage) {
     await updateSession(session.id, { status: "completed" });
@@ -874,33 +877,57 @@ export async function startGuidedSlackFlow({
     answers,
     step,
   });
-  const response = await firstSidebarResponse(
-    {
-      user,
-      teamId,
-      slackUserId,
-      channelId: postedChannelId,
-      threadTs: postedTs,
-      text: seededPrompt,
-      activeChannelId: sourceChannelId,
-    },
-    session
-  );
+  let response = "";
+  try {
+    response = await firstSidebarResponse(
+      {
+        user,
+        teamId,
+        slackUserId,
+        channelId: postedChannelId,
+        threadTs: postedTs,
+        text: seededPrompt,
+        activeChannelId: sourceChannelId,
+        activeContext: sourceActiveContext,
+      },
+      session
+    );
 
-  if (response && user.botAccessToken) {
-    const draftOptions = intent === "respond" ? await saveSlackDraftOptions(session.id, response) : [];
-    const payload = buildBeckettPayload({
-      title: "Beckett",
-      subtitle: "",
-      body: response,
-      hideTitle: true,
-      actions: buildSlackDraftUseActions(session.id, draftOptions),
+    if (response && user.botAccessToken) {
+      const draftOptions = intent === "respond" ? await saveSlackDraftOptions(session.id, response) : [];
+      const payload = buildBeckettPayload({
+        title: "Beckett",
+        subtitle: "",
+        body: response,
+        hideTitle: true,
+        actions: buildSlackDraftUseActions(session.id, draftOptions),
+      });
+      await slackApiPost(user.botAccessToken, "chat.postMessage", {
+        channel: postedChannelId,
+        thread_ts: postedTs,
+        ...payload,
+      });
+    }
+  } catch (error) {
+    console.error("Slack guided flow response failed after opener", {
+      intent,
+      sourceChannelPresent: Boolean(sourceChannelId),
+      message: error instanceof Error ? error.message : String(error),
     });
-    await slackApiPost(user.botAccessToken, "chat.postMessage", {
-      channel: postedChannelId,
-      thread_ts: postedTs,
-      ...payload,
-    });
+    response = "I started the private thread, but had trouble generating the response. Try the command again, or paste the message here and I’ll work from that.";
+    if (user.botAccessToken) {
+      const payload = buildBeckettPayload({
+        title: "Beckett",
+        subtitle: "",
+        body: response,
+        hideTitle: true,
+      });
+      await slackApiPost(user.botAccessToken, "chat.postMessage", {
+        channel: postedChannelId,
+        thread_ts: postedTs,
+        ...payload,
+      }).catch(() => null);
+    }
   }
 
   return {

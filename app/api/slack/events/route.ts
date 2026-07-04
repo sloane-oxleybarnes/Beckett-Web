@@ -218,6 +218,7 @@ async function respondToAgentMessage({
       threadTs,
       text,
       activeChannelId,
+      activeContext,
       actionToken,
     });
 
