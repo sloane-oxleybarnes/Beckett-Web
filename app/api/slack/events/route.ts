@@ -226,6 +226,7 @@ async function respondToAgentMessage({
         title: "Beckett",
         subtitle: guidedPrep.title || "Communication coach",
         body: guidedPrep.response,
+        actions: guidedPrep.actions,
       });
 
       await slackApiPost(user.botAccessToken, "chat.postMessage", {

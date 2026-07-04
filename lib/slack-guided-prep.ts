@@ -29,12 +29,14 @@ type GuidedAnswers = {
   conversation_type?: string;
   source_channel_id?: string;
   source_channel_name?: string;
+  source_thread_ts?: string;
   audience?: string;
   outcome?: string;
   concern?: string;
   practice_goal?: string;
   practice_pushback?: string;
   extra_context?: string[];
+  draft_options?: SlackDraftOption[];
 };
 
 type EvidenceSuggestion = {
@@ -77,11 +79,22 @@ type StartGuidedFlowInput = {
   prompt: string;
   sourceChannelId?: string | null;
   sourceChannelName?: string | null;
+  sourceThreadTs?: string | null;
 };
 
 type GuidedFlowResult =
-  | { handled: true; response: string; title?: string }
+  | { handled: true; response: string; title?: string; actions?: Record<string, unknown>[] }
   | { handled: false };
+
+export const SLACK_DRAFT_USE_ACTION_ID = "beckett_draft_use";
+export const SLACK_DRAFT_SEND_ACTION_ID = "beckett_draft_send";
+export const SLACK_DRAFT_CANCEL_ACTION_ID = "beckett_draft_cancel";
+
+export type SlackDraftOption = {
+  id: "direct" | "warm" | "concise";
+  label: string;
+  text: string;
+};
 
 const GUIDED_TRIGGER_RE =
   /\b(help me prepare|prep\b|prepare\b|practice\b|respond\b|reply\b|rewrite\b|decode\b|understand\b|1:1|one-on-one|manager|raise|promotion|salary|workload|feedback|boundary|pushback|difficult conversation|clarity)\b/i;
@@ -121,7 +134,7 @@ function inferConversationType(text: string) {
 function initialAnswers(
   text: string,
   flowType: GuidedFlowType,
-  source?: { channelId?: string | null; channelName?: string | null }
+  source?: { channelId?: string | null; channelName?: string | null; threadTs?: string | null }
 ): GuidedAnswers {
   const sourceAudience =
     flowType === "respond" || flowType === "rewrite" || flowType === "decode"
@@ -137,6 +150,7 @@ function initialAnswers(
     conversation_type: inferConversationType(text),
     source_channel_id: source?.channelId || undefined,
     source_channel_name: source?.channelName || undefined,
+    source_thread_ts: source?.threadTs || undefined,
     audience: sourceAudience || undefined,
     extra_context: [],
   };
@@ -174,6 +188,146 @@ function flowTitle(flowType: GuidedFlowType) {
     case "practice":
       return "Practice with Beckett";
   }
+}
+
+function normalizeDraftText(text: string) {
+  return text
+    .replace(/^[-•\s]+/, "")
+    .replace(/^["“”']+|["“”']+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function extractSlackDraftOptions(response: string): SlackDraftOption[] {
+  const labels: Array<Pick<SlackDraftOption, "id" | "label"> & { pattern: RegExp }> = [
+    { id: "direct", label: "Direct but kind", pattern: /direct\s+but\s+kind/i },
+    { id: "warm", label: "Warm and collaborative", pattern: /warm\s+and\s+collaborative/i },
+    { id: "concise", label: "Concise", pattern: /concise/i },
+  ];
+  const matches = labels
+    .map((label) => {
+      const match = response.match(label.pattern);
+      return match?.index === undefined ? null : { ...label, index: match.index, matchText: match[0] };
+    })
+    .filter(Boolean) as Array<Pick<SlackDraftOption, "id" | "label"> & { index: number; matchText: string }>;
+
+  if (matches.length < 2) return [];
+  matches.sort((a, b) => a.index - b.index);
+
+  const options = matches
+    .map((match, index) => {
+      const start = match.index + match.matchText.length;
+      const end = matches[index + 1]?.index ?? response.length;
+      const raw = response
+        .slice(start, end)
+        .replace(/^[:\s-]+/, "")
+        .replace(/\n{2,}[\s\S]*$/m, (chunk) => {
+          const firstParagraph = chunk.split(/\n{2,}/)[0] || "";
+          return firstParagraph;
+        });
+      const text = normalizeDraftText(raw);
+      return text ? { id: match.id, label: match.label, text } : null;
+    })
+    .filter(Boolean) as SlackDraftOption[];
+
+  const unique = new Map<SlackDraftOption["id"], SlackDraftOption>();
+  for (const option of options) unique.set(option.id, option);
+  return Array.from(unique.values()).slice(0, 3);
+}
+
+export function buildSlackDraftUseActions(sessionId: string, options: SlackDraftOption[]) {
+  if (!sessionId || !options.length) return [];
+  return options.map((option) => ({
+    type: "button",
+    text: {
+      type: "plain_text",
+      text:
+        option.id === "direct"
+          ? "Use direct"
+          : option.id === "warm"
+            ? "Use warm"
+            : "Use concise",
+    },
+    action_id: SLACK_DRAFT_USE_ACTION_ID,
+    value: JSON.stringify({ sessionId, optionId: option.id }),
+  }));
+}
+
+export async function saveSlackDraftOptions(sessionId: string, response: string) {
+  const options = extractSlackDraftOptions(response);
+  if (!options.length) return [];
+
+  const { data, error } = await supabaseAdmin
+    .from("slack_agent_sessions")
+    .select("answers")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (error || !data) return [];
+
+  await supabaseAdmin
+    .from("slack_agent_sessions")
+    .update({
+      answers: {
+        ...((data.answers as GuidedAnswers | null) || {}),
+        draft_options: options,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", sessionId);
+
+  return options;
+}
+
+export async function createSlackDraftActionSession({
+  user,
+  teamId,
+  slackUserId,
+  agentChannelId,
+  agentThreadTs,
+  sourceChannelId,
+  sourceChannelName,
+  sourceThreadTs,
+  prompt,
+  response,
+}: {
+  user: SlackConnectedUser;
+  teamId: string;
+  slackUserId: string;
+  agentChannelId: string;
+  agentThreadTs: string;
+  sourceChannelId?: string | null;
+  sourceChannelName?: string | null;
+  sourceThreadTs?: string | null;
+  prompt: string;
+  response: string;
+}) {
+  const draftOptions = extractSlackDraftOptions(response);
+  if (!draftOptions.length) return { sessionId: null, actions: [] as Record<string, unknown>[] };
+
+  const session = await createSession({
+    user,
+    teamId,
+    slackUserId,
+    channelId: agentChannelId,
+    threadTs: agentThreadTs,
+    flowType: "respond",
+    step: "decode_followup",
+    answers: {
+      initial_request: normalizeText(prompt),
+      conversation_type: inferConversationType(prompt),
+      source_channel_id: sourceChannelId || undefined,
+      source_channel_name: sourceChannelName || undefined,
+      source_thread_ts: sourceThreadTs || undefined,
+      audience: sourceChannelName ? `#${sourceChannelName}` : sourceChannelId ? "this Slack conversation" : undefined,
+      extra_context: [],
+      draft_options: draftOptions,
+    },
+  });
+
+  return {
+    sessionId: session.id,
+    actions: buildSlackDraftUseActions(session.id, draftOptions),
+  };
 }
 
 async function findActiveSession({
@@ -603,6 +757,7 @@ export async function startGuidedSlackFlow({
   prompt,
   sourceChannelId,
   sourceChannelName,
+  sourceThreadTs,
 }: StartGuidedFlowInput) {
   if (!isGuidedFlowType(intent)) return { ok: false, error: "unsupported_flow" };
   const seededPrompt = sourceChannelName
@@ -611,6 +766,7 @@ export async function startGuidedSlackFlow({
   const answers = initialAnswers(seededPrompt, intent, {
     channelId: sourceChannelId,
     channelName: sourceChannelName,
+    threadTs: sourceThreadTs,
   });
   const step = nextStepForAnswers(intent, answers) || (intent === "decode" ? "decode_followup" : "ask_audience");
   const initialText =
@@ -654,11 +810,13 @@ export async function startGuidedSlackFlow({
   );
 
   if (response && user.botAccessToken) {
+    const draftOptions = intent === "respond" ? await saveSlackDraftOptions(session.id, response) : [];
     const payload = buildBeckettPayload({
       title: "Beckett",
       subtitle: flowTitle(intent),
       body: response,
       hideTitle: true,
+      actions: buildSlackDraftUseActions(session.id, draftOptions),
     });
     await slackApiPost(user.botAccessToken, "chat.postMessage", {
       channel: postedChannelId,
@@ -733,7 +891,14 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
       answers,
       step,
     });
-    return { handled: true, title: flowTitle(flowType), response: await firstSidebarResponse(input, created) };
+    const response = await firstSidebarResponse(input, created);
+    const draftOptions = flowType === "respond" ? await saveSlackDraftOptions(created.id, response) : [];
+    return {
+      handled: true,
+      title: flowTitle(flowType),
+      response,
+      actions: buildSlackDraftUseActions(created.id, draftOptions),
+    };
   }
 
   if (session.step === "decode_followup") {
@@ -749,7 +914,14 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
         extra_context: [...(session.answers.extra_context || []), text],
       },
     });
-    return { handled: true, title: "Respond with Beckett", response: await completeSession(input, updated, text) };
+    const response = await completeSession(input, updated, text);
+    const draftOptions = await saveSlackDraftOptions(updated.id, response);
+    return {
+      handled: true,
+      title: "Respond with Beckett",
+      response,
+      actions: buildSlackDraftUseActions(updated.id, draftOptions),
+    };
   }
 
   if (session.step === "confirm_evidence") {
@@ -788,5 +960,12 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
     return { handled: true, title: flowTitle(session.flow_type), response: askForStep(updated) };
   }
 
-  return { handled: true, title: flowTitle(session.flow_type), response: await completeSession(input, updated) };
+  const response = await completeSession(input, updated);
+  const draftOptions = session.flow_type === "respond" ? await saveSlackDraftOptions(updated.id, response) : [];
+  return {
+    handled: true,
+    title: flowTitle(session.flow_type),
+    response,
+    actions: buildSlackDraftUseActions(updated.id, draftOptions),
+  };
 }

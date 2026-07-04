@@ -11,6 +11,7 @@ import {
   postSlackResponse,
   runSlackCoaching,
   scheduleSlackBackgroundTask,
+  slackApiPost,
   slackConnectText,
   slackContextUserNote,
   SlackBlock,
@@ -20,6 +21,13 @@ import {
   SlackResponseDetail,
   verifySlackRequest,
 } from "@/lib/slack-app";
+import {
+  createSlackDraftActionSession,
+  SLACK_DRAFT_CANCEL_ACTION_ID,
+  SLACK_DRAFT_SEND_ACTION_ID,
+  SLACK_DRAFT_USE_ACTION_ID,
+  SlackDraftOption,
+} from "@/lib/slack-guided-prep";
 import { supabaseAdmin } from "@/lib/server-admin";
 
 export const runtime = "nodejs";
@@ -59,6 +67,11 @@ type SlackInteractionPayload = {
     attachments?: Array<{ text?: string; fallback?: string }>;
   };
   channel?: { id?: string; name?: string };
+};
+
+type SlackDraftActionValue = {
+  sessionId?: string;
+  optionId?: SlackDraftOption["id"];
 };
 
 type SlackPendingRequest = {
@@ -147,6 +160,27 @@ function getSlashDetailAction(payload: SlackInteractionPayload) {
   } satisfies { requestId: string; responseDetail: SlackResponseDetail; intent: SlackCoachingIntent };
 }
 
+function getDraftAction(payload: SlackInteractionPayload) {
+  const action = payload.actions?.find((item) =>
+    item.action_id === SLACK_DRAFT_USE_ACTION_ID ||
+    item.action_id === SLACK_DRAFT_SEND_ACTION_ID ||
+    item.action_id === SLACK_DRAFT_CANCEL_ACTION_ID
+  );
+  if (!action?.action_id || !action.value) return null;
+
+  try {
+    const parsed = JSON.parse(action.value) as SlackDraftActionValue;
+    if (!parsed.sessionId || !parsed.optionId) return null;
+    return {
+      actionId: action.action_id,
+      sessionId: parsed.sessionId,
+      optionId: parsed.optionId,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function detailLabel(responseDetail: SlackResponseDetail) {
   return responseDetail === "longer" ? "longer explanation" : "quick answer";
 }
@@ -169,6 +203,97 @@ async function loadPendingRequest(requestId: string) {
 
   if (error) throw error;
   return data as SlackPendingRequest | null;
+}
+
+async function loadDraftSession({
+  sessionId,
+  teamId,
+  slackUserId,
+}: {
+  sessionId: string;
+  teamId: string;
+  slackUserId: string;
+}) {
+  const { data, error } = await supabaseAdmin
+    .from("slack_agent_sessions")
+    .select("id, user_id, slack_team_id, slack_user_id, slack_channel_id, thread_ts, flow_type, status, answers")
+    .eq("id", sessionId)
+    .eq("slack_team_id", teamId)
+    .eq("slack_user_id", slackUserId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as
+    | {
+        id: string;
+        user_id: string;
+        slack_team_id: string;
+        slack_user_id: string;
+        slack_channel_id: string;
+        thread_ts: string | null;
+        flow_type: string;
+        status: string;
+        answers: {
+          source_channel_id?: string;
+          source_channel_name?: string;
+          source_thread_ts?: string;
+          draft_options?: SlackDraftOption[];
+        };
+      }
+    | null;
+}
+
+function draftDestinationLabel(answers: {
+  source_channel_id?: string;
+  source_channel_name?: string;
+  source_thread_ts?: string;
+}) {
+  const channel = answers.source_channel_name ? `#${answers.source_channel_name}` : "the original Slack conversation";
+  return answers.source_thread_ts ? `${channel} thread` : channel;
+}
+
+function buildDraftActionValue(sessionId: string, optionId: SlackDraftOption["id"]) {
+  return JSON.stringify({ sessionId, optionId });
+}
+
+function buildDraftConfirmationPayload({
+  sessionId,
+  option,
+  destination,
+}: {
+  sessionId: string;
+  option: SlackDraftOption;
+  destination: string;
+}) {
+  return buildBeckettPayload({
+    title: "Beckett",
+    subtitle: "Confirm before sending",
+    body: [
+      `Selected draft: ${option.label}`,
+      "",
+      option.text,
+      "",
+      `Destination: ${destination}`,
+      "",
+      "Nothing posts publicly unless you confirm.",
+    ].join("\n"),
+    hideTitle: true,
+    actions: [
+      {
+        type: "button",
+        text: { type: "plain_text", text: "Send to Slack" },
+        style: "primary",
+        action_id: SLACK_DRAFT_SEND_ACTION_ID,
+        value: buildDraftActionValue(sessionId, option.id),
+      },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "Cancel" },
+        action_id: SLACK_DRAFT_CANCEL_ACTION_ID,
+        value: buildDraftActionValue(sessionId, option.id),
+      },
+    ],
+  });
 }
 
 async function claimPendingRequest({
@@ -439,6 +564,38 @@ async function sendMessageShortcutResponse({
     });
 
     if (agentDelivery.ok) {
+      const agentChannelId = "channelId" in agentDelivery ? agentDelivery.channelId : null;
+      const agentThreadTs = "ts" in agentDelivery ? agentDelivery.ts : null;
+      if (agentChannelId && agentThreadTs && user.botAccessToken) {
+        const draftSession = await createSlackDraftActionSession({
+          user,
+          teamId,
+          slackUserId,
+          agentChannelId,
+          agentThreadTs,
+          sourceChannelId: payload.channel?.id,
+          sourceChannelName: payload.channel?.name,
+          sourceThreadTs: payload.message?.thread_ts || payload.message?.ts,
+          prompt,
+          response,
+        });
+
+        if (draftSession.actions.length) {
+          const actionPayload = buildBeckettPayload({
+            title: "Beckett",
+            subtitle: "Choose a draft",
+            body: "Pick the version you want to review before sending.",
+            hideTitle: true,
+            actions: draftSession.actions,
+          });
+          await slackApiPost(user.botAccessToken, "chat.postMessage", {
+            channel: agentChannelId,
+            thread_ts: agentThreadTs,
+            ...actionPayload,
+          });
+        }
+      }
+
       const ack = buildBeckettPayload({
         title: "Beckett",
         subtitle: "Message coaching",
@@ -464,6 +621,92 @@ async function sendMessageShortcutResponse({
   }
 }
 
+async function handleDraftButtonResponse({
+  origin,
+  payload,
+  actionId,
+  sessionId,
+  optionId,
+}: {
+  origin: string;
+  payload: SlackInteractionPayload;
+  actionId: string;
+  sessionId: string;
+  optionId: SlackDraftOption["id"];
+}) {
+  const responseUrl = payload.response_url || "";
+  const teamId = payload.team?.id || "";
+  const slackUserId = payload.user?.id || "";
+
+  try {
+    if (!teamId || !slackUserId) {
+      await replaceSlackInteraction(responseUrl, "Beckett could not read the Slack workspace and user context.");
+      return;
+    }
+
+    const session = await loadDraftSession({ sessionId, teamId, slackUserId });
+    const option = session?.answers?.draft_options?.find((item) => item.id === optionId);
+    if (!session || !option) {
+      await replaceSlackInteraction(responseUrl, "That draft is no longer available. Ask Beckett to draft a new response.");
+      return;
+    }
+
+    if (actionId === SLACK_DRAFT_CANCEL_ACTION_ID) {
+      await replaceSlackInteraction(responseUrl, "Canceled. Nothing was posted.");
+      return;
+    }
+
+    if (!session.answers.source_channel_id) {
+      await replaceSlackInteraction(
+        responseUrl,
+        [
+          "I do not have the original Slack destination for this draft, so I will not offer a send button.",
+          "",
+          option.text,
+        ].join("\n")
+      );
+      return;
+    }
+
+    const destination = draftDestinationLabel(session.answers);
+    if (actionId === SLACK_DRAFT_USE_ACTION_ID) {
+      const confirmation = buildDraftConfirmationPayload({ sessionId, option, destination });
+      await replaceSlackInteraction(responseUrl, confirmation.text, confirmation.blocks);
+      return;
+    }
+
+    const user = await lookupSlackConnectedUser(teamId, slackUserId);
+    if (!user?.botAccessToken) {
+      await replaceSlackInteraction(responseUrl, slackConnectText(origin, "Beckett could not send that draft because Slack needs to be reconnected."));
+      return;
+    }
+
+    const sent = await slackApiPost<{ ts?: string }>(user.botAccessToken, "chat.postMessage", {
+      channel: session.answers.source_channel_id,
+      thread_ts: session.answers.source_thread_ts,
+      text: option.text,
+    });
+
+    if (!sent.ok) {
+      await replaceSlackInteraction(
+        responseUrl,
+        `Beckett could not post that draft to ${destination}: ${sent.error || "Slack did not accept the message."}`
+      );
+      return;
+    }
+
+    await replaceSlackInteraction(responseUrl, `Sent to ${destination}.`);
+  } catch (error) {
+    console.error("Slack draft button action failed", {
+      sessionId,
+      optionId,
+      actionId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    await replaceSlackInteraction(responseUrl, "Beckett could not finish that draft action. Please try again.");
+  }
+}
+
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const verification = verifySlackRequest(req, rawBody);
@@ -475,6 +718,22 @@ export async function POST(req: NextRequest) {
   if (!payload) return NextResponse.json({ error: "Invalid Slack payload." }, { status: 400 });
 
   if (payload.type === "block_actions") {
+    const draftAction = getDraftAction(payload);
+    if (draftAction) {
+      scheduleSlackBackgroundTask(
+        "Slack draft button response failed",
+        handleDraftButtonResponse({
+          origin: req.nextUrl.origin,
+          payload,
+          actionId: draftAction.actionId,
+          sessionId: draftAction.sessionId,
+          optionId: draftAction.optionId,
+        })
+      );
+
+      return NextResponse.json({ ok: true });
+    }
+
     const detailAction = getSlashDetailAction(payload);
     if (!detailAction) return NextResponse.json({ ok: true });
 
