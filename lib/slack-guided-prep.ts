@@ -658,6 +658,7 @@ export async function startGuidedSlackFlow({
       title: "Beckett",
       subtitle: flowTitle(intent),
       body: response,
+      hideTitle: true,
     });
     await slackApiPost(user.botAccessToken, "chat.postMessage", {
       channel: postedChannelId,

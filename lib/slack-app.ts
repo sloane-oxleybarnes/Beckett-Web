@@ -78,6 +78,7 @@ type BeckettBlockOptions = {
   body?: string;
   footer?: string;
   actions?: SlackActionElement[];
+  hideTitle?: boolean;
 };
 
 export type SlackConnectedUser = {
@@ -270,13 +271,16 @@ export function buildBeckettBlocks({
   body,
   footer,
   actions,
+  hideTitle = false,
 }: BeckettBlockOptions): SlackBlock[] {
-  const blocks: SlackBlock[] = [
-    {
+  const blocks: SlackBlock[] = [];
+
+  if (!hideTitle) {
+    blocks.push({
       type: "header",
       text: { type: "plain_text", text: title.slice(0, 150) },
-    },
-  ];
+    });
+  }
 
   if (subtitle) {
     blocks.push({
@@ -326,12 +330,15 @@ export function buildBeckettPayload({
   body,
   footer,
   actions,
+  hideTitle,
 }: BeckettBlockOptions) {
   const cleanedBody = cleanSlackDisplayText(body || "");
-  const fallback = [title || "Beckett", subtitle, prompt, cleanedBody, footer].filter(Boolean).join("\n\n");
+  const fallback = [hideTitle ? null : title || "Beckett", subtitle, prompt, cleanedBody, footer]
+    .filter(Boolean)
+    .join("\n\n");
   return {
     text: truncateSlackText(cleanSlackDisplayText(fallback || "Beckett is ready.")),
-    blocks: buildBeckettBlocks({ title, subtitle, prompt, body: cleanedBody, footer, actions }),
+    blocks: buildBeckettBlocks({ title, subtitle, prompt, body: cleanedBody, footer, actions, hideTitle }),
   };
 }
 
@@ -652,6 +659,7 @@ export async function postSlackAgentMessage({
     title: "Beckett",
     subtitle: title,
     body: text,
+    hideTitle: true,
   });
 
   const posted = await slackApiPost<{ ts?: string }>(botAccessToken, "chat.postMessage", {
