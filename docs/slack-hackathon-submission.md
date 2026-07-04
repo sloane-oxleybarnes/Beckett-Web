@@ -24,8 +24,8 @@ This hackathon submission is Slack-only. It does not rely on Beckett's Chrome ex
 3. Beckett explains what is visible in the thread, what is only a possible interpretation, and what not to over-read.
 4. Beckett suggests a next step and 2-3 reply options: Direct but kind, Warm and collaborative, and Concise.
 5. The user runs `/beckett prep I need to talk to my manager about workload in my 1:1`.
-6. Beckett opens a short modal to gather the person, goal, evidence, and likely pushback.
-7. Beckett moves the coaching into the Slack Agent/Split View Messages surface.
+6. Beckett starts a private sidebar walkthrough instead of opening a modal.
+7. Beckett asks one focused setup question at a time.
 8. Beckett searches relevant Slack history for possible evidence instead of making the user remember and paste everything manually.
 9. Beckett asks the user to confirm what evidence to include, then builds talking points, an opening line, likely pushback, a practice prompt, and a follow-up draft.
 
@@ -72,9 +72,9 @@ flowchart LR
   E --> F["Slack agent tool selector"]
   F --> G["Anthropic coaching call with Beckett guardrails"]
   G --> I["Slack Agent/Split View coach panel"]
-  G --> K["Private ephemeral fallback"]
-  B --> J["Prep modal intake"]
+  B --> J["Guided sidebar session state"]
   J --> E
+  G --> K["Private ephemeral acknowledgement"]
 ```
 
 ## Privacy Notes
@@ -84,7 +84,7 @@ flowchart LR
 - Beckett does not store full Slack history or raw Slack search results by default.
 - Beckett separates visible evidence from possible interpretation.
 - Beckett does not infer diagnosis or hidden intent.
-- Modal intake is used only to collect the context Beckett needs for the requested prep session.
+- Guided sidebar questions collect only the context Beckett needs for the requested coaching session.
 
 ## Demo Script
 
@@ -96,8 +96,8 @@ Demo:
 3. Highlight that Beckett names visible evidence and uncertainty separately.
 4. Show reply options.
 5. Run `/beckett prep I need to talk to my manager about workload in my 1:1`.
-6. Show the `Prep with Beckett` modal.
-7. Submit context and show the coaching in the Slack Agent/Split View panel.
+6. Show Beckett starting the prep in the Slack Agent/Split View panel.
+7. Show Beckett asking one focused question at a time.
 8. Show Beckett pulling possible evidence from relevant Slack history.
 9. Show the user confirming what to include.
 10. Show talking points, opening line, likely pushback, practice prompt, and follow-up draft.
@@ -107,12 +107,12 @@ Close: "Beckett for Slack helps neurodivergent workers communicate clearly insid
 ## Slack-Only Test Checklist
 
 - `/beckett` returns a clean help card with no timeout.
-- `/beckett decode "Sure, sounds fine."` opens a private Beckett intake form and routes coaching into Beckett's Slack assistant conversation.
+- `/beckett decode "Sure, sounds fine."` routes coaching into Beckett's Slack assistant conversation without opening a modal.
 - `/beckett respond`, `/beckett rewrite`, `/beckett decode`, `/beckett prep`, and `/beckett practice` are the only visible slash subcommands.
 - `/beckett draft`, `/beckett clarity`, `/beckett boundary`, `/beckett followup`, and `/beckett tone` return a clean unsupported/help response.
 - `Ask Beckett` message shortcut returns a private response that separates visible facts from possible interpretation.
-- `/beckett prep I need to ask my manager for a raise` opens the `Prep with Beckett` modal without `operation_timeout`.
-- Prep output appears privately in Slack, with fallback behavior if the sidebar/Split View surface is unavailable.
+- `/beckett prep I need to ask my manager for a raise` starts a private guided sidebar flow without opening a modal.
+- Prep output appears privately in Slack.
 - Sidebar assistant flow asks focused follow-up questions instead of producing only one long wall of text when more context is needed.
 - Beckett searches authorized Slack history for possible evidence before asking the user to provide evidence manually.
 - Beckett asks the user to confirm what evidence to include.
