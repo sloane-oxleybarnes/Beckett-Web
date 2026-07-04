@@ -592,19 +592,19 @@ export async function setSlackAgentSuggestedPrompts({
     prompts: [
       {
         title: "Prep for a difficult conversation",
-        message: "Help me prepare for a difficult workplace conversation.",
+        message: "/beckett prep I need to prepare for a difficult workplace conversation.",
       },
       {
         title: "Decode this Slack thread",
-        message: "Help me understand what is visible in this Slack thread and what I should not over-read.",
+        message: "/beckett decode help me understand what is visible in this Slack thread and what I should not over-read.",
       },
       {
-        title: "Draft a clearer reply",
-        message: "Help me write a direct but kind Slack reply.",
+        title: "Respond clearly",
+        message: "/beckett respond help me write a direct but kind Slack reply.",
       },
       {
-        title: "Ask for clarity",
-        message: "Help me ask a clarifying question without over-apologizing.",
+        title: "Practice a conversation",
+        message: "/beckett practice my 1:1 with my manager about workload.",
       },
     ],
   });

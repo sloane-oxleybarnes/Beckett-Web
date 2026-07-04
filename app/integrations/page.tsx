@@ -21,7 +21,7 @@ const live = [
   { name: "Chrome extension", icon: "🧩", description: "Brings Beckett into the browser tools beta users are testing now." },
 ];
 
-const slackCommands = ["rewrite", "decode", "draft", "prep", "tone", "followup"];
+const slackCommands = ["respond", "rewrite", "decode", "prep", "practice"];
 
 const comingSoon = [
   { name: "Google Meet", icon: "🎥" },

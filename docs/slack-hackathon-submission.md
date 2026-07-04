@@ -107,7 +107,9 @@ Close: "Beckett for Slack helps neurodivergent workers communicate clearly insid
 ## Slack-Only Test Checklist
 
 - `/beckett` returns a clean help card with no timeout.
-- `/beckett decode "Sure, sounds fine."` opens the private Quick answer / Longer explanation flow.
+- `/beckett decode "Sure, sounds fine."` opens a private Beckett intake form and routes coaching into Beckett's Slack assistant conversation.
+- `/beckett respond`, `/beckett rewrite`, `/beckett decode`, `/beckett prep`, and `/beckett practice` are the only visible slash subcommands.
+- `/beckett draft`, `/beckett clarity`, `/beckett boundary`, `/beckett followup`, and `/beckett tone` return a clean unsupported/help response.
 - `Ask Beckett` message shortcut returns a private response that separates visible facts from possible interpretation.
 - `/beckett prep I need to ask my manager for a raise` opens the `Prep with Beckett` modal without `operation_timeout`.
 - Prep output appears privately in Slack, with fallback behavior if the sidebar/Split View surface is unavailable.

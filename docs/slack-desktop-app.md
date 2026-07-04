@@ -9,10 +9,10 @@ This is the Slack-only hackathon path for using Beckett inside Slack Desktop. It
 - Hackathon positioning: Beckett prepares neurodivergent workers for the conversations that matter at work
 - Signed Slack request verification with `SLACK_SIGNING_SECRET`
 - Beckett account matching through the existing `user_integrations` Slack connection
-- Ephemeral coaching responses so Beckett does not post into public Slack channels
+- Minimal private acknowledgements in Slack command/message surfaces, with the real coaching routed into Beckett's private Slack assistant conversation when available
 - Active context plus relevant live Slack search across authorized public channels, private channels, DMs, and group DMs after the user reconnects with the latest scopes
 - Tool-style agent layer for `analyze_slack_thread`, `draft_slack_reply`, `coach_for_clarity`, `prep_difficult_conversation`, `summarize_relationship_context`, and `explain_tone_without_over_inference`
-- Modal intake for `/beckett prep ...`, followed by Beckett coaching in the Slack Agent/Split View Messages surface when available
+- Modal intake for `/beckett respond`, `/beckett rewrite`, `/beckett decode`, `/beckett prep`, and `/beckett practice`, followed by Beckett coaching in the Slack Agent/Split View Messages surface when available
 
 ## Staging Setup
 
@@ -45,9 +45,9 @@ Use Slack Desktop or the Slack web app:
    - Expected: No `operation_timeout`.
    - Expected: No visible asterisk-heavy or terminal-like formatting.
 2. Run `/beckett decode "Sure, sounds fine."`.
-   - Expected: Slack acknowledges quickly, then shows a private Quick answer / Longer explanation choice card.
-3. Click `Quick answer`, then repeat and click `Longer explanation`.
-   - Expected: Beckett replaces the choice card with private coaching.
+   - Expected: Slack acknowledges quickly and opens a Beckett intake form.
+3. Submit the form.
+   - Expected: Beckett moves the coaching into the private Beckett assistant conversation when available.
    - Expected: The response uses clean section labels and short bullets.
    - Expected: No public channel message is posted.
 
@@ -67,17 +67,27 @@ Use Slack Desktop or the Slack web app:
 Test these commands:
 
 1. `/beckett respond help me answer this without sounding defensive`
-2. `/beckett boundary I cannot take on another project this week`
-3. `/beckett clarity I do not know what "clean this up" means`
-4. `/beckett practice my 1:1 with my manager about workload`
-5. `/beckett tone "I need this by Friday."`
-6. `/beckett followup remind Avery about the readout`
+2. `/beckett rewrite "Any update on this?"`
+3. `/beckett decode "Sure, sounds fine."`
+4. `/beckett prep I need to talk to my manager about workload in my 1:1`
+5. `/beckett practice my 1:1 with my manager about workload`
 
 Expected:
-- Non-prep commands use the private Quick answer / Longer explanation flow.
+- Commands open clean Slack-native modals before coaching.
+- Final coaching routes to Beckett's private assistant conversation when available.
 - Beckett gives neurodivergent-friendly workplace communication coaching.
 - Beckett avoids clinical labels, hidden-intent claims, and overconfident reads.
 - Draft options stay Slack-ready and easy to copy.
+
+Removed modes:
+- `/beckett draft`
+- `/beckett clarity`
+- `/beckett boundary`
+- `/beckett followup`
+- `/beckett tone`
+
+Expected:
+- Beckett should point users to `/beckett respond`, `/beckett rewrite`, `/beckett decode`, `/beckett prep`, or `/beckett practice`.
 
 ### 4. Prep Modal: Difficult Conversation Intake
 
@@ -92,9 +102,23 @@ Expected:
    - What evidence or context should Beckett know?
    - What are you worried they may push back on?
 3. Submit the modal.
-   - Expected: Beckett sends private prep coaching.
+   - Expected: Beckett sends private prep coaching to the Beckett assistant conversation.
    - Expected: Output includes conversation goal, talking points, opening sentence, likely pushback, practice prompt, and follow-up draft.
    - Expected: If the sidebar/Split View surface is unavailable, Beckett uses a private fallback response.
+
+### 4A. Practice Modal: Role-Play Intake
+
+1. Run `/beckett practice my 1:1 with my manager about workload`.
+   - Expected: Slack quickly shows `Opening practice form...`.
+   - Expected: The `Practice with Beckett` modal opens.
+2. Fill in:
+   - Who are you talking to?
+   - What conversation do you want to practice?
+   - What do you want to get better at?
+   - What are you worried could happen?
+3. Submit the modal.
+   - Expected: Beckett starts the practice setup privately in the Beckett assistant conversation.
+   - Expected: If the assistant surface is unavailable, Beckett uses a private fallback response.
 
 ### 5. Sidebar / Assistant Coaching Flow
 

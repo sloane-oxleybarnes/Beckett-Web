@@ -1,5 +1,9 @@
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  isAllowedSlackPlan as isAllowedSharedSlackPlan,
+  lookupSlackConnectedUser as lookupSharedSlackConnectedUser,
+} from "@/lib/slack-app";
 
 export const runtime = "nodejs";
 
@@ -11,13 +15,8 @@ type SlackCoachingIntent =
   | "general"
   | "rewrite"
   | "decode"
-  | "draft"
   | "prep"
-  | "tone"
-  | "followup"
   | "respond"
-  | "clarity"
-  | "boundary"
   | "practice";
 type SlackBlock = Record<string, unknown>;
 type SlackMessageOptions = {
@@ -55,7 +54,7 @@ type ParsedSlackCommand = {
 };
 
 type SlackPrepModalMetadata = {
-  intent: "prep";
+  intent: Exclude<SlackCoachingIntent, "general">;
   prompt: string;
   responseUrl: string;
   teamId: string;
@@ -270,24 +269,31 @@ function slackAskedLabel(intent: SlackCoachingIntent = "general") {
       return "You asked Beckett to rewrite:";
     case "decode":
       return "You asked Beckett to decode:";
-    case "draft":
-      return "You asked Beckett to draft:";
     case "prep":
       return "You asked Beckett to help you prep:";
-    case "tone":
-      return "You asked Beckett to check tone:";
-    case "followup":
-      return "You asked Beckett to follow up:";
     case "respond":
       return "You asked Beckett to help you respond:";
-    case "clarity":
-      return "You asked Beckett to help you ask for clarity:";
-    case "boundary":
-      return "You asked Beckett to help with a boundary:";
     case "practice":
       return "You asked Beckett to help you practice:";
     default:
       return "You asked:";
+  }
+}
+
+function commandDisplayName(intent: SlackCoachingIntent) {
+  switch (intent) {
+    case "respond":
+      return "Respond with Beckett";
+    case "rewrite":
+      return "Rewrite with Beckett";
+    case "decode":
+      return "Decode with Beckett";
+    case "prep":
+      return "Prep with Beckett";
+    case "practice":
+      return "Practice with Beckett";
+    default:
+      return "Beckett";
   }
 }
 
@@ -356,10 +362,6 @@ const slashSubcommands: Record<
     intent: "decode",
     missingText: 'Add the message you want Beckett to decode, like `/beckett decode "Sure, sounds fine."`.',
   },
-  draft: {
-    intent: "draft",
-    missingText: "Add what you need to say after `/beckett draft`, like `/beckett draft ask my manager for clearer priorities this week`.",
-  },
   prep: {
     intent: "prep",
     missingText: "Add the conversation you want to prepare for after `/beckett prep`.",
@@ -368,27 +370,9 @@ const slashSubcommands: Record<
     intent: "practice",
     missingText: "Add the conversation you want to practice after `/beckett practice`.",
   },
-  clarity: {
-    intent: "clarity",
-    missingText: "Add what feels unclear after `/beckett clarity`.",
-  },
-  boundary: {
-    intent: "boundary",
-    missingText: "Add the boundary you need help setting after `/beckett boundary`.",
-  },
-  tone: {
-    intent: "tone",
-    missingText: 'Add the wording you want Beckett to check, like `/beckett tone "I need this by Friday."`.',
-  },
-  followup: {
-    intent: "followup",
-    missingText: "Add the follow-up you need after `/beckett followup`.",
-  },
-  "follow-up": {
-    intent: "followup",
-    missingText: "Add the follow-up you need after `/beckett follow-up`.",
-  },
 };
+
+const removedSlashSubcommands = new Set(["draft", "clarity", "boundary", "followup", "tone"]);
 
 function parseSlashCommand(rawBody: string): SlashCommandPayload {
   const params = new URLSearchParams(rawBody);
@@ -411,7 +395,23 @@ function parseBeckettText(rawText: string): ParsedSlackCommand {
   const command = match?.[1]?.toLowerCase();
   const definition = command ? slashSubcommands[command] : null;
 
-  if (!definition) return { intent: "general", prompt: text };
+  if (command && removedSlashSubcommands.has(command)) {
+    return {
+      intent: "general",
+      prompt: text,
+      missingText:
+        "That Beckett Slack mode has moved. Use `/beckett respond`, `/beckett rewrite`, `/beckett decode`, `/beckett prep`, or `/beckett practice`.",
+    };
+  }
+
+  if (!definition) {
+    return {
+      intent: "general",
+      prompt: text,
+      missingText:
+        "Start with one of Beckett’s Slack modes: `/beckett respond`, `/beckett rewrite`, `/beckett decode`, `/beckett prep`, or `/beckett practice`.",
+    };
+  }
 
   const prompt = (match?.[2] || "").trim();
   return {
@@ -436,13 +436,8 @@ function helpPayload(command = "/beckett") {
       `${command} rewrite "Any update on this?"`,
       `${command} decode "Sure, sounds fine."`,
       `${command} respond help me answer this without sounding defensive`,
-      `${command} draft ask my manager for clearer priorities this week`,
       `${command} prep I need to tell a teammate their handoffs are too vague`,
-      `${command} boundary I cannot take on another project this week`,
-      `${command} clarity I do not know what "clean this up" means`,
       `${command} practice my 1:1 with my manager about workload`,
-      `${command} tone "I need this by Friday."`,
-      `${command} followup remind Avery about the readout`,
       "",
       "For a specific Slack message, use the message shortcut: Ask Beckett about this message.",
     ].join("\n"),
@@ -508,10 +503,138 @@ function textInputBlock({
   };
 }
 
+function staticSelectBlock({
+  blockId,
+  actionId,
+  label,
+  placeholder,
+  options,
+  optional = false,
+}: {
+  blockId: string;
+  actionId: string;
+  label: string;
+  placeholder: string;
+  options: Array<{ text: string; value: string }>;
+  optional?: boolean;
+}): SlackViewBlock {
+  return {
+    type: "input",
+    block_id: blockId,
+    optional,
+    label: { type: "plain_text", text: label },
+    element: {
+      type: "static_select",
+      action_id: actionId,
+      placeholder: { type: "plain_text", text: placeholder },
+      options: options.map((option) => ({
+        text: { type: "plain_text", text: option.text },
+        value: option.value,
+      })),
+    },
+  };
+}
+
+function usersSelectBlock({
+  blockId,
+  actionId,
+  label,
+  placeholder,
+  optional = true,
+}: {
+  blockId: string;
+  actionId: string;
+  label: string;
+  placeholder: string;
+  optional?: boolean;
+}): SlackViewBlock {
+  return {
+    type: "input",
+    block_id: blockId,
+    optional,
+    label: { type: "plain_text", text: label },
+    element: {
+      type: "users_select",
+      action_id: actionId,
+      placeholder: { type: "plain_text", text: placeholder },
+    },
+  };
+}
+
+function conversationsSelectBlock({
+  blockId,
+  actionId,
+  label,
+  placeholder,
+  optional = true,
+}: {
+  blockId: string;
+  actionId: string;
+  label: string;
+  placeholder: string;
+  optional?: boolean;
+}): SlackViewBlock {
+  return {
+    type: "input",
+    block_id: blockId,
+    optional,
+    label: { type: "plain_text", text: label },
+    element: {
+      type: "conversations_select",
+      action_id: actionId,
+      placeholder: { type: "plain_text", text: placeholder },
+      filter: {
+        include: ["public", "private", "im", "mpim"],
+        exclude_bot_users: true,
+      },
+    },
+  };
+}
+
+function audienceBlocks(): SlackViewBlock[] {
+  return [
+    staticSelectBlock({
+      blockId: "audience_type",
+      actionId: "value",
+      label: "Where are you sending this?",
+      placeholder: "Choose one",
+      options: [
+        { text: "DM", value: "dm" },
+        { text: "Channel", value: "channel" },
+      ],
+    }),
+    conversationsSelectBlock({
+      blockId: "target_channel",
+      actionId: "value",
+      label: "Select the DM or channel",
+      placeholder: "Choose the conversation",
+      optional: true,
+    }),
+    staticSelectBlock({
+      blockId: "channel_scope",
+      actionId: "value",
+      label: "If this is a channel, who is it for?",
+      placeholder: "Choose one",
+      optional: true,
+      options: [
+        { text: "One specific person", value: "specific_person" },
+        { text: "The whole channel", value: "whole_channel" },
+      ],
+    }),
+    usersSelectBlock({
+      blockId: "target_person",
+      actionId: "value",
+      label: "Specific person, if there is one",
+      placeholder: "Choose a person",
+      optional: true,
+    }),
+  ];
+}
+
 function buildPrepModalView(prompt: string, metadata: SlackPrepModalMetadata) {
   return {
     type: "modal",
-    callback_id: "beckett_prep_modal",
+    callback_id: "beckett_slack_flow_modal",
     title: { type: "plain_text", text: "Prep with Beckett" },
     submit: { type: "plain_text", text: "Start prep" },
     close: { type: "plain_text", text: "Cancel" },
@@ -563,6 +686,105 @@ function buildPrepModalView(prompt: string, metadata: SlackPrepModalMetadata) {
   };
 }
 
+function buildResponseModalView(intent: Exclude<SlackCoachingIntent, "general" | "prep" | "practice">, prompt: string, metadata: SlackPrepModalMetadata) {
+  const copy = {
+    respond: {
+      submit: "Draft replies",
+      label: "What are you responding to?",
+      placeholder: "Paste the message or describe the thread.",
+      helper: "Beckett will keep this private and move the coaching into your Beckett conversation.",
+    },
+    rewrite: {
+      submit: "Rewrite",
+      label: "What should Beckett rewrite?",
+      placeholder: "Paste your draft message.",
+      helper: "Beckett will rewrite this and explain the tone choice privately.",
+    },
+    decode: {
+      submit: "Decode",
+      label: "What should Beckett decode?",
+      placeholder: "Paste the message or describe the thread.",
+      helper: "Beckett will explain the possible tone/subtext and what not to over-read.",
+    },
+  }[intent];
+
+  return {
+    type: "modal",
+    callback_id: "beckett_slack_flow_modal",
+    title: { type: "plain_text", text: commandDisplayName(intent) },
+    submit: { type: "plain_text", text: copy.submit },
+    close: { type: "plain_text", text: "Cancel" },
+    private_metadata: JSON.stringify(metadata).slice(0, 3000),
+    blocks: [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: copy.helper,
+        },
+      },
+      textInputBlock({
+        blockId: "request",
+        actionId: "value",
+        label: copy.label,
+        placeholder: copy.placeholder,
+        initialValue: prompt,
+        multiline: true,
+      }),
+      ...audienceBlocks(),
+    ],
+  };
+}
+
+function buildPracticeModalView(prompt: string, metadata: SlackPrepModalMetadata) {
+  return {
+    type: "modal",
+    callback_id: "beckett_slack_flow_modal",
+    title: { type: "plain_text", text: "Practice with Beckett" },
+    submit: { type: "plain_text", text: "Start practice" },
+    close: { type: "plain_text", text: "Cancel" },
+    private_metadata: JSON.stringify(metadata).slice(0, 3000),
+    blocks: [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: "Beckett will use this to set up a private role-play in your Beckett conversation.",
+        },
+      },
+      textInputBlock({
+        blockId: "talking_to",
+        actionId: "value",
+        label: "Who are you talking to?",
+        placeholder: "My manager, Priya",
+      }),
+      textInputBlock({
+        blockId: "conversation",
+        actionId: "value",
+        label: "What conversation do you want to practice?",
+        placeholder: "I need to talk about workload in my 1:1.",
+        initialValue: prompt,
+        multiline: true,
+      }),
+      textInputBlock({
+        blockId: "goal",
+        actionId: "value",
+        label: "What do you want to get better at?",
+        placeholder: "Staying direct, not over-apologizing, handling pushback...",
+        multiline: true,
+      }),
+      textInputBlock({
+        blockId: "concern",
+        actionId: "value",
+        label: "What are you worried could happen?",
+        placeholder: "They may say this is not the right time.",
+        multiline: true,
+      }),
+      ...audienceBlocks(),
+    ],
+  };
+}
+
 async function openSlackModal(botAccessToken: string, triggerId: string, view: Record<string, unknown>) {
   const res = await fetch("https://slack.com/api/views.open", {
     method: "POST",
@@ -575,7 +797,7 @@ async function openSlackModal(botAccessToken: string, triggerId: string, view: R
   return res.json().catch(() => ({})) as Promise<{ ok?: boolean; error?: string }>;
 }
 
-async function openPrepModal({
+async function openCommandModal({
   origin,
   payload,
   parsed,
@@ -585,8 +807,6 @@ async function openPrepModal({
   parsed: ParsedSlackCommand;
 }) {
   const responseUrl = payload.response_url || "";
-  const { supabaseAdmin } = await import("@/lib/server-admin");
-
   if (!payload.team_id || !payload.user_id) {
     await postSlackResponse(responseUrl, "Beckett could not read the Slack workspace and user context.", {
       replaceOriginal: true,
@@ -594,32 +814,32 @@ async function openPrepModal({
     return;
   }
   if (!payload.trigger_id) {
-    await postSlackResponse(responseUrl, "Beckett could not open the prep form because Slack did not send a modal trigger.", {
+    await postSlackResponse(responseUrl, "Beckett could not open the form because Slack did not send a modal trigger.", {
       replaceOriginal: true,
     });
     return;
   }
 
-  const user = await lookupSlackConnectedUser(supabaseAdmin, payload.team_id, payload.user_id);
+  const user = await lookupSharedSlackConnectedUser(payload.team_id, payload.user_id);
   if (!user) {
     await postSlackResponse(responseUrl, slackConnectText(origin), { replaceOriginal: true });
     return;
   }
-  if (!isAllowedSlackPlan(user)) {
+  if (!isAllowedSharedSlackPlan(user)) {
     await postSlackResponse(responseUrl, "Beckett Slack coaching is available for beta and pro users.", {
       replaceOriginal: true,
     });
     return;
   }
   if (!user.botAccessToken) {
-    await postSlackResponse(responseUrl, "Beckett could not open the prep form because the Slack bot token is missing. Reinstall the Slack app, then reconnect Slack in Beckett Settings.", {
+    await postSlackResponse(responseUrl, "Beckett could not open the form because the Slack bot token is missing. Reinstall the Slack app, then reconnect Slack in Beckett Settings.", {
       replaceOriginal: true,
     });
     return;
   }
 
   const modalMetadata: SlackPrepModalMetadata = {
-    intent: "prep",
+    intent: parsed.intent === "general" ? "respond" : parsed.intent,
     prompt: parsed.prompt,
     responseUrl,
     teamId: payload.team_id,
@@ -627,23 +847,35 @@ async function openPrepModal({
     channelId: payload.channel_id,
     channelName: payload.channel_name,
   };
-  const view = buildPrepModalView(parsed.prompt, modalMetadata);
+  let view: Record<string, unknown>;
+  if (parsed.intent === "prep") {
+    view = buildPrepModalView(parsed.prompt, modalMetadata);
+  } else if (parsed.intent === "practice") {
+    view = buildPracticeModalView(parsed.prompt, modalMetadata);
+  } else if (parsed.intent === "respond" || parsed.intent === "rewrite" || parsed.intent === "decode") {
+    view = buildResponseModalView(parsed.intent, parsed.prompt, modalMetadata);
+  } else {
+    view = buildResponseModalView("respond", parsed.prompt, modalMetadata);
+  }
   const opened = await openSlackModal(user.botAccessToken, payload.trigger_id, view);
 
   if (!opened.ok) {
-    console.error("Slack prep modal open failed", {
+    console.error("Slack command modal open failed", {
       error: opened.error,
       teamPresent: Boolean(payload.team_id),
       userPresent: Boolean(payload.user_id),
+      intent: parsed.intent,
       promptLength: parsed.prompt.length,
     });
-    await postSlackResponse(responseUrl, "Beckett could not open the prep form. I can still prep privately here if you run `/beckett prep` again.", {
+    await postSlackResponse(responseUrl, "Beckett could not open that form. Try the `/beckett` command again.", {
       replaceOriginal: true,
     });
     return;
   }
 
-  await postSlackResponse(responseUrl, "Opening Beckett’s prep form...", { replaceOriginal: true });
+  await postSlackResponse(responseUrl, `Opening ${commandDisplayName(parsed.intent).replace(" with Beckett", "").toLowerCase()} form...`, {
+    replaceOriginal: true,
+  });
 }
 
 async function sendSlashChoiceCard({
@@ -782,16 +1014,16 @@ export async function POST(req: NextRequest) {
     promptLength: parsed.prompt.length,
   });
 
-  if (parsed.intent === "prep") {
+  if (parsed.intent === "prep" || parsed.intent === "practice" || parsed.intent === "respond" || parsed.intent === "rewrite" || parsed.intent === "decode") {
     scheduleSlackBackgroundTask(
-      "Slack prep modal open failed",
-      openPrepModal({
+      "Slack command modal open failed",
+      openCommandModal({
         origin: req.nextUrl.origin,
         payload,
         parsed,
       })
     );
-    return slackTextResponse("Opening Beckett’s prep form...");
+    return slackTextResponse(`Opening ${commandDisplayName(parsed.intent).replace(" with Beckett", "").toLowerCase()} form...`);
   }
 
   scheduleSlackBackgroundTask(
