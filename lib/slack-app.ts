@@ -821,16 +821,19 @@ export async function fetchSlackConversationContext({
   if (!accessToken) return slackUnavailable("missing_token");
   if (!channelId) return slackUnavailable("missing_channel");
 
-  const fetchRecentHistory = () =>
-    slackApiFetch<{ messages?: SlackHistoryMessage[] }>(
+  const fetchRecentHistory = () => {
+    const params = new URLSearchParams({
+      channel: channelId,
+      limit: String(MAX_SLACK_CONTEXT_MESSAGES),
+      inclusive: "true",
+    });
+    if (messageTs && !threadTs) params.set("latest", messageTs);
+    return slackApiFetch<{ messages?: SlackHistoryMessage[] }>(
       accessToken,
       "conversations.history",
-      new URLSearchParams({
-        channel: channelId,
-        limit: String(MAX_SLACK_CONTEXT_MESSAGES),
-        inclusive: "true",
-      })
+      params
     ).catch(() => null);
+  };
 
   const replyTs = threadTs || messageTs || null;
   const replyData = replyTs
@@ -845,7 +848,16 @@ export async function fetchSlackConversationContext({
         })
       ).catch(() => null)
     : null;
-  const data = replyData?.ok ? replyData : await fetchRecentHistory();
+  const recentData =
+    !replyData?.ok || (Array.isArray(replyData.messages) && replyData.messages.length <= 1)
+      ? await fetchRecentHistory()
+      : null;
+  const data =
+    recentData?.ok && Array.isArray(recentData.messages) && recentData.messages.length > (replyData?.messages?.length || 0)
+      ? recentData
+      : replyData?.ok
+        ? replyData
+        : recentData;
 
   if (!data?.ok) {
     const reason =
@@ -867,7 +879,7 @@ export async function fetchSlackConversationContext({
   if (!formatted.length) return slackUnavailable("no_messages");
 
   const label = channelName ? `#${channelName}` : "this Slack conversation";
-  const contextLabel = replyData?.ok ? `Slack thread context from ${label}` : `Recent Slack context from ${label}`;
+  const contextLabel = data === replyData ? `Slack thread context from ${label}` : `Recent Slack context from ${label}`;
   const context = [`${contextLabel} (oldest to newest):`, ...formatted].join("\n");
   return {
     text:

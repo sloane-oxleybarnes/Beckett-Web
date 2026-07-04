@@ -27,6 +27,8 @@ type GuidedAnswers = {
   initial_request?: string;
   person?: string;
   conversation_type?: string;
+  source_channel_id?: string;
+  source_channel_name?: string;
   audience?: string;
   outcome?: string;
   concern?: string;
@@ -116,11 +118,17 @@ function inferConversationType(text: string) {
   return "difficult workplace conversation";
 }
 
-function initialAnswers(text: string, flowType: GuidedFlowType): GuidedAnswers {
+function initialAnswers(
+  text: string,
+  flowType: GuidedFlowType,
+  source?: { channelId?: string | null; channelName?: string | null }
+): GuidedAnswers {
   return {
     initial_request: normalizeText(text),
     person: flowType === "prep" || flowType === "practice" ? inferPerson(text) : "",
     conversation_type: inferConversationType(text),
+    source_channel_id: source?.channelId || undefined,
+    source_channel_name: source?.channelName || undefined,
     extra_context: [],
   };
 }
@@ -430,6 +438,7 @@ function promptForFlow(session: SlackAgentSession, followupText?: string) {
     `Initial request: ${answers.initial_request || "not specified"}`,
     `Audience/person: ${answers.audience || answers.person || "not specified"}`,
     `Conversation type: ${answers.conversation_type || "not specified"}`,
+    `Source Slack channel: ${answers.source_channel_name ? `#${answers.source_channel_name}` : answers.source_channel_id || "not specified"}`,
     `Outcome: ${answers.outcome || "not specified"}`,
     `Concern/pushback: ${answers.concern || answers.practice_pushback || "not specified"}`,
     `Practice goal: ${answers.practice_goal || "not specified"}`,
@@ -488,16 +497,43 @@ function promptForFlow(session: SlackAgentSession, followupText?: string) {
 
 async function completeSession(input: GuidedFlowInput, session: SlackAgentSession, followupText?: string) {
   const prompt = promptForFlow(session, followupText);
+  const contextChannelId = input.activeChannelId || session.answers.source_channel_id || null;
+  const contextChannelName = session.answers.source_channel_name || null;
+  const activeContext = contextChannelId
+    ? await fetchSlackConversationContext({
+        accessToken: input.user.accessToken,
+        channelId: contextChannelId,
+        channelName: contextChannelName,
+      })
+    : null;
+  const contextPrompt = [
+    prompt,
+    session.answers.person ? `Relevant person: ${session.answers.person}` : "",
+    session.answers.audience ? `Relevant audience: ${session.answers.audience}` : "",
+    session.answers.source_channel_name ? `Relevant channel: #${session.answers.source_channel_name}` : "",
+    "Include relevant prior Slack messages with this person or about this topic across authorized channels, DMs, and group DMs.",
+  ].filter(Boolean).join("\n");
+  const coachingContext = await buildSlackCoachingContext({
+    user: input.user,
+    prompt: contextPrompt,
+    activeContext,
+    contextChannelId,
+    actionToken: input.actionToken,
+  });
+  const messageText = [
+    prompt,
+    coachingContext.text ? `\n${coachingContext.text}` : "",
+  ].filter(Boolean).join("\n");
   const response = await runSlackCoaching({
     user: input.user,
     action: "agent_message",
     prompt,
     sourceLabel: `slack_guided_${session.flow_type}_final`,
-    messageText: prompt,
-    contextStatus: "available",
-    contextFailureReason: null,
-    contextMessageCount: session.confirmed_evidence.length,
-    broaderSearchUsed: session.evidence_suggestions.length > 0,
+    messageText,
+    contextStatus: coachingContext.status,
+    contextFailureReason: coachingContext.failureReason,
+    contextMessageCount: coachingContext.messageCount,
+    broaderSearchUsed: coachingContext.broaderSearchUsed || session.evidence_suggestions.length > 0,
     responseDetail: session.flow_type === "respond" || session.flow_type === "rewrite" || session.flow_type === "decode" ? undefined : "longer",
     intent: session.flow_type,
   });
@@ -557,7 +593,10 @@ export async function startGuidedSlackFlow({
   const seededPrompt = sourceChannelName
     ? `${prompt}\n\nStarted from Slack channel: #${sourceChannelName}`
     : prompt;
-  const answers = initialAnswers(seededPrompt, intent);
+  const answers = initialAnswers(seededPrompt, intent, {
+    channelId: sourceChannelId,
+    channelName: sourceChannelName,
+  });
   const step = nextStepForAnswers(intent, answers) || (intent === "decode" ? "decode_followup" : "ask_audience");
   const initialText =
     intent === "decode"
@@ -664,7 +703,9 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
           : /\bpractice\b/i.test(text)
             ? "practice"
             : "prep";
-    const answers = initialAnswers(text, flowType);
+    const answers = initialAnswers(text, flowType, {
+      channelId: input.activeChannelId,
+    });
     const step = nextStepForAnswers(flowType, answers) || (flowType === "decode" ? "decode_followup" : "ask_audience");
     const created = await createSession({
       user: input.user,
