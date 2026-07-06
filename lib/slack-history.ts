@@ -313,7 +313,16 @@ export async function publishSlackHome({
   userId: string;
 }) {
   if (!botAccessToken) return { ok: false, error: "missing_bot_token" };
-  const threads = await listRecentSlackCoachingThreads(userId);
+  let threads: SlackCoachingThread[] = [];
+  try {
+    threads = await listRecentSlackCoachingThreads(userId);
+  } catch (error) {
+    console.error("Slack Home history lookup failed", {
+      userPresent: Boolean(userId),
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   return slackApiPost(botAccessToken, "views.publish", {
     user_id: slackUserId,
     view: {
