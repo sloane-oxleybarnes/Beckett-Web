@@ -7,6 +7,7 @@ import {
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
   postSlackResponse,
+  resolveSlackAuthorRelationshipContext,
   runSlackCoaching,
   scheduleSlackBackgroundTask,
   slackAskedLabel,
@@ -359,15 +360,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    const authorRelationship = await resolveSlackAuthorRelationshipContext({
+      user,
+      teamId,
+      slackAuthorUserId: payload.message?.user,
+      interactionType: "slack_message_shortcut",
+    });
+
     const response = await runSlackCoaching({
       user,
       action: "message_shortcut",
       prompt: buildShortcutPrompt(payload),
       sourceLabel: "slack_message_shortcut",
       messageText,
+      relationshipContext: authorRelationship?.promptContext || null,
     });
 
-    await postSlackResponse(responseUrl, response);
+    const linkHint =
+      authorRelationship && !authorRelationship.linked && authorRelationship.slackIdentifier
+        ? [
+            "",
+            `_Slack contact not linked yet. To use relationship context for ${
+              authorRelationship.slackProfile?.name || "this person"
+            }, add confirmed Slack ID ${authorRelationship.slackIdentifier} to their Beckett contact._`,
+          ].join("\n")
+        : "";
+
+    await postSlackResponse(responseUrl, `${response}${linkHint}`);
     return NextResponse.json({ ok: true });
   } catch (error) {
     await postSlackResponse(responseUrl, `Beckett could not finish that request: ${handleSlackAiError(error)}`);

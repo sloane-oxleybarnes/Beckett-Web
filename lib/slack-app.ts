@@ -4,6 +4,11 @@ import { callAnthropic } from "@/lib/anthropic";
 import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
+import {
+  lookupRelationshipContextByIdentifier,
+  recordSafeInteractionSummary,
+} from "@/lib/contact-relationship-context";
+import { slackUserIdentifier } from "@/lib/contact-identifiers";
 import { getPublicSiteUrl } from "@/lib/deployment-env";
 import { supabaseAdmin } from "@/lib/server-admin";
 
@@ -294,9 +299,14 @@ async function slackApiFetch<T>(accessToken: string, method: string, params: URL
 }
 
 async function lookupSlackUserName(accessToken: string, userId: string) {
+  const profile = await lookupSlackUserProfile(accessToken, userId);
+  return profile.name;
+}
+
+export async function lookupSlackUserProfile(accessToken: string, userId: string) {
   const cacheKey = `${accessToken.slice(-8)}:${userId}`;
   const cached = slackUserNameCache.get(cacheKey);
-  if (cached) return cached;
+  if (cached) return { id: userId, name: cached };
 
   const data = await slackApiFetch<SlackUserInfo>(
     accessToken,
@@ -311,7 +321,7 @@ async function lookupSlackUserName(accessToken: string, userId: string) {
     userId;
 
   slackUserNameCache.set(cacheKey, name);
-  return name;
+  return { id: data?.user?.id || userId, name };
 }
 
 async function formatSlackHistoryMessage(accessToken: string, message: SlackHistoryMessage) {
@@ -361,12 +371,72 @@ export async function fetchSlackConversationContext({
     : `${context.slice(0, MAX_SLACK_CONTEXT_LENGTH - 40).trim()}\n[Context trimmed]`;
 }
 
+export async function resolveSlackAuthorRelationshipContext({
+  user,
+  teamId,
+  slackAuthorUserId,
+  interactionType,
+}: {
+  user: SlackConnectedUser;
+  teamId: string;
+  slackAuthorUserId?: string | null;
+  interactionType: string;
+}) {
+  const identifier = slackUserIdentifier(teamId, slackAuthorUserId);
+  if (!identifier) return null;
+
+  const slackProfile =
+    user.accessToken && slackAuthorUserId
+      ? await lookupSlackUserProfile(user.accessToken, slackAuthorUserId).catch(() => null)
+      : null;
+  const relationshipContext = await lookupRelationshipContextByIdentifier({
+    userId: user.id,
+    identifier,
+    requireConfirmed: true,
+  });
+
+  if (!relationshipContext) {
+    return {
+      linked: false,
+      slackProfile,
+      slackIdentifier: identifier.identifier,
+      promptContext: null,
+    };
+  }
+
+  await recordSafeInteractionSummary({
+    userId: user.id,
+    contactId: relationshipContext.contact.id,
+    platform: "slack",
+    interactionType,
+    summary: `Slack coaching was requested for ${relationshipContext.contact.name}. Beckett matched this person by confirmed Slack user ID and used stored relationship context.`,
+    metadata: {
+      source: interactionType,
+      slack_team_id: teamId,
+      slack_user_id: slackAuthorUserId || null,
+      slack_display_name: slackProfile?.name || null,
+    },
+    updateRelationshipSummary: false,
+  }).catch((error) => {
+    console.error("Slack relationship summary storage failed", error);
+  });
+
+  return {
+    linked: true,
+    slackProfile,
+    slackIdentifier: identifier.identifier,
+    contact: relationshipContext.contact,
+    promptContext: relationshipContext.promptContext,
+  };
+}
+
 export async function runSlackCoaching({
   user,
   action,
   prompt,
   sourceLabel,
   messageText,
+  relationshipContext,
   responseDetail,
   intent = "general",
 }: {
@@ -375,6 +445,7 @@ export async function runSlackCoaching({
   prompt: string;
   sourceLabel: string;
   messageText?: string | null;
+  relationshipContext?: string | null;
   responseDetail?: SlackResponseDetail;
   intent?: SlackCoachingIntent;
 }) {
@@ -384,6 +455,7 @@ export async function runSlackCoaching({
     metadata: {
       sourceLabel,
       teamName: user.teamName,
+      relationshipContextIncluded: Boolean(relationshipContext),
       responseDetail: responseDetail || null,
       intent,
     },
@@ -411,13 +483,16 @@ ${beckettBoundaryPrompt()}`;
         ? "Response length: Longer explanation. Give more context about likely tone/subtext, what to watch for, next steps, and suggested wording. Keep it scannable in Slack and under 1700 characters."
         : "Response length: Default Slack coaching response. Be concise but useful.";
   const messageLine = messageText ? `\n\nSlack message/context:\n${messageText}` : "";
+  const relationshipLine = relationshipContext
+    ? `\n\nConfirmed relationship context:\n${relationshipContext}`
+    : "";
   const userPrompt = `${preferenceLine}
 ${toneLine}
 ${responseDetailLine}
 ${slackIntentInstruction(intent)}
 
 User request:
-${prompt}${messageLine}`;
+${prompt}${relationshipLine}${messageLine}`;
 
   const maxTokens = responseDetail === "longer" ? 700 : responseDetail === "quick" ? 420 : 800;
   const text = await callAnthropic(system, [{ role: "user", content: userPrompt }], maxTokens);
@@ -431,6 +506,7 @@ ${prompt}${messageLine}`;
       action,
       sourceLabel,
       teamName: user.teamName,
+      relationshipContextIncluded: Boolean(relationshipContext),
       responseDetail: responseDetail || null,
       intent,
     },

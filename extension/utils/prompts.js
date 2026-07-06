@@ -62,7 +62,7 @@ function buildSystem(mode, isSafePerson, linkedInContext, voiceContext, userCont
   return parts.join('\n\n');
 }
 
-export function buildMessagePrompt({ messageText, thread, sender, platform, channelType, mode, linkedInContext, isSafePerson, voiceContext, currentUser }) {
+export function buildMessagePrompt({ messageText, thread, sender, platform, channelType, mode, linkedInContext, isSafePerson, voiceContext, currentUser, relationshipContext }) {
   // Resolve the user's display name — prefer LinkedIn name, fall back to deriving from thread or email
   const userName = currentUser?.name ||
     (thread?.find(m => m.isCurrentUser)?.sender) ||
@@ -95,10 +95,13 @@ export function buildMessagePrompt({ messageText, thread, sender, platform, chan
   const anchor = userIdentifier
     ? `In this conversation, ${userIdentifier} is talking with ${participantList}.\n\n`
     : '';
+  const relationshipBlock = relationshipContext
+    ? `Stored relationship context from Beckett Contacts. Use this only as background and do not treat it as evidence of current intent:\n${relationshipContext}\n\n`
+    : '';
 
   const user = `Platform: ${platform} | Sender: ${sender || 'unknown'} | Channel: ${channelType || 'unknown'} | Mode: ${mode}
 
-${anchor}${contextBlock}
+${anchor}${relationshipBlock}${contextBlock}
 
 Use the full thread when it is present. If the answer depends on earlier messages, look there before saying you cannot tell.
 Only use evidence from messages that actually appear in the thread. Do not infer that someone "rolled with," accepted, ignored, liked, disliked, or responded well to a message unless a later visible message from that person supports it.

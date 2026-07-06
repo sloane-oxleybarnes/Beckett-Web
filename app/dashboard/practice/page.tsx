@@ -301,6 +301,7 @@ function ContactOverlay({
   const [gmailEmail, setGmailEmail] = useState('')
   const [gmailLoading, setGmailLoading] = useState(false)
   const [gmailResult, setGmailResult] = useState<string | null>(null)
+  const [gmailContactName, setGmailContactName] = useState<string | null>(null)
   const [gmailError, setGmailError] = useState<string | null>(null)
 
   async function loadGmailContext() {
@@ -308,8 +309,9 @@ function ContactOverlay({
     setGmailLoading(true)
     setGmailError(null)
     setGmailResult(null)
+    setGmailContactName(null)
     const res = await fetch(`/api/gmail/contact-context?email=${encodeURIComponent(gmailEmail)}`)
-    const data = await res.json() as { summary?: string; error?: string }
+    const data = await res.json() as { summary?: string; error?: string; contact?: { name?: string | null } | null }
     setGmailLoading(false)
     if (data.error === 'google_not_connected') {
       setGmailError('Connect Google in Settings to load email history.')
@@ -317,6 +319,7 @@ function ContactOverlay({
       setGmailError('No emails found with that address.')
     } else if (data.summary) {
       setGmailResult(data.summary)
+      setGmailContactName(data.contact?.name || null)
     } else {
       setGmailError('Something went wrong. Try again.')
     }
@@ -385,9 +388,12 @@ function ContactOverlay({
           {gmailResult && (
             <div className="bg-bg border border-border rounded-card p-3 mb-3">
               <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-1">Communication style</p>
+              {gmailContactName && (
+                <p className="mb-1 text-xs text-primary">Matched to {gmailContactName}</p>
+              )}
               <p className="text-sm text-ink leading-relaxed">{gmailResult}</p>
               <button
-                onClick={() => onSelect({ name: gmailEmail, style: gmailResult, notes: '' })}
+                onClick={() => onSelect({ name: gmailContactName || gmailEmail, style: gmailResult, notes: '' })}
                 className="mt-3 w-full bg-primary text-white text-sm rounded-pill py-2 hover:bg-primary-dark transition-colors"
               >
                 Use this context

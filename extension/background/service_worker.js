@@ -302,6 +302,10 @@ async function handleTriggerAnalyze(payload, sendResponse) {
     };
 
     const analysisContext = enrichedContext || ctx;
+    const relationshipContext = await fetchContactRelationshipContext(analysisContext).catch((error) => {
+      console.warn('Beckett: contact relationship context unavailable:', error.message);
+      return null;
+    });
     const prompt = buildMessagePrompt({
       messageText: analysisContext.messageText,
       thread,
@@ -313,6 +317,7 @@ async function handleTriggerAnalyze(payload, sendResponse) {
       isSafePerson: analysisContext.isSafePerson || false,
       voiceContext,
       currentUser,
+      relationshipContext: relationshipContext?.promptContext || null,
     });
 
     const analysisMetadata = {
@@ -323,6 +328,7 @@ async function handleTriggerAnalyze(payload, sendResponse) {
       channelType: analysisContext.channelType || null,
       channelName: analysisContext.channelName || null,
       gmailEnrichmentReason,
+      relationshipContextIncluded: Boolean(relationshipContext?.promptContext),
       slackConnected: ctx.platform === 'slack' ? (!!slackToken || !!beckettSlackConnected) : null,
       slackUserId: ctx.platform === 'slack' ? (slackUserId || beckettSlackUserId || null) : null,
     };
@@ -333,6 +339,7 @@ async function handleTriggerAnalyze(payload, sendResponse) {
       source: analysisMetadata.source,
       threadCount: analysisMetadata.threadCount,
       gmailEnrichmentReason,
+      relationshipContextIncluded: analysisMetadata.relationshipContextIncluded,
     });
     sendResponse({
       result,
@@ -405,6 +412,32 @@ async function fetchBackendGmailThread(ctx) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `gmail_backend_error_${res.status}`);
   return data;
+}
+
+async function fetchContactRelationshipContext(ctx) {
+  const { beckettToken } = await chrome.storage.local.get('beckettToken');
+  if (!beckettToken) return null;
+
+  let platform = null;
+  let identifier = null;
+  if (ctx.senderEmail) {
+    platform = 'email';
+    identifier = ctx.senderEmail;
+  } else if (ctx.platform === 'slack' && ctx.slackTeamId && ctx.senderSlackUserId) {
+    platform = 'slack_user_id';
+    identifier = `${ctx.slackTeamId}:${ctx.senderSlackUserId}`;
+  }
+
+  if (!platform || !identifier) return null;
+
+  const params = new URLSearchParams({ platform, identifier });
+  const res = await fetch(`${BECKETT_API}/contacts/context?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${beckettToken}` },
+  });
+  if (!res.ok) return null;
+
+  const data = await res.json().catch(() => ({}));
+  return data.promptContext ? data : null;
 }
 
 async function extractContextFromTab(tab) {

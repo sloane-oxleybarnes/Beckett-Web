@@ -332,6 +332,7 @@ function renderAnalysisMetadata(metadata) {
     sourceLabel,
     count ? `${count} message${count === 1 ? '' : 's'} included` : null,
     metadata.channelName ? `#${metadata.channelName}` : metadata.channelType || null,
+    metadata.relationshipContextIncluded ? 'Relationship context used' : null,
   ].filter(Boolean);
 
   if (metadata.platform === 'gmail' && metadata.source !== 'gmail_api' && metadata.gmailEnrichmentReason) {
@@ -430,6 +431,11 @@ async function lookupContact() {
       const suffix = data.contact.trusted ? '— trusted contact' : '— in contacts';
       label.textContent = `${icon} ${data.contact.name} ${suffix}`;
       addBtn.textContent = `See ${data.contact.name}'s Contact Card`;
+      addBtn.hidden = false;
+      addBtn.onclick = () => chrome.runtime.sendMessage({ type: 'OPEN_CONTACTS' });
+    } else if (data.suggestion) {
+      label.textContent = `Possible contact: ${data.suggestion.name}`;
+      addBtn.textContent = 'Review in Contacts';
       addBtn.hidden = false;
       addBtn.onclick = () => chrome.runtime.sendMessage({ type: 'OPEN_CONTACTS' });
     } else {
