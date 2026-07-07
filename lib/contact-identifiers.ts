@@ -91,6 +91,17 @@ export function slackUserIdentifier(teamId: string | null | undefined, slackUser
   });
 }
 
+function slackUserIdentifierFromMaybeCombinedId(value: string | null | undefined) {
+  const raw = String(value || "").trim();
+  if (!/^[A-Z0-9]+:[A-Z0-9]+$/i.test(raw)) return null;
+  return normalizeContactIdentifier({
+    platform: "slack_user_id",
+    identifier: raw,
+    label: "Confirmed Slack user",
+    confirmed: true,
+  });
+}
+
 export function buildContactIdentifierRows({
   contactId,
   userId,
@@ -114,6 +125,7 @@ export function buildContactIdentifierRows({
       label: "Slack handle",
       confirmed: false,
     }),
+    slackUserIdentifierFromMaybeCombinedId(slackHandle),
     normalizeContactIdentifier({ platform: "phone", identifier: phoneNumber, label: "Phone", confirmed: true }),
     ...identifiers.map(normalizeContactIdentifier),
   ].filter(Boolean) as NormalizedContactIdentifier[];

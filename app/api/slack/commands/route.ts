@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   buildBeckettPayload,
+  handleSlackAiError,
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
+  lookupSlackWorkspaceBotToken,
   postSlackResponse,
+  runSlackGuestCoaching,
   scheduleSlackBackgroundTask,
   verifySlackRequest,
 } from "@/lib/slack-app";
@@ -135,10 +138,46 @@ async function startSidebarFlow({
 
     const user = await lookupSlackConnectedUser(payload.team_id, payload.user_id);
     if (!user) {
+      if (parsed.intent === "decode" || parsed.intent === "respond" || parsed.intent === "rewrite") {
+        const botAccessToken = await lookupSlackWorkspaceBotToken(payload.team_id).catch((error) => {
+          console.error("Slack workspace bot token lookup for guest slash failed", {
+            teamPresent: Boolean(payload.team_id),
+            slackUserPresent: Boolean(payload.user_id),
+            message: error instanceof Error ? error.message : String(error),
+          });
+          return null;
+        });
+        if (botAccessToken) {
+          const response = await runSlackGuestCoaching({
+            teamId: payload.team_id,
+            slackUserId: payload.user_id,
+            action: "slash_command",
+            prompt: parsed.prompt,
+            messageText: parsed.prompt,
+            intent: parsed.intent,
+          });
+          const guestPayload = buildBeckettPayload({
+            title: "Beckett",
+            subtitle: "",
+            prompt: parsed.prompt,
+            body: response,
+            footer: "Connect Slack in Beckett Settings to use your coaching profile, contact context, broader Slack history, and saved Beckett conversations.",
+            hideTitle: true,
+          });
+          await postSlackResponse(responseUrl, guestPayload.text, {
+            blocks: guestPayload.blocks,
+            replaceOriginal: true,
+          });
+          return;
+        }
+      }
+
       await postSlackResponse(
         responseUrl,
         [
-          "I could not match this Slack account to a Beckett beta profile yet.",
+          parsed.intent === "prep" || parsed.intent === "practice"
+            ? "Prep and practice use your Beckett profile and saved coaching setup."
+            : "I could not match this Slack account to a Beckett beta profile yet.",
           "",
           `Connect Slack from Beckett Settings, then try again: <${origin}/dashboard/settings|Open Beckett Settings>`,
         ].join("\n"),
@@ -190,7 +229,7 @@ async function startSidebarFlow({
       intent: parsed.intent,
       message: error instanceof Error ? error.message : String(error),
     });
-    await postSlackResponse(responseUrl, "Beckett could not start that sidebar flow. Please try `/beckett` again.", {
+    await postSlackResponse(responseUrl, `Beckett could not finish that request: ${handleSlackAiError(error)}`, {
       replaceOriginal: true,
     });
   }

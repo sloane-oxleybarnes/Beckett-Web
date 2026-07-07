@@ -7,9 +7,11 @@ import {
   handleSlackAiError,
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
+  lookupSlackWorkspaceBotToken,
   postSlackAgentMessage,
   postSlackResponse,
   resolveSlackAuthorRelationshipContext,
+  runSlackGuestCoaching,
   runSlackCoaching,
   scheduleSlackBackgroundTask,
   slackApiPost,
@@ -556,7 +558,39 @@ async function sendMessageShortcutResponse({
 
     const user = await lookupSlackConnectedUser(teamId, slackUserId);
     if (!user) {
-      await postSlackResponse(responseUrl, slackConnectText(origin), { replaceOriginal: true });
+      const botAccessToken = await lookupSlackWorkspaceBotToken(teamId).catch((error) => {
+        console.error("Slack workspace bot token lookup for guest shortcut failed", {
+          teamPresent: Boolean(teamId),
+          slackUserPresent: Boolean(slackUserId),
+          message: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      });
+      if (!botAccessToken) {
+        await postSlackResponse(responseUrl, slackConnectText(origin), { replaceOriginal: true });
+        return;
+      }
+
+      const response = await runSlackGuestCoaching({
+        teamId,
+        slackUserId,
+        action: "message_shortcut",
+        prompt,
+        messageText,
+        intent: "respond",
+      });
+      const responsePayload = buildBeckettPayload({
+        title: "Beckett",
+        subtitle: "",
+        prompt,
+        body: response,
+        footer: "Connect Slack in Beckett Settings to use your coaching profile, contact context, broader Slack history, and saved Beckett conversations.",
+        hideTitle: true,
+      });
+      await postSlackResponse(responseUrl, responsePayload.text, {
+        blocks: responsePayload.blocks,
+        replaceOriginal: true,
+      });
       return;
     }
 

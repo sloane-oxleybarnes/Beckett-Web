@@ -287,7 +287,7 @@ export default function ContactsPage() {
         .map((identifier) => ({
           platform: identifier.platform,
           identifier: identifier.identifier.trim(),
-          label: identifierLabel(identifier),
+          label: identifier.platform === "slack_user_id" ? "Confirmed Slack user" : identifierLabel(identifier),
           confirmed: identifier.platform !== "slack",
         }))
         .filter((identifier) => identifier.identifier),
@@ -434,9 +434,12 @@ export default function ContactsPage() {
                   type="text"
                   value={form.slack_handle}
                   onChange={(e) => setForm({ ...form, slack_handle: e.target.value })}
-                  placeholder="@handle or display name"
+                  placeholder="@handle, display name, or TFH7EK674:UFGK6BHJM"
                   className="w-full border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
+                <p className="mt-1 text-xs text-ink-light">
+                  Paste Beckett’s confirmed Slack ID here to connect this contact to the real Slack person.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-ink mb-1">Phone</label>

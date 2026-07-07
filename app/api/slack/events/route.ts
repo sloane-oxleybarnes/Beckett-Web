@@ -9,10 +9,11 @@ import {
   lookupSlackConnectedUser,
   lookupSlackWorkspaceBotToken,
   resolveSlackAuthorRelationshipContext,
+  runSlackGuestCoaching,
   runSlackCoaching,
   scheduleSlackBackgroundTask,
   slackApiPost,
-  slackConnectText,
+  type SlackCoachingIntent,
   verifySlackRequest,
 } from "@/lib/slack-app";
 import { handleGuidedSlackPrep } from "@/lib/slack-guided-prep";
@@ -58,6 +59,36 @@ function extractActiveSlackContext(event: NonNullable<SlackEventEnvelope["event"
     userId: userEntity?.value || null,
     actionToken: event.action_token || null,
   };
+}
+
+function inferAssistantIntent(text: string): SlackCoachingIntent {
+  const normalized = text.toLowerCase();
+  if (normalized.includes("decode") || normalized.includes("understand this message") || normalized.includes("over-reading")) {
+    return "decode";
+  }
+  if (normalized.includes("rewrite") || normalized.includes("clearer and kinder")) {
+    return "rewrite";
+  }
+  if (normalized.includes("draft") || normalized.includes("respond") || normalized.includes("clear response")) {
+    return "respond";
+  }
+  if (normalized.includes("practice")) return "practice";
+  if (normalized.includes("prepare") || normalized.includes("prep")) return "prep";
+  return "general";
+}
+
+function isAssistantStarterPrompt(text: string) {
+  const normalized = text.trim().toLowerCase();
+  return [
+    "help me decode the current message without over-reading it.",
+    "help me draft a clear response to the current conversation.",
+    "help me rewrite my response so it is clearer and kinder.",
+    "help me prepare for a difficult conversation.",
+  ].includes(normalized);
+}
+
+function guestModeFooter() {
+  return "Connect Slack in Beckett Settings to use your coaching profile, contact context, broader Slack history, and saved Beckett conversations.";
 }
 
 export async function POST(req: NextRequest) {
@@ -146,7 +177,24 @@ async function setupMessagesSurface({
   channelId?: string;
 }) {
   const user = await lookupSlackConnectedUser(teamId, slackUserId);
-  if (!user?.botAccessToken || !isAllowedSlackPlan(user)) return;
+  if (!user?.botAccessToken || !isAllowedSlackPlan(user)) {
+    const botAccessToken = await lookupSlackWorkspaceBotToken(teamId).catch((error) => {
+      console.error("Slack workspace bot token lookup for Messages failed", {
+        teamPresent: Boolean(teamId),
+        slackUserPresent: Boolean(slackUserId),
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    });
+    if (!botAccessToken) return;
+
+    await configureSlackAgentSurface({
+      botAccessToken,
+      slackUserId,
+      channelId,
+    });
+    return;
+  }
 
   await configureSlackAgentSurface({
     botAccessToken: user.botAccessToken,
@@ -206,6 +254,7 @@ async function respondToAgentMessage({
   activeUserId?: string | null;
   actionToken?: string | null;
 }) {
+  const assistantIntent = inferAssistantIntent(text);
   const user = await lookupSlackConnectedUser(teamId, slackUserId);
   if (!user?.botAccessToken) {
     const botAccessToken = await lookupSlackWorkspaceBotToken(teamId).catch((error) => {
@@ -218,18 +267,68 @@ async function respondToAgentMessage({
     });
 
     if (botAccessToken) {
-      const payload = buildBeckettPayload({
-        title: "Beckett",
-        subtitle: "Connect Slack",
-        body: slackConnectText("https://www.meetbeckett.co", "I can see this Slack workspace, but I could not match your Slack account to a Beckett profile yet."),
-      });
+      const intent = assistantIntent;
+      if (intent === "prep" || intent === "practice") {
+        const payload = buildBeckettPayload({
+          title: "Beckett",
+          subtitle: "",
+          body: [
+            "Prep and practice use your Beckett profile and saved coaching setup.",
+            "",
+            "Connect Slack from Beckett Settings, then come back here to use that flow.",
+          ].join("\n"),
+          footer: "You can still paste a message here for lightweight decode, respond, or rewrite help.",
+          hideTitle: true,
+        });
 
-      await slackApiPost(botAccessToken, "chat.postMessage", {
-        channel: channelId,
-        thread_ts: threadTs,
-        ...payload,
-      });
-      return;
+        await slackApiPost(botAccessToken, "chat.postMessage", {
+          channel: channelId,
+          thread_ts: threadTs,
+          ...payload,
+        });
+        return;
+      }
+
+      try {
+        const messageText = isAssistantStarterPrompt(text) ? "" : text;
+        const response = await runSlackGuestCoaching({
+          teamId,
+          slackUserId,
+          action: "agent_message",
+          prompt: text,
+          messageText,
+          intent,
+        });
+        const payload = buildBeckettPayload({
+          title: "Beckett",
+          subtitle: "",
+          prompt: isAssistantStarterPrompt(text) ? undefined : text,
+          body: response,
+          footer: guestModeFooter(),
+          hideTitle: true,
+        });
+
+        await slackApiPost(botAccessToken, "chat.postMessage", {
+          channel: channelId,
+          thread_ts: threadTs,
+          ...payload,
+        });
+        return;
+      } catch (error) {
+        const payload = buildBeckettPayload({
+          title: "Beckett",
+          subtitle: "Could not finish that request",
+          body: handleSlackAiError(error),
+          hideTitle: true,
+        });
+        await slackApiPost(botAccessToken, "chat.postMessage", {
+          channel: channelId,
+          thread_ts: threadTs,
+          ...payload,
+        });
+        return;
+      }
+
     }
 
     console.error("Slack agent message ignored because no connected user or workspace bot token was found", {
@@ -316,6 +415,35 @@ async function respondToAgentMessage({
       actionToken,
     });
 
+    if (
+      isAssistantStarterPrompt(text) &&
+      (assistantIntent === "decode" || assistantIntent === "respond" || assistantIntent === "rewrite") &&
+      !coachingContext.text
+    ) {
+      const payload = buildBeckettPayload({
+        title: "Beckett",
+        subtitle: "",
+        body: [
+          "I can help, but I could not read a current Slack message from here.",
+          "",
+          "Paste or paraphrase the message you want help with, or use Ask Beckett from the message’s menu.",
+        ].join("\n"),
+        hideTitle: true,
+      });
+
+      await slackApiPost(user.botAccessToken, "chat.postMessage", {
+        channel: channelId,
+        thread_ts: threadTs,
+        ...payload,
+      });
+      await slackApiPost(user.botAccessToken, "assistant.threads.setStatus", {
+        channel_id: channelId,
+        thread_ts: threadTs,
+        status: "",
+      }).catch(() => null);
+      return;
+    }
+
     const response = await runSlackCoaching({
       user,
       action: "agent_message",
@@ -327,7 +455,7 @@ async function respondToAgentMessage({
       contextMessageCount: coachingContext.messageCount,
       broaderSearchUsed: coachingContext.broaderSearchUsed,
       relationshipContext: activeRelationship?.promptContext || null,
-      intent: "general",
+      intent: assistantIntent,
       responseDetail: "longer",
     });
     const payload = buildBeckettPayload({

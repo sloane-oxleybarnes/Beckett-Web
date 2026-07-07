@@ -111,6 +111,8 @@ Close: "Beckett for Slack helps neurodivergent workers communicate clearly insid
 - `/beckett respond`, `/beckett rewrite`, `/beckett decode`, `/beckett prep`, and `/beckett practice` are the only visible slash subcommands.
 - `/beckett draft`, `/beckett clarity`, `/beckett boundary`, `/beckett followup`, and `/beckett tone` return a clean unsupported/help response.
 - `Ask Beckett` message shortcut returns a private response that separates visible facts from possible interpretation.
+- Unlinked Slack users can use lightweight decode/respond/rewrite when they paste text or use Ask Beckett on selected message text.
+- Unlinked Slack users are prompted to connect before prep/practice, saved history, contact context, or broader Slack history.
 - `/beckett prep I need to ask my manager for a raise` starts a private guided sidebar flow without opening a modal.
 - Prep output appears privately in Slack.
 - Sidebar assistant flow asks focused follow-up questions instead of producing only one long wall of text when more context is needed.

@@ -11,13 +11,13 @@ features:
     agent_description: Beckett is a neurodivergent workplace communication coach that helps you decode messages, draft clearer replies, rewrite responses, and prep or practice difficult conversations.
     suggested_prompts:
       - title: Decode a Message
-        message: /beckett decode help me understand this message without over-reading it.
+        message: Help me decode the current message without over-reading it.
       - title: Respond to a Message
-        message: /beckett respond help me draft a clear response to this conversation.
+        message: Help me draft a clear response to the current conversation.
       - title: Rewrite a Message
-        message: /beckett rewrite help me make this response clearer and kinder.
+        message: Help me rewrite my response so it is clearer and kinder.
       - title: Prep / Practice
-        message: /beckett prep help me prepare for a difficult conversation.
+        message: Help me prepare for a difficult conversation.
   bot_user:
     display_name: Beckett Staging
     always_online: false

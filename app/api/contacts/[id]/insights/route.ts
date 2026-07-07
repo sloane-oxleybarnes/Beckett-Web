@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { upsertRelationshipSummary } from '@/lib/contact-relationship-context'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { getExtensionUserId } from '@/lib/extension-auth'
+import { callAnthropic } from '@/lib/anthropic'
 
 async function getAuthedUserId(req: NextRequest): Promise<string | null> {
   const extUserId = await getExtensionUserId(req)
@@ -9,26 +10,6 @@ async function getAuthedUserId(req: NextRequest): Promise<string | null> {
   const supabase = createSupabaseServerClient()
   const { data: { session } } = await supabase.auth.getSession()
   return session?.user.id ?? null
-}
-
-async function callClaude(prompt: string): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) throw new Error('Anthropic API key not configured')
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 600,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
-  const data = await res.json() as { content: { text?: string }[] }
-  return data.content.map((b) => b.text || '').join('').trim()
 }
 
 export async function POST(
@@ -63,7 +44,7 @@ Respond with only the JSON object, no markdown wrapping.`
 
   let insights: Record<string, string>
   try {
-    const raw = await callClaude(prompt)
+    const raw = await callAnthropic(null, [{ role: 'user', content: prompt }], 600)
     insights = JSON.parse(raw.replace(/^```json?\n?/, '').replace(/\n?```$/, ''))
   } catch {
     return NextResponse.json({ error: 'failed to generate insights' }, { status: 500 })

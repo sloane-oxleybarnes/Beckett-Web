@@ -4,22 +4,7 @@ import {
   recordSafeInteractionSummary,
 } from '@/lib/contact-relationship-context'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-
-async function callAnthropic(prompt: string): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) throw new Error('Anthropic API key not configured.')
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 200,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
-  const data = await res.json() as { content: { text?: string }[] }
-  return data.content.map(b => b.text || '').join('').trim()
-}
+import { callAnthropic } from '@/lib/anthropic'
 
 export async function GET(req: NextRequest) {
   const supabase = createSupabaseServerClient()
@@ -64,14 +49,16 @@ export async function GET(req: NextRequest) {
 
   if (!snippets.length) return NextResponse.json({ error: 'no_threads_found' })
 
-  const summary = await callAnthropic(
+  const summary = await callAnthropic(null, [{
+    role: 'user',
+    content:
     `Based on these email exchanges with someone, describe their communication style in 2-3 sentences. Focus on tone, directness, and how they prefer to receive information. Be specific and practical.
 
 Email snippets:
 ${snippets.map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
-Return only the description — no preamble, no labels.`
-  )
+Return only the description — no preamble, no labels.`,
+  }], 200).then((text) => text.trim())
 
   const relationshipContext = await lookupRelationshipContextByIdentifier({
     userId: session.user.id,

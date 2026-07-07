@@ -22,6 +22,7 @@ const MAX_SLACK_BROAD_CONTEXT_RESULTS = 12;
 const MAX_SLACK_ASKED_PROMPT_LENGTH = 650;
 const MAX_QUICK_SLACK_ANSWER_LENGTH = 1200;
 const MAX_LONGER_SLACK_ANSWER_LENGTH = 2000;
+const DEFAULT_SLACK_GUEST_DAILY_LIMIT = 5;
 export const SLACK_SLASH_QUICK_ACTION_ID = "beckett_slash_quick";
 export const SLACK_SLASH_LONGER_ACTION_ID = "beckett_slash_longer";
 export const REQUIRED_SLACK_USER_SCOPES = [
@@ -372,6 +373,60 @@ export function slackConnectResponse(origin: string, detail?: string) {
   return slackTextResponse(slackConnectText(origin, detail));
 }
 
+export function getSlackGuestDailyLimit() {
+  const configured = Number(process.env.SLACK_GUEST_DAILY_AI_LIMIT);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SLACK_GUEST_DAILY_LIMIT;
+}
+
+export class SlackGuestUsageLimitError extends Error {
+  status = 429;
+
+  constructor(public limit: number) {
+    super(`Guest Slack coaching is limited to ${limit} analyses per day. Connect Slack in Beckett Settings for the full beta experience.`);
+  }
+}
+
+function startOfUtcDay() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+}
+
+export async function recordSlackGuestUsage({
+  teamId,
+  slackUserId,
+  action,
+  metadata,
+}: {
+  teamId: string;
+  slackUserId: string;
+  action: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const limit = getSlackGuestDailyLimit();
+  const { count, error: countError } = await supabaseAdmin
+    .from("slack_guest_usage_events")
+    .select("id", { count: "exact", head: true })
+    .eq("slack_team_id", teamId)
+    .eq("slack_user_id", slackUserId)
+    .gte("created_at", startOfUtcDay());
+
+  if (countError) throw countError;
+  const used = count || 0;
+  if (used >= limit) throw new SlackGuestUsageLimitError(limit);
+
+  const { error } = await supabaseAdmin.from("slack_guest_usage_events").insert({
+    slack_team_id: teamId,
+    slack_user_id: slackUserId,
+    source: "slack_guest",
+    action,
+    token_estimate: 1,
+    metadata: metadata || {},
+  });
+
+  if (error) throw error;
+  return { limit, used: used + 1, remaining: Math.max(limit - used - 1, 0) };
+}
+
 export async function postSlackResponse(responseUrl: string, text: string, options: SlackMessageOptions = {}) {
   if (!responseUrl) return;
   await fetch(responseUrl, {
@@ -604,19 +659,19 @@ export async function setSlackAgentSuggestedPrompts({
     prompts: [
       {
         title: "Decode a Message",
-        message: "/beckett decode help me understand this message without over-reading it.",
+        message: "Help me decode the current message without over-reading it.",
       },
       {
         title: "Respond to a Message",
-        message: "/beckett respond help me draft a clear response to this conversation.",
+        message: "Help me draft a clear response to the current conversation.",
       },
       {
         title: "Rewrite a Message",
-        message: "/beckett rewrite help me make this response clearer and kinder.",
+        message: "Help me rewrite my response so it is clearer and kinder.",
       },
       {
         title: "Prep / Practice",
-        message: "/beckett prep help me prepare for a difficult conversation.",
+        message: "Help me prepare for a difficult conversation.",
       },
     ],
   });
@@ -1240,7 +1295,77 @@ ${prompt}${relationshipLine}${messageLine}`;
   return truncateSlackText(cleaned);
 }
 
+export async function runSlackGuestCoaching({
+  teamId,
+  slackUserId,
+  action,
+  prompt,
+  messageText,
+  intent = "general",
+}: {
+  teamId: string;
+  slackUserId: string;
+  action: "slash_command" | "message_shortcut" | "agent_message";
+  prompt: string;
+  messageText: string;
+  intent?: SlackCoachingIntent;
+}) {
+  const cleanMessageText = messageText.trim();
+  if (!cleanMessageText) {
+    return [
+      "I can help, but I could not read this Slack conversation without a connected Beckett profile.",
+      "",
+      "Paste or paraphrase the message and I’ll analyze it here.",
+    ].join("\n");
+  }
+
+  await recordSlackGuestUsage({
+    teamId,
+    slackUserId,
+    action,
+    metadata: {
+      intent,
+      messageLength: cleanMessageText.length,
+      connectedProfile: false,
+    },
+  });
+
+  const agentTool = selectSlackAgentTool({
+    intent,
+    action,
+    hasSlackContext: Boolean(cleanMessageText),
+  });
+  const system = `You are Beckett, a workplace and workplace-adjacent communication coach for neurodivergent professionals.
+You are responding inside Slack, so be concise, practical, and easy to scan.
+The Slack user is using guest mode. You do not have their Beckett coaching profile, contact memory, saved history, or broader Slack search.
+Help with workplace, workplace-adjacent, friendly, logistics, and personal Slack conversations when the user asks for decode, respond, or rewrite help.
+Do not refuse because a message is personal or casual.
+Do not claim certainty about another person's intent. Use phrases like "may" or "likely" when interpreting tone.
+Do not hallucinate reactions, comfort, rapport, agreement, annoyance, or pushback that is not visible in the provided Slack text.
+Always separate visible facts from possible interpretation when decoding.
+If there is not enough text to analyze, ask the user to paste or paraphrase the message.
+For reply drafting, include 2-3 Slack-ready options when useful: Direct but kind, Warm and collaborative, and Concise.
+Format with short plain-language section labels and bullets. Do not use markdown tables, markdown bold markers, or literal asterisks.
+${slackAgentToolInstruction(agentTool)}
+${beckettBoundaryPrompt()}`;
+  const userPrompt = [
+    "The user has not connected a Beckett profile yet.",
+    slackIntentInstruction(intent),
+    "",
+    "User request:",
+    prompt,
+    "",
+    "Slack text available to Beckett:",
+    cleanMessageText,
+  ].join("\n");
+
+  const text = await callAnthropic(system, [{ role: "user", content: userPrompt }], 650);
+  return fitSlackAnswer(text.trim() || "I could not generate a response for that Slack request.", MAX_LONGER_SLACK_ANSWER_LENGTH);
+}
+
 export function handleSlackAiError(error: unknown) {
+  if (error instanceof SlackGuestUsageLimitError) return error.message;
+
   if (error instanceof AiUsageLimitError) {
     return `You have reached today’s Beckett beta AI limit. ${error.message}`;
   }

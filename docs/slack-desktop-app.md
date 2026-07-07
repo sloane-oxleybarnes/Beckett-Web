@@ -61,6 +61,8 @@ Use Slack Desktop or the Slack web app:
    - Expected: The suggested prompt title says `What can Beckett help with today?`
 2. Click a suggested prompt, such as `Respond to a Message`.
    - Expected: Beckett starts a private Messages conversation.
+   - Expected: The prompt sends normal assistant text, not a literal `/beckett` command.
+   - Expected: If Slack does not provide current message context, Beckett asks the user to paste/paraphrase or use Ask Beckett from a specific message.
    - Expected: No public channel message is posted.
 3. Open the Home tab.
    - Expected: Home shows `Beckett History`.
