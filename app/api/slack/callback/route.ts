@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { trackBetaEvent } from "@/lib/beta-events";
-import { getPublicSiteUrl } from "@/lib/deployment-env";
-import { getSlackOAuthWorkerUrl } from "@/lib/slack-oauth";
+import { getSlackOAuthWorkerUrl, getSlackRedirectOrigin } from "@/lib/slack-oauth";
 
 const REQUIRED_SLACK_USER_SCOPES = [
   "channels:history",
@@ -36,7 +35,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard/settings?slack=auth_error", req.url));
   }
 
-  const origin = getPublicSiteUrl(req.nextUrl.origin);
+  const origin = getSlackRedirectOrigin();
   const redirectUri = `${origin}/api/slack/callback`;
   const slackOAuthWorker = getSlackOAuthWorkerUrl();
 

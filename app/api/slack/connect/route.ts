@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { getPublicSiteUrl } from "@/lib/deployment-env";
-import { getSlackOAuthWorkerUrl } from "@/lib/slack-oauth";
+import { getSlackOAuthWorkerUrl, getSlackRedirectOrigin } from "@/lib/slack-oauth";
 
 export async function GET(req: NextRequest) {
   const supabase = createSupabaseServerClient();
@@ -13,7 +12,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/auth/login?next=/dashboard/settings", req.url));
   }
 
-  const origin = getPublicSiteUrl(req.nextUrl.origin);
+  const origin = getSlackRedirectOrigin();
   const redirectUri = `${origin}/api/slack/callback`;
   const state = crypto.randomUUID();
   const slackOAuthWorker = getSlackOAuthWorkerUrl();
