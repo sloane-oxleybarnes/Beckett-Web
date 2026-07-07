@@ -15,7 +15,6 @@ import {
   slackApiPost,
   slackConnectText,
   slackContextUserNote,
-  slackMessageResponse,
   SlackBlock,
   SlackCoachingIntent,
   SLACK_SLASH_LONGER_ACTION_ID,
@@ -541,14 +540,30 @@ async function sendMessageShortcutResponse({
   const responseUrl = payload.response_url || "";
 
   try {
+    const prompt = buildShortcutPrompt(payload);
+    const preparing = buildBeckettPayload({
+      title: "Beckett",
+      subtitle: "Message coaching",
+      prompt,
+      body: "Beckett is reading that message...",
+      hideTitle: true,
+    });
+    await postSlackResponse(responseUrl, preparing.text, { blocks: preparing.blocks }).catch((error) => {
+      console.error("Slack shortcut preparing response failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
+
     const user = await lookupSlackConnectedUser(teamId, slackUserId);
     if (!user) {
-      await postSlackResponse(responseUrl, slackConnectText(origin));
+      await postSlackResponse(responseUrl, slackConnectText(origin), { replaceOriginal: true });
       return;
     }
 
     if (!isAllowedSlackPlan(user)) {
-      await postSlackResponse(responseUrl, "Beckett Slack coaching is available for beta and pro users.");
+      await postSlackResponse(responseUrl, "Beckett Slack coaching is available for beta and pro users.", {
+        replaceOriginal: true,
+      });
       return;
     }
 
@@ -559,7 +574,6 @@ async function sendMessageShortcutResponse({
       messageTs: payload.message?.ts,
       threadTs: payload.message?.thread_ts,
     });
-    const prompt = buildShortcutPrompt(payload);
     const coachingContext = await buildSlackCoachingContext({
       user,
       prompt,
@@ -664,7 +678,7 @@ async function sendMessageShortcutResponse({
         subtitle: "Message coaching",
         body: "I moved this into your private Beckett conversation.",
       });
-      await postSlackResponse(responseUrl, ack.text, { blocks: ack.blocks });
+      await postSlackResponse(responseUrl, ack.text, { blocks: ack.blocks, replaceOriginal: true });
       return;
     }
 
@@ -679,9 +693,11 @@ async function sendMessageShortcutResponse({
         response,
       ].filter(Boolean).join("\n\n"),
     });
-    await postSlackResponse(responseUrl, responsePayload.text, { blocks: responsePayload.blocks });
+    await postSlackResponse(responseUrl, responsePayload.text, { blocks: responsePayload.blocks, replaceOriginal: true });
   } catch (error) {
-    await postSlackResponse(responseUrl, `Beckett could not finish that request: ${handleSlackAiError(error)}`);
+    await postSlackResponse(responseUrl, `Beckett could not finish that request: ${handleSlackAiError(error)}`, {
+      replaceOriginal: true,
+    });
   }
 }
 
@@ -950,15 +966,27 @@ export async function POST(req: NextRequest) {
   const messageText = extractMessageText(payload);
 
   if (!teamId || !slackUserId) {
-    return slackMessageResponse("Beckett could not read the Slack workspace and user context.");
+    if (responseUrl) {
+      scheduleSlackBackgroundTask(
+        "Slack shortcut missing user response failed",
+        postSlackResponse(responseUrl, "Beckett could not read the Slack workspace and user context.")
+      );
+    }
+    return NextResponse.json({ ok: true });
   }
 
   if (!messageText) {
-    return slackMessageResponse("Beckett could not read message text from that Slack shortcut.");
+    if (responseUrl) {
+      scheduleSlackBackgroundTask(
+        "Slack shortcut missing text response failed",
+        postSlackResponse(responseUrl, "Beckett could not read message text from that Slack shortcut.")
+      );
+    }
+    return NextResponse.json({ ok: true });
   }
 
   if (!responseUrl) {
-    return slackMessageResponse("Beckett could not read Slack's response URL for that shortcut.");
+    return NextResponse.json({ ok: true });
   }
 
   scheduleSlackBackgroundTask(
@@ -969,13 +997,5 @@ export async function POST(req: NextRequest) {
       messageText,
     })
   );
-  const prompt = buildShortcutPrompt(payload);
-  const preparing = buildBeckettPayload({
-    title: "Beckett",
-    subtitle: "Message coaching",
-    prompt,
-    body: "Beckett is reading that message...",
-    hideTitle: true,
-  });
-  return slackMessageResponse(preparing.text, { blocks: preparing.blocks });
+  return NextResponse.json({ ok: true });
 }
