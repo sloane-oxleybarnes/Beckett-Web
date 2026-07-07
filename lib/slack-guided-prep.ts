@@ -698,7 +698,8 @@ function promptForFlow(session: SlackAgentSession, followupText?: string) {
         base,
         "",
         "Return sections: Possible read, Next move, Draft options.",
-        "Draft options must be labeled Direct but kind, Warm and collaborative, and Concise.",
+        "Fold what is uncertain or not knowable into Possible read in one concise sentence.",
+        "Draft options must be bullet points labeled Direct but kind, Warm and collaborative, and Concise.",
       ].join("\n");
     case "rewrite":
       return [
@@ -713,7 +714,8 @@ function promptForFlow(session: SlackAgentSession, followupText?: string) {
         "Decode the message or situation without over-inference. The conversation may be workplace, workplace-adjacent, friendly, or personal; help with the provided conversation rather than rejecting it as non-work.",
         base,
         "",
-        "Return sections: What is visible, Possible read, What not to over-read, Next move.",
+        "Return sections: Possible read and Next move.",
+        "Fold what is visible and what is uncertain into Possible read without adding a standalone uncertainty section.",
         "End by asking whether the user wants help drafting a response.",
       ].join("\n");
     case "practice":

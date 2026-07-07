@@ -270,6 +270,13 @@ export function cleanSlackDisplayText(text: string) {
     .trim();
 }
 
+function formatSlackMrkdwnForBlocks(text: string) {
+  return text
+    .replace(/^(Possible read|Next move|Draft options)\s*:?\s*$/gim, "*$1*")
+    .replace(/^[-•]?\s*(Direct but kind|Warm and collaborative|Concise)\s*:\s*/gim, "- $1: ")
+    .replace(/^(What(?:'s| is) not knowable|What not to over-read)\s*:?\s*$/gim, "");
+}
+
 export function buildBeckettBlocks({
   title = "Beckett",
   subtitle = "Communication coach",
@@ -310,7 +317,7 @@ export function buildBeckettBlocks({
     for (const chunk of splitSlackSectionText(cleanSlackDisplayText(body))) {
       blocks.push({
         type: "section",
-        text: { type: "mrkdwn", text: chunk },
+        text: { type: "mrkdwn", text: formatSlackMrkdwnForBlocks(chunk) },
       });
     }
   }
@@ -523,7 +530,7 @@ function slackIntentInstruction(intent: SlackCoachingIntent) {
     case "rewrite":
       return "Slack task: Rewrite or improve the user's draft. Preserve the meaning, make it natural for workplace Slack/email, and briefly explain the main tone choice.";
     case "decode":
-      return "Slack task: Decode the pasted message or recent context. Explain likely tone/subtext as possibilities, what to pay attention to, and a useful next move.";
+      return "Slack task: Decode the pasted message or recent context. Use Possible read and Next move. Keep uncertainty inside Possible read instead of making a separate not-knowable section.";
     case "draft":
       return "Slack task: Draft a message from the user's goal. Provide ready-to-use wording and briefly name any assumptions.";
     case "prep":
@@ -533,7 +540,7 @@ function slackIntentInstruction(intent: SlackCoachingIntent) {
     case "followup":
       return "Slack task: Help write or improve a follow-up. Keep it specific, low-pressure, and clear about the next step.";
     case "respond":
-      return "Slack task: Help the user respond to the Slack context. Explain the strategy briefly, then provide 2-3 ready-to-use reply options labeled Direct but kind, Warm and collaborative, and Concise.";
+      return "Slack task: Help the user respond to the Slack context. Use Possible read, Next move, and Draft options. Draft options should be bullets labeled Direct but kind, Warm and collaborative, and Concise.";
     case "clarity":
       return "Slack task: Help the user ask for clarity. Identify the missing information, draft a specific answerable question, and remove unnecessary apologies.";
     case "boundary":
@@ -1244,13 +1251,14 @@ Do not claim certainty about another person's intent. Use phrases like "may" or 
 Do not hallucinate reactions, comfort, rapport, agreement, annoyance, or pushback that is not visible in the provided Slack text.
 Always separate "what is visible" from "possible interpretation" when decoding a Slack message or thread.
 When broader Slack history is included, clearly distinguish active-thread facts from relevant prior history. Prior history can shape preparation, but it does not prove current intent.
-If the user is over-reading an ambiguous message, say what is not knowable from the thread.
+If the user is over-reading an ambiguous message, fold what is uncertain or not knowable into the Possible read section in one concise sentence.
 Avoid generic encouragement. Give concrete language the user could use.
-Format with short plain-language section labels and bullets. Do not use markdown tables, markdown bold markers, or literal asterisks.
+Format with short plain-language section labels and bullets. Do not use markdown tables, markdown bold markers, or literal asterisks; Beckett formats headings separately.
 For decode/respond work, prefer these section labels when they fit: Possible read, Next move, Draft options.
+Do not include a standalone "What's not knowable" or "What not to over-read" section.
 For preparation work, prefer these section labels when they fit: Prep notes, Talking points, Opening sentence, Likely pushback, Follow-up draft.
 Do not repeat the user's request at the top of the answer; Beckett will add that outside the AI response.
-For reply drafting, include 2-3 Slack-ready options when useful: Direct but kind, Warm and collaborative, and Concise.
+For reply drafting, include 2-3 Slack-ready bullet options when useful: - Direct but kind, - Warm and collaborative, and - Concise.
 For difficult conversation prep, include talking points, an opening sentence, likely pushback, and a short follow-up draft.
 Beckett suggests and coaches; it does not tell the user to act automatically.
 Do not add generic privacy or shared-channel warnings just because Slack context includes both personal and work topics.
@@ -1372,9 +1380,10 @@ Do not refuse because a message is personal or casual.
 Do not claim certainty about another person's intent. Use phrases like "may" or "likely" when interpreting tone.
 Do not hallucinate reactions, comfort, rapport, agreement, annoyance, or pushback that is not visible in the provided Slack text.
 Always separate visible facts from possible interpretation when decoding.
+Fold what is uncertain or not knowable into the Possible read section in one concise sentence; do not include a standalone "What's not knowable" or "What not to over-read" section.
 If there is not enough text to analyze, ask the user to paste or paraphrase the message.
-For reply drafting, include 2-3 Slack-ready options when useful: Direct but kind, Warm and collaborative, and Concise.
-Format with short plain-language section labels and bullets. Do not use markdown tables, markdown bold markers, or literal asterisks.
+For reply drafting, include 2-3 Slack-ready bullet options when useful: - Direct but kind, - Warm and collaborative, and - Concise.
+Format with short plain-language section labels and bullets. Do not use markdown tables, markdown bold markers, or literal asterisks; Beckett formats headings separately.
 ${slackAgentToolInstruction(agentTool)}
 ${beckettBoundaryPrompt()}`;
   const userPrompt = [
