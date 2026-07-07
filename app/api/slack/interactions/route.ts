@@ -145,6 +145,20 @@ function buildPreparingBlocks(
   ];
 }
 
+function buildShortcutPreparingBlocks(prompt: string): SlackBlock[] {
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: [`*${slackAskedLabel("general")}*`, `>${formatAskedPrompt(prompt)}`, "", "Beckett is reading that message..."].join(
+          "\n"
+        ),
+      },
+    },
+  ];
+}
+
 async function replaceSlackInteraction(responseUrl: string, text: string, blocks?: SlackBlock[]) {
   await postSlackResponse(responseUrl, text, {
     replaceOriginal: true,
@@ -273,6 +287,69 @@ async function sendPendingSlashResponse({
   }
 }
 
+async function sendMessageShortcutResponse({
+  origin,
+  payload,
+  teamId,
+  slackUserId,
+  responseUrl,
+  messageText,
+}: {
+  origin: string;
+  payload: SlackInteractionPayload;
+  teamId: string;
+  slackUserId: string;
+  responseUrl: string;
+  messageText: string;
+}) {
+  try {
+    const user = await lookupSlackConnectedUser(teamId, slackUserId);
+    if (!user) {
+      await postSlackResponse(responseUrl, slackConnectText(origin), { replaceOriginal: true });
+      return;
+    }
+
+    if (!isAllowedSlackPlan(user)) {
+      await postSlackResponse(responseUrl, "Beckett Slack coaching is available for beta and pro users.", {
+        replaceOriginal: true,
+      });
+      return;
+    }
+
+    const authorRelationship = await resolveSlackAuthorRelationshipContext({
+      user,
+      teamId,
+      slackAuthorUserId: payload.message?.user,
+      interactionType: "slack_message_shortcut",
+    });
+
+    const response = await runSlackCoaching({
+      user,
+      action: "message_shortcut",
+      prompt: buildShortcutPrompt(payload),
+      sourceLabel: "slack_message_shortcut",
+      messageText,
+      relationshipContext: authorRelationship?.promptContext || null,
+    });
+
+    const linkHint =
+      authorRelationship && !authorRelationship.linked && authorRelationship.slackIdentifier
+        ? [
+            "",
+            `_Slack contact not linked yet. To use relationship context for ${
+              authorRelationship.slackProfile?.name || "this person"
+            }, add confirmed Slack ID ${authorRelationship.slackIdentifier} to their Beckett contact._`,
+          ].join("\n")
+        : "";
+
+    await postSlackResponse(responseUrl, `${response}${linkHint}`, { replaceOriginal: true });
+  } catch (error) {
+    await postSlackResponse(responseUrl, `Beckett could not finish that request: ${handleSlackAiError(error)}`, {
+      replaceOriginal: true,
+    });
+  }
+}
+
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const verification = verifySlackRequest(req, rawBody);
@@ -337,59 +414,33 @@ export async function POST(req: NextRequest) {
   const slackUserId = payload.user?.id;
   const responseUrl = payload.response_url || "";
   const messageText = extractMessageText(payload);
+  const prompt = buildShortcutPrompt(payload);
 
   if (!teamId || !slackUserId) {
-    await postSlackResponse(responseUrl, "Beckett could not read the Slack workspace and user context.");
-    return NextResponse.json({ ok: true });
+    return slackMessageResponse("Beckett could not read the Slack workspace and user context.");
   }
 
   if (!messageText) {
-    await postSlackResponse(responseUrl, "Beckett could not read message text from that Slack shortcut.");
-    return NextResponse.json({ ok: true });
+    return slackMessageResponse("Beckett could not read message text from that Slack shortcut.");
   }
 
-  try {
-    const user = await lookupSlackConnectedUser(teamId, slackUserId);
-    if (!user) {
-      await postSlackResponse(responseUrl, slackConnectText(req.nextUrl.origin));
-      return NextResponse.json({ ok: true });
-    }
+  if (!responseUrl) {
+    return slackMessageResponse("Beckett could not read Slack's response URL for that shortcut.");
+  }
 
-    if (!isAllowedSlackPlan(user)) {
-      await postSlackResponse(responseUrl, "Beckett Slack coaching is available for beta and pro users.");
-      return NextResponse.json({ ok: true });
-    }
-
-    const authorRelationship = await resolveSlackAuthorRelationshipContext({
-      user,
+  scheduleSlackBackgroundTask(
+    "Slack message shortcut response failed",
+    sendMessageShortcutResponse({
+      origin: req.nextUrl.origin,
+      payload,
       teamId,
-      slackAuthorUserId: payload.message?.user,
-      interactionType: "slack_message_shortcut",
-    });
-
-    const response = await runSlackCoaching({
-      user,
-      action: "message_shortcut",
-      prompt: buildShortcutPrompt(payload),
-      sourceLabel: "slack_message_shortcut",
+      slackUserId,
+      responseUrl,
       messageText,
-      relationshipContext: authorRelationship?.promptContext || null,
-    });
+    })
+  );
 
-    const linkHint =
-      authorRelationship && !authorRelationship.linked && authorRelationship.slackIdentifier
-        ? [
-            "",
-            `_Slack contact not linked yet. To use relationship context for ${
-              authorRelationship.slackProfile?.name || "this person"
-            }, add confirmed Slack ID ${authorRelationship.slackIdentifier} to their Beckett contact._`,
-          ].join("\n")
-        : "";
-
-    await postSlackResponse(responseUrl, `${response}${linkHint}`);
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    await postSlackResponse(responseUrl, `Beckett could not finish that request: ${handleSlackAiError(error)}`);
-    return NextResponse.json({ ok: true });
-  }
+  return slackMessageResponse("Beckett is reading that message...", {
+    blocks: buildShortcutPreparingBlocks(prompt),
+  });
 }
