@@ -34,8 +34,10 @@ import {
 } from "@/lib/slack-guided-prep";
 import {
   archiveSlackCoachingThread,
+  appendSlackCoachingMessage,
   buildSlackHistoryContinuePayload,
   createSlackCoachingThread,
+  loadSlackCoachingMessages,
   loadSlackCoachingThread,
   parseSlackHistoryAction,
   publishSlackHome,
@@ -668,7 +670,7 @@ async function sendMessageShortcutResponse({
       const agentChannelId = "channelId" in agentDelivery ? agentDelivery.channelId : null;
       const agentThreadTs = "ts" in agentDelivery ? agentDelivery.ts : null;
       if (agentChannelId && agentThreadTs && user.botAccessToken) {
-        await createSlackCoachingThread({
+        const coachingThread = await createSlackCoachingThread({
           user,
           teamId,
           slackUserId,
@@ -685,7 +687,26 @@ async function sendMessageShortcutResponse({
           console.error("Slack shortcut history create failed", {
             message: error instanceof Error ? error.message : String(error),
           });
+          return null;
         });
+        if (coachingThread?.id) {
+          await appendSlackCoachingMessage({
+            threadId: coachingThread.id,
+            user,
+            teamId,
+            slackUserId,
+            role: "user",
+            content: prompt,
+          }).catch(() => null);
+          await appendSlackCoachingMessage({
+            threadId: coachingThread.id,
+            user,
+            teamId,
+            slackUserId,
+            role: "beckett",
+            content: response,
+          }).catch(() => null);
+        }
 
         const draftSession = await createSlackDraftActionSession({
           user,
@@ -881,7 +902,12 @@ async function handleHistoryButtonResponse({
     const thread = threadId ? await loadSlackCoachingThread({ threadId, userId: user.id }) : null;
 
     if (actionId === SLACK_HISTORY_CONTINUE_ACTION_ID && thread) {
-      const payloadToPost = buildSlackHistoryContinuePayload(thread);
+      const messages = await loadSlackCoachingMessages({
+        threadId: thread.id,
+        userId: user.id,
+        limit: 10,
+      }).catch(() => []);
+      const payloadToPost = buildSlackHistoryContinuePayload(thread, messages);
       if (thread.slack_channel_id && thread.thread_ts) {
         await slackApiPost(user.botAccessToken, "chat.postMessage", {
           channel: thread.slack_channel_id,

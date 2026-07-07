@@ -27,6 +27,17 @@ export type SlackCoachingThread = {
   archived_at: string | null;
 };
 
+export type SlackCoachingMessage = {
+  id: string;
+  coaching_thread_id: string;
+  user_id: string;
+  slack_team_id: string;
+  slack_user_id: string;
+  role: "user" | "beckett";
+  content: string;
+  created_at: string;
+};
+
 type UpsertThreadInput = {
   user: SlackConnectedUser;
   teamId: string;
@@ -44,6 +55,12 @@ type UpsertThreadInput = {
 
 function truncate(value: string | null | undefined, length: number) {
   const text = (value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= length) return text;
+  return `${text.slice(0, length - 3).trim()}...`;
+}
+
+function truncateMessageContent(value: string | null | undefined, length: number) {
+  const text = (value || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   if (text.length <= length) return text;
   return `${text.slice(0, length - 3).trim()}...`;
 }
@@ -123,6 +140,121 @@ export async function updateSlackCoachingThread(
   return data as SlackCoachingThread | null;
 }
 
+export async function appendSlackCoachingMessage({
+  threadId,
+  user,
+  teamId,
+  slackUserId,
+  role,
+  content,
+}: {
+  threadId?: string | null;
+  user: SlackConnectedUser;
+  teamId: string;
+  slackUserId: string;
+  role: SlackCoachingMessage["role"];
+  content?: string | null;
+}) {
+  const cleanContent = truncateMessageContent(content, 4000);
+  if (!threadId || !cleanContent) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("slack_coaching_messages")
+    .insert({
+      coaching_thread_id: threadId,
+      user_id: user.id,
+      slack_team_id: teamId,
+      slack_user_id: slackUserId,
+      role,
+      content: cleanContent,
+    })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as SlackCoachingMessage;
+}
+
+export async function loadSlackCoachingMessages({
+  threadId,
+  userId,
+  limit = 12,
+}: {
+  threadId: string;
+  userId: string;
+  limit?: number;
+}) {
+  const { data, error } = await supabaseAdmin
+    .from("slack_coaching_messages")
+    .select("*")
+    .eq("coaching_thread_id", threadId)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return ((data || []) as SlackCoachingMessage[]).reverse();
+}
+
+export function formatSlackCoachingMessages(messages: SlackCoachingMessage[], maxLength = 1800) {
+  const transcript = messages
+    .map((message) => `${message.role === "user" ? "User" : "Beckett"}: ${message.content}`)
+    .join("\n\n");
+  const cleaned = transcript.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  if (cleaned.length <= maxLength) return cleaned;
+  return `${cleaned.slice(0, maxLength - 3).trim()}...`;
+}
+
+export async function findSlackCoachingThreadBySlackThread({
+  userId,
+  teamId,
+  slackUserId,
+  channelId,
+  threadTs,
+}: {
+  userId: string;
+  teamId: string;
+  slackUserId: string;
+  channelId: string;
+  threadTs: string;
+}) {
+  if (!threadTs) return null;
+  const { data, error } = await supabaseAdmin
+    .from("slack_coaching_threads")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("slack_team_id", teamId)
+    .eq("slack_user_id", slackUserId)
+    .eq("slack_channel_id", channelId)
+    .eq("thread_ts", threadTs)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as SlackCoachingThread | null;
+}
+
+export async function completeActiveSlackSessionsForThread({
+  threadId,
+  userId,
+}: {
+  threadId: string;
+  userId: string;
+}) {
+  const { error } = await supabaseAdmin
+    .from("slack_agent_sessions")
+    .update({
+      status: "completed",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("coaching_thread_id", threadId)
+    .eq("user_id", userId)
+    .eq("status", "active");
+
+  if (error) throw error;
+}
+
 export async function listRecentSlackCoachingThreads(userId: string, limit = 8) {
   const { data, error } = await supabaseAdmin
     .from("slack_coaching_threads")
@@ -153,6 +285,7 @@ export async function archiveSlackCoachingThread({
     .eq("user_id", userId);
 
   if (error) throw error;
+  await completeActiveSlackSessionsForThread({ threadId, userId });
 }
 
 export async function loadSlackCoachingThread({
@@ -376,7 +509,8 @@ export async function publishSlackHomeResult(input: {
   return result;
 }
 
-export function buildSlackHistoryContinuePayload(thread: SlackCoachingThread) {
+export function buildSlackHistoryContinuePayload(thread: SlackCoachingThread, messages: SlackCoachingMessage[] = []) {
+  const transcript = formatSlackCoachingMessages(messages, 1800);
   const payload = buildBeckettPayload({
     title: "Beckett",
     subtitle: "",
@@ -384,6 +518,7 @@ export function buildSlackHistoryContinuePayload(thread: SlackCoachingThread) {
       `Picking this back up: ${thread.title}`,
       "",
       thread.summary || thread.prompt_snippet || "We were working through this conversation together.",
+      transcript ? `\nRecent Beckett conversation:\n${transcript}` : "",
       "",
       "What do you want to do next?",
     ].join("\n"),

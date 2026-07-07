@@ -17,7 +17,19 @@ import {
   verifySlackRequest,
 } from "@/lib/slack-app";
 import { handleGuidedSlackPrep } from "@/lib/slack-guided-prep";
-import { publishSlackConnectHome, publishSlackHomeResult } from "@/lib/slack-history";
+import {
+  appendSlackCoachingMessage,
+  buildSlackThreadArchiveAction,
+  createSlackCoachingThread,
+  findSlackCoachingThreadBySlackThread,
+  formatSlackCoachingMessages,
+  loadSlackCoachingMessages,
+  publishSlackConnectHome,
+  publishSlackHomeResult,
+  slackHistoryTitle,
+  summarizeSlackCoachingResponse,
+  updateSlackCoachingThread,
+} from "@/lib/slack-history";
 
 export const runtime = "nodejs";
 
@@ -235,6 +247,83 @@ async function publishHome({
   });
 }
 
+async function continueExistingSlackCoachingThread({
+  user,
+  teamId,
+  slackUserId,
+  channelId,
+  threadTs,
+  text,
+  intent,
+}: {
+  user: NonNullable<Awaited<ReturnType<typeof lookupSlackConnectedUser>>>;
+  teamId: string;
+  slackUserId: string;
+  channelId: string;
+  threadTs: string;
+  text: string;
+  intent: SlackCoachingIntent;
+}) {
+  const thread = await findSlackCoachingThreadBySlackThread({
+    userId: user.id,
+    teamId,
+    slackUserId,
+    channelId,
+    threadTs,
+  });
+  if (!thread) return null;
+
+  const previousMessages = await loadSlackCoachingMessages({
+    threadId: thread.id,
+    userId: user.id,
+    limit: 10,
+  }).catch(() => []);
+  const transcript = formatSlackCoachingMessages(previousMessages, 1800);
+  const prompt = [
+    `The user is continuing this Beckett coaching thread: ${thread.title}.`,
+    thread.summary ? `Current summary: ${thread.summary}` : "",
+    transcript ? `Previous Beckett conversation:\n${transcript}` : "",
+    "",
+    `User follow-up: ${text}`,
+  ].filter(Boolean).join("\n");
+
+  await appendSlackCoachingMessage({
+    threadId: thread.id,
+    user,
+    teamId,
+    slackUserId,
+    role: "user",
+    content: text,
+  }).catch(() => null);
+
+  const response = await runSlackCoaching({
+    user,
+    action: "agent_message",
+    prompt,
+    sourceLabel: thread.title,
+    messageText: transcript || thread.summary || thread.prompt_snippet || text,
+    contextStatus: "available",
+    contextMessageCount: previousMessages.length,
+    broaderSearchUsed: false,
+    intent,
+    responseDetail: "longer",
+  });
+
+  await appendSlackCoachingMessage({
+    threadId: thread.id,
+    user,
+    teamId,
+    slackUserId,
+    role: "beckett",
+    content: response,
+  }).catch(() => null);
+  await updateSlackCoachingThread(thread.id, {
+    summary: summarizeSlackCoachingResponse(response, thread.summary || thread.prompt_snippet || text),
+  }).catch(() => null);
+
+  return { thread, response };
+}
+
 async function respondToAgentMessage({
   teamId,
   slackUserId,
@@ -407,6 +496,36 @@ async function respondToAgentMessage({
       return;
     }
 
+    const continuedThread = await continueExistingSlackCoachingThread({
+      user,
+      teamId,
+      slackUserId,
+      channelId,
+      threadTs,
+      text,
+      intent: assistantIntent,
+    });
+    if (continuedThread) {
+      const payload = buildBeckettPayload({
+        title: "Beckett",
+        subtitle: "",
+        body: continuedThread.response,
+        hideTitle: true,
+      });
+
+      await slackApiPost(user.botAccessToken, "chat.postMessage", {
+        channel: channelId,
+        thread_ts: threadTs,
+        ...payload,
+      });
+      await slackApiPost(user.botAccessToken, "assistant.threads.setStatus", {
+        channel_id: channelId,
+        thread_ts: threadTs,
+        status: "",
+      }).catch(() => null);
+      return;
+    }
+
     const coachingContext = await buildSlackCoachingContext({
       user,
       prompt: text,
@@ -458,6 +577,57 @@ async function respondToAgentMessage({
       intent: assistantIntent,
       responseDetail: "longer",
     });
+    const coachingThread = await createSlackCoachingThread({
+      user,
+      teamId,
+      slackUserId,
+      flowType:
+        assistantIntent === "respond" ||
+        assistantIntent === "rewrite" ||
+        assistantIntent === "decode" ||
+        assistantIntent === "prep" ||
+        assistantIntent === "practice"
+          ? assistantIntent
+          : "message",
+      title: slackHistoryTitle(
+        assistantIntent === "respond" ||
+          assistantIntent === "rewrite" ||
+          assistantIntent === "decode" ||
+          assistantIntent === "prep" ||
+          assistantIntent === "practice"
+          ? assistantIntent
+          : "message",
+        "Messages"
+      ),
+      promptSnippet: text,
+      summary: summarizeSlackCoachingResponse(response, text),
+      slackChannelId: channelId,
+      threadTs,
+      status: "active",
+    }).catch((error) => {
+      console.error("Slack generic coaching history create failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    });
+    if (coachingThread?.id) {
+      await appendSlackCoachingMessage({
+        threadId: coachingThread.id,
+        user,
+        teamId,
+        slackUserId,
+        role: "user",
+        content: text,
+      }).catch(() => null);
+      await appendSlackCoachingMessage({
+        threadId: coachingThread.id,
+        user,
+        teamId,
+        slackUserId,
+        role: "beckett",
+        content: response,
+      }).catch(() => null);
+    }
     const payload = buildBeckettPayload({
       title: "Beckett",
       subtitle: "Communication coach",
@@ -467,6 +637,7 @@ async function respondToAgentMessage({
         coachingContext.broaderSearchUsed ? "Used relevant Slack history for context." : "",
         relationshipNote,
       ].filter(Boolean).join("\n") || undefined,
+      actions: buildSlackThreadArchiveAction(coachingThread?.id),
     });
 
     await slackApiPost(user.botAccessToken, "chat.postMessage", {

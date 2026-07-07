@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/server-admin";
 import {
+  appendSlackCoachingMessage,
   buildSlackThreadArchiveAction,
   createSlackCoachingThread,
   summarizeSlackCoachingResponse,
@@ -407,19 +408,25 @@ async function findActiveSession({
   teamId,
   slackUserId,
   channelId,
+  threadTs,
 }: {
   teamId: string;
   slackUserId: string;
   channelId: string;
+  threadTs?: string | null;
 }) {
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("slack_agent_sessions")
     .select("*")
     .eq("slack_team_id", teamId)
     .eq("slack_user_id", slackUserId)
     .eq("slack_channel_id", channelId)
     .eq("status", "active")
-    .gt("expires_at", new Date().toISOString())
+    .gt("expires_at", new Date().toISOString());
+
+  query = threadTs ? query.eq("thread_ts", threadTs) : query.is("thread_ts", null);
+
+  const { data, error } = await query
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -485,6 +492,55 @@ async function updateSession(sessionId: string, patch: Partial<SlackAgentSession
   return data as SlackAgentSession;
 }
 
+async function persistGuidedTurn({
+  input,
+  session,
+  userText,
+  beckettText,
+  fallbackSummary,
+}: {
+  input: GuidedFlowInput;
+  session: SlackAgentSession;
+  userText?: string | null;
+  beckettText?: string | null;
+  fallbackSummary?: string | null;
+}) {
+  const threadId = session.coaching_thread_id;
+  if (!threadId) return;
+
+  await appendSlackCoachingMessage({
+    threadId,
+    user: input.user,
+    teamId: input.teamId,
+    slackUserId: input.slackUserId,
+    role: "user",
+    content: userText,
+  }).catch((error) => {
+    console.error("Slack coaching user message storage failed", {
+      threadId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  });
+
+  await appendSlackCoachingMessage({
+    threadId,
+    user: input.user,
+    teamId: input.teamId,
+    slackUserId: input.slackUserId,
+    role: "beckett",
+    content: beckettText,
+  }).catch((error) => {
+    console.error("Slack coaching Beckett message storage failed", {
+      threadId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  });
+
+  await updateSlackCoachingThread(threadId, {
+    summary: summarizeSlackCoachingResponse(beckettText || "", fallbackSummary || session.answers.initial_request || ""),
+  }).catch(() => null);
+}
+
 function isStartOver(text: string) {
   return /\b(start over|restart|new prep|new conversation|reset)\b/i.test(text);
 }
@@ -548,6 +604,13 @@ function askForStep(session: SlackAgentSession) {
     case "confirm_evidence":
       return formatEvidencePrompt(session.evidence_suggestions, "");
   }
+}
+
+function guidedActions(session: SlackAgentSession, draftOptions: SlackDraftOption[] = []) {
+  return [
+    ...buildSlackDraftUseActions(session.id, draftOptions),
+    ...buildSlackThreadArchiveAction(session.coaching_thread_id),
+  ];
 }
 
 function parseSelection(text: string, max: number) {
@@ -912,6 +975,24 @@ export async function startGuidedSlackFlow({
     step,
     coachingThreadId: coachingThread?.id,
   });
+  if (coachingThread?.id) {
+    await appendSlackCoachingMessage({
+      threadId: coachingThread.id,
+      user,
+      teamId,
+      slackUserId,
+      role: "user",
+      content: prompt,
+    }).catch(() => null);
+    await appendSlackCoachingMessage({
+      threadId: coachingThread.id,
+      user,
+      teamId,
+      slackUserId,
+      role: "beckett",
+      content: initialText,
+    }).catch(() => null);
+  }
   let response = "";
   try {
     response = await firstSidebarResponse(
@@ -930,6 +1011,14 @@ export async function startGuidedSlackFlow({
 
     if (response && user.botAccessToken) {
       const draftOptions = intent === "respond" ? await saveSlackDraftOptions(session.id, response) : [];
+      await appendSlackCoachingMessage({
+        threadId: coachingThread?.id,
+        user,
+        teamId,
+        slackUserId,
+        role: "beckett",
+        content: response,
+      }).catch(() => null);
       await updateSlackCoachingThread(coachingThread?.id, {
         summary: summarizeSlackCoachingResponse(response, initialText),
         status: intent === "prep" || intent === "practice" ? "active" : "completed",
@@ -939,10 +1028,7 @@ export async function startGuidedSlackFlow({
         subtitle: "",
         body: response,
         hideTitle: true,
-        actions: [
-          ...buildSlackDraftUseActions(session.id, draftOptions),
-          ...buildSlackThreadArchiveAction(coachingThread?.id),
-        ],
+        actions: guidedActions(session, draftOptions),
       });
       await slackApiPost(user.botAccessToken, "chat.postMessage", {
         channel: postedChannelId,
@@ -993,11 +1079,14 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
     teamId: input.teamId,
     slackUserId: input.slackUserId,
     channelId: input.channelId,
+    threadTs: input.threadTs,
   });
 
   if (session && isCancel(text)) {
     await updateSession(session.id, { status: "completed" });
-    return { handled: true, title: flowTitle(session.flow_type), response: "No problem. I stopped that flow. Start a new one whenever you want." };
+    const response = "No problem. I stopped that flow. Start a new one whenever you want.";
+    await persistGuidedTurn({ input, session, userText: text, beckettText: response });
+    return { handled: true, title: flowTitle(session.flow_type), response, actions: guidedActions(session) };
   }
 
   if (session && isStartOver(text)) {
@@ -1006,14 +1095,17 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
   }
 
   if (session && isLikelyTopicChange(text)) {
+    const response = [
+      "This sounds like a new topic.",
+      "",
+      "Reply `start over` to begin a new walkthrough, or answer my last question to continue the current one.",
+    ].join("\n");
+    await persistGuidedTurn({ input, session, userText: text, beckettText: response });
     return {
       handled: true,
       title: flowTitle(session.flow_type),
-      response: [
-        "This sounds like a new topic.",
-        "",
-        "Reply `start over` to begin a new walkthrough, or answer my last question to continue the current one.",
-      ].join("\n"),
+      response,
+      actions: guidedActions(session),
     };
   }
 
@@ -1032,6 +1124,29 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
       channelId: input.activeChannelId,
     });
     const step = nextStepForAnswers(flowType, answers) || (flowType === "decode" ? "decode_followup" : "ask_audience");
+    const sourceLabel = sourceLabelForFlow({
+      activeContext: input.activeContext,
+      userName: input.user.name,
+    });
+    const coachingThread = await createSlackCoachingThread({
+      user: input.user,
+      teamId: input.teamId,
+      slackUserId: input.slackUserId,
+      flowType,
+      title: assistantThreadTitle(flowType, sourceLabel),
+      promptSnippet: text,
+      summary: text,
+      slackChannelId: input.channelId,
+      threadTs: input.threadTs,
+      sourceChannelId: input.activeChannelId,
+      status: "active",
+    }).catch((error) => {
+      console.error("Slack coaching history create failed", {
+        flowType,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    });
     const created = await createSession({
       user: input.user,
       teamId: input.teamId,
@@ -1041,22 +1156,31 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
       flowType,
       answers,
       step,
-      coachingThreadId: null,
+      coachingThreadId: coachingThread?.id,
     });
     const response = await firstSidebarResponse(input, created);
     const draftOptions = flowType === "respond" ? await saveSlackDraftOptions(created.id, response) : [];
+    await persistGuidedTurn({
+      input,
+      session: created,
+      userText: text,
+      beckettText: response,
+      fallbackSummary: text,
+    });
     return {
       handled: true,
       title: flowTitle(flowType),
       response,
-      actions: buildSlackDraftUseActions(created.id, draftOptions),
+      actions: guidedActions(created, draftOptions),
     };
   }
 
   if (session.step === "decode_followup") {
     if (/\b(done|no|stop)\b/i.test(text)) {
       await updateSession(session.id, { status: "completed" });
-      return { handled: true, title: flowTitle(session.flow_type), response: "Got it. I’ll stop there." };
+      const response = "Got it. I’ll stop there.";
+      await persistGuidedTurn({ input, session, userText: text, beckettText: response });
+      return { handled: true, title: flowTitle(session.flow_type), response, actions: guidedActions(session) };
     }
     const updated = await updateSession(session.id, {
       status: "completed",
@@ -1068,11 +1192,12 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
     });
     const response = await completeSession(input, updated, text);
     const draftOptions = await saveSlackDraftOptions(updated.id, response);
+    await persistGuidedTurn({ input, session: updated, userText: text, beckettText: response });
     return {
       handled: true,
       title: flowTitle(updated.flow_type),
       response,
-      actions: buildSlackDraftUseActions(updated.id, draftOptions),
+      actions: guidedActions(updated, draftOptions),
     };
   }
 
@@ -1080,7 +1205,8 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
     const parsed = parseSelection(text, session.evidence_suggestions.length);
     if (parsed.type === "search_again") {
       const response = await buildEvidenceStep(input, session, text);
-      return { handled: true, title: flowTitle(session.flow_type), response };
+      await persistGuidedTurn({ input, session, userText: text, beckettText: response });
+      return { handled: true, title: flowTitle(session.flow_type), response, actions: guidedActions(session) };
     }
 
     const extra_context = Array.isArray(session.answers.extra_context) ? session.answers.extra_context : [];
@@ -1094,7 +1220,9 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
       confirmed_evidence: confirmed,
       answers: { ...session.answers, extra_context },
     });
-    return { handled: true, title: flowTitle(session.flow_type), response: await completeSession(input, updated) };
+    const response = await completeSession(input, updated);
+    await persistGuidedTurn({ input, session: updated, userText: text, beckettText: response });
+    return { handled: true, title: flowTitle(session.flow_type), response, actions: guidedActions(updated) };
   }
 
   const answers = mergeAnswersForStep(session, text);
@@ -1105,19 +1233,24 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
   });
 
   if (nextStep === "confirm_evidence") {
-    return { handled: true, title: flowTitle(session.flow_type), response: await buildEvidenceStep(input, updated) };
+    const response = await buildEvidenceStep(input, updated);
+    await persistGuidedTurn({ input, session: updated, userText: text, beckettText: response });
+    return { handled: true, title: flowTitle(session.flow_type), response, actions: guidedActions(updated) };
   }
 
   if (nextStep) {
-    return { handled: true, title: flowTitle(session.flow_type), response: askForStep(updated) };
+    const response = askForStep(updated);
+    await persistGuidedTurn({ input, session: updated, userText: text, beckettText: response });
+    return { handled: true, title: flowTitle(session.flow_type), response, actions: guidedActions(updated) };
   }
 
   const response = await completeSession(input, updated);
   const draftOptions = session.flow_type === "respond" ? await saveSlackDraftOptions(updated.id, response) : [];
+  await persistGuidedTurn({ input, session: updated, userText: text, beckettText: response });
   return {
     handled: true,
     title: flowTitle(session.flow_type),
     response,
-    actions: buildSlackDraftUseActions(updated.id, draftOptions),
+    actions: guidedActions(updated, draftOptions),
   };
 }
