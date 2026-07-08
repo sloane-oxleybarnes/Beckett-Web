@@ -15,7 +15,6 @@ import {
   scheduleSlackBackgroundTask,
   shouldUseBroaderSlackContext,
   slackApiPost,
-  slackContextDebugLine,
   type SlackCoachingIntent,
   verifySlackRequest,
 } from "@/lib/slack-app";
@@ -114,24 +113,18 @@ function isAssistantStarterPrompt(text: string) {
 function starterPromptMissingContextMessage(intent: SlackCoachingIntent) {
   if (intent === "rewrite") {
     return [
-      "Send me the draft you want to clean up, and I’ll make it clearer while keeping your meaning.",
+      "Paste the message you want to rewrite, and I'll tighten it up for the person you're sending it to, making sure to keep it clear and kind.",
       "",
       "If the rewrite depends on a specific Slack conversation, use the message’s ⋯ menu or send me a Slack message link too.",
     ].join("\n");
   }
 
-  const action =
-    intent === "respond"
-      ? "draft a response"
-      : "decode a message";
+  const action = intent === "respond" ? "responding to" : "decoding";
+  const shortcut = intent === "respond" ? "Beckett - Respond" : "Beckett - Decode";
 
   return [
-    `I can ${action} from the latest Slack conversation when you start me from that conversation.`,
-    "",
-    "From this Beckett Messages button, Slack did not send me the open channel or DM, so I can’t safely choose the most recent message.",
-    "",
-    "Use one of these instead:",
-    "- Click the message’s ⋯ menu and choose Beckett - Decode or Beckett - Respond.",
+    `How to get my help ${action} a message:`,
+    `- Click the message’s ⋯ menu and choose ‘${shortcut}’ or`,
     `- Type /beckett ${intent} in the Slack conversation you want me to use.`,
     "- Send me a Slack message link.",
   ].join("\n");
@@ -199,19 +192,19 @@ function flowTypeAsSlackIntent(flowType: string | null | undefined, fallback: Sl
 function slackHistoryFailureMessage(reason: string | null | undefined) {
   switch (reason) {
     case "missing_token":
-      return "Context pulled: active/linked conversation: unavailable (missing_token). How to resolve: Slack is not connected for this account. Connect Slack from Beckett Settings.";
+      return "Slack is not connected for this account. Connect Slack from Beckett Settings, then try again.";
     case "missing_scope":
-      return "Context pulled: active/linked conversation: unavailable (missing_scope). How to resolve: I’m missing the Slack permissions needed to read this context. Reconnect Slack from Beckett Settings, then reinstall or reauthorize the Slack app if prompted.";
+      return "I’m missing the Slack permissions needed to read this conversation. Reconnect Slack from Beckett Settings, then reinstall or reauthorize the Slack app if prompted.";
     case "feature_not_enabled":
-      return "Context pulled: active/linked conversation: unavailable (feature_not_enabled). How to resolve: Slack broader search is not enabled for this app or workspace yet. I can still use the active conversation and linked Slack threads.";
+      return "Slack broader search is not enabled for this app or workspace yet. I can still use selected messages and linked Slack threads.";
     case "not_in_channel":
-      return "Context pulled: active/linked conversation: unavailable (not_in_channel). How to resolve: I do not have access to this channel or DM. Add Beckett to the channel or use a conversation Beckett is authorized to read.";
+      return "I do not have access to that channel or DM. Add Beckett to the channel, use a conversation I’m authorized to read, or paste the message here.";
     case "channel_not_found":
-      return "Context pulled: active/linked conversation: unavailable (channel_not_found). How to resolve: I could not find that Slack channel or conversation. Check that the link is from the connected workspace.";
+      return "I could not find that Slack channel or conversation. Check that the link is from the connected workspace.";
     case "no_messages":
-      return "Context pulled: active/linked conversation: unavailable (no_messages). How to resolve: I could open the conversation, but Slack did not return readable messages. Try linking a specific message or thread.";
+      return "I could open the conversation, but Slack did not return readable messages. Try linking a specific message or thread.";
     default:
-      return "Context pulled: active/linked conversation: unavailable (slack_api_error). How to resolve: Slack returned an error while I was trying to read context. Try again, or reconnect Slack if this keeps happening.";
+      return "Slack returned an error while I was trying to read this context. Try again, or reconnect Slack if this keeps happening.";
   }
 }
 
@@ -834,7 +827,6 @@ async function respondToAgentMessage({
           "",
           response,
         ].join("\n"),
-        footer: slackContextDebugLine(linkedCoachingContext),
         hideTitle: true,
         actions: [
           ...(isCompactSlackIntent(linkIntent) ? buildSlackExplainMoreAction(coachingThread?.id) : []),
@@ -897,7 +889,6 @@ async function respondToAgentMessage({
         title: "Beckett",
         subtitle: "",
         body: "I lost the saved context for this Beckett thread. Send me a link to the Slack message or thread you want to continue from, and I’ll pick it back up.",
-        footer: slackContextDebugLine(coachingContext),
         hideTitle: true,
       });
 
@@ -923,7 +914,6 @@ async function respondToAgentMessage({
         title: "Beckett",
         subtitle: "",
         body: starterPromptMissingContextMessage(assistantIntent),
-        footer: slackContextDebugLine(coachingContext),
         hideTitle: true,
       });
 
@@ -1016,10 +1006,7 @@ async function respondToAgentMessage({
         "",
         response,
       ].join("\n"),
-      footer: [
-        slackContextDebugLine(coachingContext),
-        relationshipNote,
-      ].filter(Boolean).join("\n") || undefined,
+      footer: relationshipNote || undefined,
       actions: [
         ...(isCompactSlackIntent(assistantIntent) ? buildSlackExplainMoreAction(coachingThread?.id) : []),
         ...buildSlackThreadArchiveAction(coachingThread?.id),

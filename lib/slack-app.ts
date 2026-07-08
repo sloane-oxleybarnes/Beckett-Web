@@ -145,6 +145,12 @@ type SlackHistoryMessage = {
   thread_ts?: string;
 };
 
+export type SlackLatestMessageContext = {
+  targetText: string;
+  targetTs: string | null;
+  context: SlackConversationContext;
+};
+
 type SlackUserInfo = {
   ok?: boolean;
   user?: {
@@ -307,7 +313,7 @@ function removeStandaloneSlackUncertaintySections(text: string) {
   const uncertaintyHeading =
     /^(?:~\s*)?(?:what(?:['’]s| is| isn['’]t)? not knowable|what not to over-?read|what (?:i|beckett) can(?:not|'t|’t) know|unknowns?)(?:\s*~)?\s*:?\s*$/i;
   const knownHeading =
-    /^(?:~\s*)?(?:possible read|next move|draft options|relationship read|what i['’]m basing this on|what is visible|visible facts|rewritten message|why this works|prep notes|talking points|opening sentence|likely pushback|follow-up draft|conversation goal|practice prompt|direct but kind|warm and collaborative|concise)(?:\s*~)?\s*:?\s*$/i;
+    /^(?:~\s*)?(?:possible read|next move|draft options|relationship read|what i['’]m basing this on|what is visible|visible facts|rewritten message|why this works|prep notes|talking points|opening sentence|likely pushback|follow-up draft|conversation goal|practice prompt|goal|say this first|if they push back|watch for|practice next|what works|try this version|direct but kind|warm and collaborative|concise)(?:\s*~)?\s*:?\s*$/i;
   const lines = text.split("\n");
   const kept: string[] = [];
   let skipping = false;
@@ -334,6 +340,14 @@ function canonicalSlackHeading(value: string) {
   if (normalized === "draft options") return "Draft options";
   if (normalized === "relationship read") return "Relationship read";
   if (normalized === "what i'm basing this on" || normalized === "what i’m basing this on") return "What I’m basing this on";
+  if (normalized === "goal") return "Goal";
+  if (normalized === "say this first") return "Say this first";
+  if (normalized === "if they push back") return "If they push back";
+  if (normalized === "watch for") return "Watch for";
+  if (normalized === "practice next") return "Practice next";
+  if (normalized === "what works") return "What works";
+  if (normalized === "try this version") return "Try this version";
+  if (normalized === "why it works") return "Why it works";
   return null;
 }
 
@@ -812,7 +826,7 @@ export async function setSlackAgentSuggestedPrompts({
         message: "Show me how to draft a response from a specific Slack message with Beckett.",
       },
       {
-        title: "Rewrite a Draft",
+        title: "Edit a Draft",
         message: "Help me rewrite this draft so it is clearer and kinder.",
       },
       {
@@ -1335,6 +1349,54 @@ export async function fetchSlackConversationContext({
   } satisfies SlackConversationContext;
 }
 
+export async function fetchLatestSlackMessageContext({
+  accessToken,
+  channelId,
+  channelName,
+  currentSlackUserId,
+}: {
+  accessToken: string | null;
+  channelId?: string | null;
+  channelName?: string | null;
+  currentSlackUserId?: string | null;
+}): Promise<SlackLatestMessageContext | null> {
+  if (!accessToken || !channelId) return null;
+
+  const data = await slackApiFetch<{ messages?: SlackHistoryMessage[] }>(
+    accessToken,
+    "conversations.history",
+    new URLSearchParams({
+      channel: channelId,
+      limit: String(MAX_SLACK_CONTEXT_MESSAGES),
+      inclusive: "true",
+    })
+  ).catch(() => null);
+
+  if (!data?.ok || !Array.isArray(data.messages) || !data.messages.length) return null;
+  const currentUserId = normalizeSlackUserId(currentSlackUserId);
+  const target = data.messages.find((message) => {
+    if (!message?.text || message.bot_id || message.subtype) return false;
+    if (currentUserId && message.user === currentUserId) return false;
+    return Boolean(stripSlackMarkup(message.text).trim());
+  }) || data.messages.find((message) => message?.text && !message.bot_id && !message.subtype);
+
+  if (!target?.text) return null;
+
+  const context = await fetchSlackConversationContext({
+    accessToken,
+    channelId,
+    channelName,
+    messageTs: target.ts,
+    threadTs: target.thread_ts,
+  });
+
+  return {
+    targetText: stripSlackMarkup(target.text),
+    targetTs: target.ts || null,
+    context,
+  };
+}
+
 async function runSlackBroaderSearch({
   accessToken,
   query,
@@ -1638,37 +1700,6 @@ export function slackContextUserNote(context: SlackConversationContext) {
   }
 }
 
-export function slackContextDebugLine(context: {
-  status: SlackContextStatus;
-  failureReason?: SlackContextFailureReason | null;
-  messageCount?: number;
-  broaderSearchUsed?: boolean;
-  retrievalMethod?: string;
-  activeContext?: SlackConversationContext | null;
-  broaderContext?: SlackConversationContext | null;
-}) {
-  const describe = (label: string, item?: SlackConversationContext | null) => {
-    if (!item) return `${label}: not requested`;
-    const method = item.retrievalMethod ? `, ${item.retrievalMethod}` : "";
-    if (item.status !== "available") return `${label}: unavailable (${item.failureReason || "unknown"}${method})`;
-    return `${label}: ${item.messageCount} message${item.messageCount === 1 ? "" : "s"}${method}`;
-  };
-
-  const parts =
-    context.activeContext || context.broaderContext
-      ? [
-          describe("active/linked conversation", context.activeContext),
-          describe("broader Slack history", context.broaderContext),
-        ]
-      : [
-          context.status === "available"
-            ? `Slack context: ${context.messageCount || 0} message${context.messageCount === 1 ? "" : "s"}${context.retrievalMethod ? `, ${context.retrievalMethod}` : ""}`
-            : `Slack context: unavailable (${context.failureReason || "unknown"})`,
-        ];
-
-  return `Context pulled: ${parts.join("; ")}.`;
-}
-
 export async function runSlackCoaching({
   user,
   action,
@@ -1748,7 +1779,7 @@ If the user asks for relationship insight and active Slack context is available,
 For broad relationship, history, pattern, vibe, or dynamic questions where broader Slack history is unavailable but visible context is available, start the answer from the visible thread with phrasing like "Based on the visible conversation..." and do not ask for more background unless there is no visible Slack context.
 If active Slack context is available but broader Slack history or saved relationship context is missing, do not treat that as a blocker. Mention it only briefly when relevant.
 Do not say you cannot access DMs, direct messages, private channels, or Slack history as a general capability claim. You may only describe the specific Slack context status provided in the prompt, such as missing permissions, not in channel, no messages found, or linked context available.
-Do not explain Slack retrieval failures in your own words. The app renders the context diagnostic and resolution instructions separately; answer only from the Slack context and user text actually provided.
+Do not explain Slack retrieval failures in your own words. Answer only from the Slack context and user text actually provided.
 If Slack context is unavailable for a prep request, continue coaching from the user's stated scenario instead of saying you need the actual pattern first.
 If the user is over-reading an ambiguous message, fold what is uncertain or not knowable into the Possible read section in one concise sentence.
 Avoid generic encouragement. Give concrete language the user could use.
@@ -1758,7 +1789,7 @@ Never include a standalone "What's not knowable", "What is not knowable", "What 
 For preparation work, prefer short coach-card sections when they fit: Goal, Say this first, If they push back, Watch for, Practice next.
 Do not repeat the user's request at the top of the answer; Beckett will add that outside the AI response.
 For reply drafting, include 2-3 Slack-ready bullet options when useful: - Direct but kind, - Warm and collaborative, and - Concise.
-For difficult conversation prep, include talking points, an opening sentence, likely pushback, and a short follow-up draft.
+For difficult conversation prep, keep the answer focused on the goal, first sentence, likely pushback, what to watch for, and one next practice step.
 Beckett suggests and coaches; it does not tell the user to act automatically.
 Do not add generic privacy or shared-channel warnings just because Slack context includes both personal and work topics.
 Only mention privacy, shared-channel, or workplace policy risk when the user's request is about posting in a public/shared channel, the context clearly includes sensitive personal information, or the requested message could create a concrete workplace safety or policy concern.

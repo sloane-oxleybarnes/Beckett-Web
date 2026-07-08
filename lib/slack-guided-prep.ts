@@ -22,8 +22,6 @@ import {
   SlackCoachingIntent,
   SlackConnectedUser,
   SlackConversationContext,
-  slackContextDebugLine,
-  slackContextUserNote,
 } from "@/lib/slack-app";
 
 type GuidedFlowType = "respond" | "rewrite" | "decode" | "prep" | "practice";
@@ -42,6 +40,8 @@ type GuidedStep =
   | "ask_outcome"
   | "ask_concern"
   | "confirm_evidence"
+  | "ask_rewrite_draft"
+  | "ask_opening_draft"
   | "ask_practice_goal"
   | "ask_practice_pushback"
   | "decode_followup";
@@ -107,6 +107,7 @@ type StartGuidedFlowInput = {
   sourceChannelId?: string | null;
   sourceChannelName?: string | null;
   sourceThreadTs?: string | null;
+  sourceActiveContext?: SlackConversationContext | null;
 };
 
 type GuidedFlowResult =
@@ -252,7 +253,11 @@ function initialAnswers(
 }
 
 function nextStepForAnswers(flowType: GuidedFlowType, answers: GuidedAnswers): GuidedStep | null {
-  if (flowType === "respond" || flowType === "rewrite") {
+  if (flowType === "rewrite") {
+    if (!hasPastedMessage(answers.initial_request)) return "ask_rewrite_draft";
+    return null;
+  }
+  if (flowType === "respond") {
     if (answers.source_channel_id) return null;
     if (!answers.audience) return "ask_audience";
     return null;
@@ -644,11 +649,15 @@ function askForStep(session: SlackAgentSession) {
   switch (session.step) {
     case "ask_audience":
       return [
-        session.flow_type === "rewrite" ? "I can rewrite that." : "I can help you respond.",
+        session.flow_type === "rewrite" ? "I can help with that." : "I can help you respond.",
         "",
         "Who is this going to, and where will you send it?",
         "For example: `DM to my manager`, `channel reply to the whole team`, or `channel reply to Priya`.",
       ].join("\n");
+    case "ask_rewrite_draft":
+      return "Paste the message you want to rewrite, and I'll tighten it up for the person you're sending it to, making sure to keep it clear and kind.";
+    case "ask_opening_draft":
+      return "Paste the opening you want to try, and I’ll help you make it clear, calm, and ready to say.";
     case "ask_person":
       return [
         session.flow_type === "practice" ? "Let’s set up the practice." : "Let’s prep for this conversation together.",
@@ -782,8 +791,6 @@ async function buildEvidenceStep(input: GuidedFlowInput, session: SlackAgentSess
     actionToken: input.actionToken,
     currentSlackUserId: input.slackUserId,
   });
-  const debugLine = slackContextDebugLine(coachingContext);
-  const note = [debugLine, slackContextUserNote(coachingContext)].filter(Boolean).join("\n");
   const evidenceContext =
     coachingContext.broaderContext?.text
       ? coachingContext.broaderContext
@@ -801,19 +808,16 @@ async function buildEvidenceStep(input: GuidedFlowInput, session: SlackAgentSess
   });
 
   if (!suggestions.length) {
-    return [
-      debugLine,
-      "",
-      "I tried to find a relevant Slack conversation or context for this, but I couldn’t find anything useful. Is there anything else you want me to know, or are we good to move on?",
-    ].join("\n");
+    return "I tried to find a relevant Slack conversation or context for this, but I couldn’t find anything useful. Is there anything else you want me to know, like a specific example related to this situation?";
   }
 
-  return formatEvidencePrompt(nextSession.evidence_suggestions, note);
+  return formatEvidencePrompt(nextSession.evidence_suggestions, "");
 }
 
 function promptForFlow(session: SlackAgentSession, followupText?: string) {
   const answers = session.answers;
   const extra = answers.extra_context?.length ? answers.extra_context.map((item) => `- ${item}`).join("\n") : "None.";
+  const openingDraft = answers.extra_context?.find((item) => item.startsWith("Opening draft to coach:")) || "";
   const confirmed = session.confirmed_evidence.length
     ? session.confirmed_evidence.map((item) => `- ${item.text}`).join("\n")
     : "No Slack evidence was confirmed by the user.";
@@ -872,11 +876,23 @@ function promptForFlow(session: SlackAgentSession, followupText?: string) {
         "Use realistic but not hostile pushback. Keep it concise so the user can reply.",
       ].join("\n");
     case "prep":
+      if (openingDraft) {
+        return [
+          "Coach the user's opening line for the prepared conversation.",
+          base,
+          "",
+          openingDraft,
+          "",
+          "Return only these sections with tildes exactly as shown: ~ What works ~, ~ Try this version ~, ~ Why it works ~, ~ Practice next ~.",
+          "Do not restate the full prep. Focus on the user's pasted opening.",
+          "Keep it concise, concrete, and coach-like.",
+        ].join("\n");
+      }
       return [
         "Create final guided prep for this workplace conversation.",
         base,
         "",
-        "Return only these sections: Goal, Say this first, If they push back, Watch for, Practice next.",
+        "Return only these sections with tildes exactly as shown: ~ Goal ~, ~ Say this first ~, ~ If they push back ~, ~ Watch for ~, ~ Practice next ~.",
         "Keep each section to 1-3 short bullets or sentences. Do not include long talking-points lists, likely-pushback lists, or a follow-up draft unless the user explicitly asked for that detail.",
         "Make it feel like a calm coach helping the user know what to do next, not a full strategy memo.",
         "If no Slack evidence was confirmed, still prep from the user's stated scenario. Do not say you need the actual pattern before helping.",
@@ -939,13 +955,13 @@ async function completeSession(input: GuidedFlowInput, session: SlackAgentSessio
     responseDetail: isCompactSlackIntent(session.flow_type) ? "quick" : "longer",
     intent: session.flow_type,
   });
-  const responseWithDebug = [slackContextDebugLine(coachingContext), "", response].join("\n");
-
-  await updateSession(session.id, { status: session.flow_type === "decode" ? "active" : "completed" });
-  if (session.flow_type === "prep") {
-    return responseWithDebug;
-  }
-  return responseWithDebug;
+  await updateSession(session.id, {
+    status:
+      session.flow_type === "decode" || session.flow_type === "prep" || session.flow_type === "practice"
+        ? "active"
+        : "completed",
+  });
+  return response;
 }
 
 function mergeAnswersForStep(session: SlackAgentSession, text: string): GuidedAnswers {
@@ -956,6 +972,13 @@ function mergeAnswersForStep(session: SlackAgentSession, text: string): GuidedAn
   const cleaned = normalizeText(text);
 
   if (session.step === "ask_audience") answers.audience = cleaned;
+  if (session.step === "ask_rewrite_draft") answers.initial_request = cleaned;
+  if (session.step === "ask_opening_draft") {
+    answers.extra_context = [
+      ...(answers.extra_context || []),
+      `Opening draft to coach: ${cleaned}`,
+    ];
+  }
   if (session.step === "ask_person") answers.person = cleaned;
   if (session.step === "ask_outcome") answers.outcome = cleaned;
   if (session.step === "ask_concern") answers.concern = cleaned;
@@ -1000,6 +1023,7 @@ export async function startGuidedSlackFlow({
   sourceChannelId,
   sourceChannelName,
   sourceThreadTs,
+  sourceActiveContext: providedSourceActiveContext,
 }: StartGuidedFlowInput) {
   if (!isGuidedFlowType(intent)) return { ok: false, error: "unsupported_flow" };
   const seededPrompt = sourceChannelName
@@ -1010,13 +1034,14 @@ export async function startGuidedSlackFlow({
     channelName: sourceChannelName,
     threadTs: sourceThreadTs,
   });
-  const sourceActiveContext = sourceChannelId
+  const sourceActiveContext = providedSourceActiveContext || (sourceChannelId
     ? await fetchSlackConversationContext({
         accessToken: user.accessToken,
         channelId: sourceChannelId,
         channelName: sourceChannelName,
+        threadTs: sourceThreadTs,
       })
-    : null;
+    : null);
   const sourceLabel = sourceLabelForFlow({
     channelName: sourceChannelName,
     activeContext: sourceActiveContext,
@@ -1344,6 +1369,18 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
     };
   }
 
+  if (
+    session.flow_type === "prep" &&
+    session.status === "active" &&
+    session.step === "confirm_evidence" &&
+    /\b(opening|start|first line|say first)\b/i.test(text)
+  ) {
+    const updated = await updateSession(session.id, { step: "ask_opening_draft" });
+    const response = askForStep(updated);
+    await persistGuidedTurn({ input, session: updated, userText: text, beckettText: response });
+    return { handled: true, title: flowTitle(session.flow_type), response, actions: guidedActions(updated), coachingThreadId: updated.coaching_thread_id };
+  }
+
   if (session.step === "confirm_evidence") {
     const parsed = parseSelection(text, session.evidence_suggestions.length);
     if (parsed.type === "search_again") {
@@ -1364,6 +1401,17 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
       answers: { ...session.answers, extra_context },
     });
     const response = await completeSession(input, updated);
+    await persistGuidedTurn({ input, session: updated, userText: text, beckettText: response });
+    return { handled: true, title: flowTitle(session.flow_type), response, actions: guidedActions(updated), coachingThreadId: updated.coaching_thread_id };
+  }
+
+  if (session.step === "ask_opening_draft") {
+    const answers = mergeAnswersForStep(session, text);
+    const updated = await updateSession(session.id, {
+      answers,
+      step: "ask_opening_draft",
+    });
+    const response = await completeSession(input, updated, text);
     await persistGuidedTurn({ input, session: updated, userText: text, beckettText: response });
     return { handled: true, title: flowTitle(session.flow_type), response, actions: guidedActions(updated), coachingThreadId: updated.coaching_thread_id };
   }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   buildBeckettPayload,
+  fetchLatestSlackMessageContext,
   handleSlackAiError,
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
@@ -28,7 +29,7 @@ type SlashCommandPayload = {
 };
 
 type ParsedSlackCommand =
-  | { ok: true; intent: SlackCoachingIntent; prompt: string }
+  | { ok: true; intent: SlackCoachingIntent; prompt: string; useLatestSourceMessage?: boolean }
   | { ok: false; message: string };
 
 const slashSubcommands: Record<string, { intent: SlackCoachingIntent; missingText: string }> = {
@@ -78,13 +79,13 @@ function helpPayload(command = "/beckett") {
       "Use Beckett when a Slack message feels unclear, a reply needs careful wording, or you want to prepare for a workplace conversation.",
       "",
       "Try these:",
-      `${command} respond help me answer this without sounding defensive`,
+      `${command} respond`,
       `${command} rewrite "Any update on this?"`,
-      `${command} decode "Sure, sounds fine."`,
+      `${command} decode`,
       `${command} prep I need to tell a teammate their handoffs are too vague`,
       `${command} practice my 1:1 with my manager about workload`,
       "",
-      "For a specific Slack message, use the message shortcut: Ask Beckett about this message.",
+      "For a specific Slack message, use the message shortcuts: Beckett - Decode or Beckett - Respond.",
     ].join("\n"),
   });
 }
@@ -112,7 +113,20 @@ function parseBeckettText(rawText: string): ParsedSlackCommand {
   }
 
   const prompt = (match?.[2] || "").trim();
-  if (!prompt) return { ok: false, message: definition.missingText };
+  if (!prompt) {
+    if (definition.intent === "decode" || definition.intent === "respond") {
+      return {
+        ok: true,
+        intent: definition.intent,
+        prompt:
+          definition.intent === "decode"
+            ? "Decode the latest relevant message in this Slack conversation."
+            : "Draft a response to the latest relevant message in this Slack conversation.",
+        useLatestSourceMessage: true,
+      };
+    }
+    return { ok: false, message: definition.missingText };
+  }
 
   return { ok: true, intent: definition.intent, prompt };
 }
@@ -202,14 +216,33 @@ async function startSidebarFlow({
       return;
     }
 
+    const latestSource = parsed.useLatestSourceMessage
+      ? await fetchLatestSlackMessageContext({
+          accessToken: user.accessToken,
+          channelId: payload.channel_id,
+          channelName: payload.channel_name,
+          currentSlackUserId: payload.user_id,
+        })
+      : null;
+    const latestSourcePrompt = latestSource?.targetText
+      ? [
+          parsed.prompt,
+          "",
+          "Target latest Slack message:",
+          latestSource.targetText,
+        ].join("\n")
+      : parsed.prompt;
+
     const started = await startGuidedSlackFlow({
       user,
       teamId: payload.team_id,
       slackUserId: payload.user_id,
       intent: parsed.intent,
-      prompt: parsed.prompt,
+      prompt: latestSourcePrompt,
       sourceChannelId: payload.channel_id,
       sourceChannelName: payload.channel_name,
+      sourceThreadTs: latestSource?.targetTs || undefined,
+      sourceActiveContext: latestSource?.context || undefined,
     });
 
     if (!started.ok) {

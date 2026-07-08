@@ -17,8 +17,6 @@ import {
   shouldUseBroaderSlackContext,
   slackApiPost,
   slackConnectText,
-  slackContextDebugLine,
-  slackContextUserNote,
   SlackBlock,
   SlackCoachingIntent,
   SLACK_SLASH_LONGER_ACTION_ID,
@@ -503,13 +501,10 @@ async function sendPendingSlashResponse({
       intent,
     });
 
-    const contextNote = slackContextUserNote(coachingContext);
-    const debugLine = slackContextDebugLine(coachingContext);
     const responsePayload = buildAskedResponsePayload({
       prompt: pending.prompt,
       response,
       intent,
-      footer: [debugLine, contextNote].filter(Boolean).join("\n"),
     });
     await replaceSlackInteraction(responseUrl, responsePayload.text, responsePayload.blocks);
     console.info("Slack slash final response posted", {

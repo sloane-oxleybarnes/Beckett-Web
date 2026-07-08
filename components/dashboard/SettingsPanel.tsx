@@ -648,7 +648,7 @@ export default function SettingsPage() {
                   <li>3. Open Slack Desktop and type <code className="font-mono text-ink">/beckett</code>.</li>
                 </ol>
                 <p className="mt-3 text-xs leading-relaxed text-ink-mid">
-                  For a specific Slack message, use the message shortcut: <span className="font-medium text-ink">Ask Beckett</span>.
+                  For a specific Slack message, use the message shortcuts: <span className="font-medium text-ink">Beckett - Decode</span> or <span className="font-medium text-ink">Beckett - Respond</span>.
                 </p>
                 {!diagnostics?.integrations.slack.connected && (
                   <div className="mt-3 flex flex-wrap items-center gap-3">
