@@ -127,15 +127,32 @@ function parseInteractionPayload(rawBody: string): SlackInteractionPayload | nul
   }
 }
 
-function buildShortcutPrompt(payload: SlackInteractionPayload, authorLabel?: string | null) {
+type MessageShortcutIntent = "decode" | "respond";
+
+function messageShortcutIntent(callbackId?: string | null): MessageShortcutIntent {
+  if (callbackId === "beckett_message_decode") return "decode";
+  return "respond";
+}
+
+function buildShortcutPrompt(
+  payload: SlackInteractionPayload,
+  authorLabel?: string | null,
+  intent: MessageShortcutIntent = "respond"
+) {
   const channel =
     payload.channel?.name && payload.channel.name !== "directmessage"
       ? `#${payload.channel.name}`
       : "this DM";
   const author = authorLabel || payload.message?.username || payload.message?.user || "the other person";
+  if (intent === "decode") {
+    return [
+      `Help me decode this message from ${author} in ${channel}.`,
+      "What is visible, what might be underneath it, and what should I pay attention to?",
+    ].join(" ");
+  }
   return [
-    `Help me understand this message from ${author} in ${channel}.`,
-    "What might be happening underneath it, what should I pay attention to, and what could I say next?",
+    `Help me draft a response to this message from ${author} in ${channel}.`,
+    "Give me a short read, the next move, and three Slack-ready response options.",
   ].join(" ");
 }
 
@@ -550,10 +567,12 @@ async function sendMessageShortcutResponse({
   origin,
   payload,
   messageText,
+  intent,
 }: {
   origin: string;
   payload: SlackInteractionPayload;
   messageText: string;
+  intent: MessageShortcutIntent;
 }) {
   const teamId = payload.team?.id || "";
   const slackUserId = payload.user?.id || "";
@@ -587,14 +606,14 @@ async function sendMessageShortcutResponse({
         return;
       }
 
-      const guestPrompt = buildShortcutPrompt(payload);
+      const guestPrompt = buildShortcutPrompt(payload, null, intent);
       const response = await runSlackGuestCoaching({
         teamId,
         slackUserId,
         action: "message_shortcut",
         prompt: guestPrompt,
         messageText,
-        intent: "respond",
+        intent,
       });
       const responsePayload = buildBeckettPayload({
         title: "Beckett",
@@ -622,7 +641,7 @@ async function sendMessageShortcutResponse({
       authorRelationship?.slackProfile?.name ||
       payload.message?.username ||
       null;
-    const prompt = buildShortcutPrompt(payload, authorLabel);
+    const prompt = buildShortcutPrompt(payload, authorLabel, intent);
 
     if (!isAllowedSlackPlan(user)) {
       await postSlackResponse(responseUrl, "Beckett Slack coaching is available for beta and pro users.", {
@@ -643,7 +662,7 @@ async function sendMessageShortcutResponse({
       prompt,
       activeContext: channelContext,
       contextChannelId: payload.channel?.id,
-      includeBroaderContext: shouldUseBroaderSlackContext("respond", prompt),
+      includeBroaderContext: shouldUseBroaderSlackContext(intent, prompt),
       relevantSlackUserIds: [payload.message?.user].filter(Boolean) as string[],
       currentSlackUserId: slackUserId,
     });
@@ -667,21 +686,23 @@ async function sendMessageShortcutResponse({
       contextMessageCount: coachingContext.messageCount,
       broaderSearchUsed: coachingContext.broaderSearchUsed,
       relationshipContext: authorRelationship?.promptContext || null,
-      intent: "respond",
+      intent,
       responseDetail: "quick",
     });
 
-    const contextNote = slackContextUserNote(coachingContext);
-    const debugLine = slackContextDebugLine(coachingContext);
     const agentDelivery = await postSlackAgentMessage({
       botAccessToken: user.botAccessToken,
       slackUserId,
-      title: slackHistoryTitle("respond", authorLabel || (payload.channel?.name ? `#${payload.channel.name}` : "this Slack conversation")),
+      title: slackHistoryTitle(intent, authorLabel || (payload.channel?.name ? `#${payload.channel.name}` : "this Slack conversation")),
       text: [
-        "Let’s draft a response privately. Reply in this thread so I can keep this message, drafts, and follow-ups saved together.",
+        intent === "decode"
+          ? "Let’s read this message privately."
+          : "Let’s draft a response privately.",
         "",
-        debugLine,
-        contextNote,
+        intent === "decode"
+          ? "Reply in this thread so I can keep this message, read, and follow-ups saved together."
+          : "Reply in this thread so I can keep this message, drafts, and follow-ups saved together.",
+        "",
         relationshipNote,
         response,
       ].filter(Boolean).join("\n\n"),
@@ -695,8 +716,8 @@ async function sendMessageShortcutResponse({
           user,
           teamId,
           slackUserId,
-          flowType: "respond",
-          title: slackHistoryTitle("respond", authorLabel || (payload.channel?.name ? `#${payload.channel.name}` : "this Slack conversation")),
+          flowType: intent,
+          title: slackHistoryTitle(intent, authorLabel || (payload.channel?.name ? `#${payload.channel.name}` : "this Slack conversation")),
           promptSnippet: prompt,
           summary: summarizeSlackCoachingResponse(response, prompt),
           slackChannelId: agentChannelId,
@@ -736,18 +757,20 @@ async function sendMessageShortcutResponse({
           }).catch(() => null);
         }
 
-        const draftSession = await createSlackDraftActionSession({
-          user,
-          teamId,
-          slackUserId,
-          agentChannelId,
-          agentThreadTs,
-          sourceChannelId: payload.channel?.id,
-          sourceChannelName: payload.channel?.name,
-          sourceThreadTs: payload.message?.thread_ts || payload.message?.ts,
-          prompt,
-          response,
-        });
+        const draftSession = intent === "respond"
+          ? await createSlackDraftActionSession({
+              user,
+              teamId,
+              slackUserId,
+              agentChannelId,
+              agentThreadTs,
+              sourceChannelId: payload.channel?.id,
+              sourceChannelName: payload.channel?.name,
+              sourceThreadTs: payload.message?.thread_ts || payload.message?.ts,
+              prompt,
+              response,
+            })
+          : { actions: [] };
 
         if (draftSession.actions.length) {
           const actionPayload = buildBeckettPayload({
@@ -793,7 +816,6 @@ async function sendMessageShortcutResponse({
       prompt,
       body: [
         "I prepared this privately here because the Beckett coach panel was not available.",
-        contextNote || "",
         relationshipNote,
         response,
       ].filter(Boolean).join("\n\n"),
@@ -1177,7 +1199,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  if (payload.type !== "message_action" || payload.callback_id !== "beckett_message_context") {
+  const shortcutIntent = messageShortcutIntent(payload.callback_id);
+  if (
+    payload.type !== "message_action" ||
+    !["beckett_message_context", "beckett_message_decode", "beckett_message_respond"].includes(payload.callback_id || "")
+  ) {
     return NextResponse.json({ ok: true });
   }
 
@@ -1216,6 +1242,7 @@ export async function POST(req: NextRequest) {
       origin: req.nextUrl.origin,
       payload,
       messageText,
+      intent: shortcutIntent,
     })
   );
   return NextResponse.json({ ok: true });

@@ -20,9 +20,9 @@ This hackathon submission is Slack-only. It does not rely on Beckett's Chrome ex
 ## Demo Workflow
 
 1. The user sees a vague manager Slack message before a 1:1.
-2. The user opens the message shortcut and chooses `Ask Beckett`.
-3. Beckett explains what is visible in the thread, what is only a possible interpretation, and what not to over-read.
-4. Beckett suggests a next step and 2-3 reply options: Direct but kind, Warm and collaborative, and Concise.
+2. The user opens the message shortcut and chooses `Beckett - Decode` or `Beckett - Respond`.
+3. For decode, Beckett explains what is visible in the thread, what is only a possible interpretation, and what not to over-read.
+4. For respond, Beckett suggests a next step and 2-3 reply options: Direct but kind, Warm and collaborative, and Concise.
 5. The user runs `/beckett prep I need to talk to my manager about workload in my 1:1`.
 6. Beckett starts a private sidebar walkthrough instead of opening a modal.
 7. Beckett asks one focused setup question at a time.
@@ -92,7 +92,7 @@ Opening: "Beckett for Slack is a neurodivergent workplace communication coach. I
 
 Demo:
 1. Show the vague manager thread.
-2. Click `Ask Beckett`.
+2. Click `Beckett - Respond`.
 3. Highlight that Beckett names visible evidence and uncertainty separately.
 4. Show reply options.
 5. Run `/beckett prep I need to talk to my manager about workload in my 1:1`.
@@ -110,8 +110,9 @@ Close: "Beckett for Slack helps neurodivergent workers communicate clearly insid
 - `/beckett decode "Sure, sounds fine."` routes coaching into Beckett's Slack assistant conversation without opening a modal.
 - `/beckett respond`, `/beckett rewrite`, `/beckett decode`, `/beckett prep`, and `/beckett practice` are the only visible slash subcommands.
 - `/beckett draft`, `/beckett clarity`, `/beckett boundary`, `/beckett followup`, and `/beckett tone` return a clean unsupported/help response.
-- `Ask Beckett` message shortcut returns a private response that separates visible facts from possible interpretation.
-- Unlinked Slack users can use lightweight decode/respond/rewrite when they paste text or use Ask Beckett on selected message text.
+- `Beckett - Decode` message shortcut returns a private response that separates visible facts from possible interpretation.
+- `Beckett - Respond` message shortcut returns private draft options for the selected message.
+- Unlinked Slack users can use lightweight decode/respond/rewrite when they paste text or use Beckett shortcuts on selected message text.
 - Unlinked Slack users are prompted to connect before prep/practice, saved history, contact context, or broader Slack history.
 - `/beckett prep I need to ask my manager for a raise` starts a private guided sidebar flow without opening a modal.
 - Prep output appears privately in Slack.

@@ -27,10 +27,14 @@ features:
       url: https://www.meetbeckett.co/api/slack/commands
       should_escape: false
   shortcuts:
-    - name: Ask Beckett
+    - name: Beckett - Decode
       type: message
-      callback_id: beckett_message_context
-      description: Get private coaching on this Slack message or thread.
+      callback_id: beckett_message_decode
+      description: Decode tone, meaning, and what to pay attention to in this message.
+    - name: Beckett - Respond
+      type: message
+      callback_id: beckett_message_respond
+      description: Draft clear private response options for this message.
 oauth_config:
   redirect_urls:
     - https://www.meetbeckett.co/api/slack/callback

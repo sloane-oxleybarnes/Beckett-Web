@@ -5,7 +5,7 @@ This is the Slack-only hackathon path for using Beckett inside Slack Desktop. It
 ## What This Adds
 
 - Slash command: `/beckett`
-- Message shortcut: `Ask Beckett`
+- Message shortcuts: `Beckett - Decode` and `Beckett - Respond`
 - Hackathon positioning: Beckett prepares neurodivergent workers for the conversations that matter at work
 - Signed Slack request verification with `SLACK_SIGNING_SECRET`
 - Beckett account matching through the existing `user_integrations` Slack connection
@@ -62,7 +62,7 @@ Use Slack Desktop or the Slack web app:
 2. Click a suggested prompt, such as `Respond to a Message`.
    - Expected: Beckett starts a private Messages conversation.
    - Expected: The prompt sends normal assistant text, not a literal `/beckett` command.
-   - Expected: If Slack does not provide current message context, Beckett asks the user to paste/paraphrase or use Ask Beckett from a specific message.
+   - Expected: If Slack does not provide current message context, Beckett asks the user to paste/paraphrase or use `Beckett - Decode` / `Beckett - Respond` from a specific message.
    - Expected: No public channel message is posted.
 3. Open the Home tab.
    - Expected: Home shows `Beckett History`.
@@ -78,12 +78,15 @@ Use Slack Desktop or the Slack web app:
 ### 2. Message Shortcut: Decode + Respond
 
 1. In the demo workspace, open the vague manager task handoff thread.
-2. Use the message shortcut: `Ask Beckett`.
+2. Use the message shortcut: `Beckett - Decode`.
    - Expected: Beckett responds privately.
    - Expected: Beckett separates what is visible from possible interpretation.
    - Expected: Beckett does not claim the manager is annoyed, comfortable, aligned, or reacting unless that is visible in the provided Slack context.
-   - Expected: Beckett suggests a clear next move and 2-3 reply options.
-3. Repeat with the passive-aggressive teammate thread.
+   - Expected: Beckett separates visible facts from possible interpretation without drafting response options unless useful.
+3. Use the message shortcut: `Beckett - Respond`.
+   - Expected: Beckett starts a private response thread.
+   - Expected: Beckett gives a concise read, a next move, and 2-3 reply options.
+4. Repeat with the passive-aggressive teammate thread.
    - Expected: Beckett helps the user avoid over-reading and gives a practical reply option.
 
 ### 3. Slash Commands: Workplace Coaching
@@ -193,7 +196,7 @@ Expected:
 ## Hackathon Demo Story
 
 1. A user sees a vague manager Slack thread before a 1:1.
-2. The user clicks `Ask Beckett`.
+2. The user clicks `Beckett - Respond`.
 3. Beckett explains what is visible, what is uncertain, and what not to over-read.
 4. Beckett suggests the next move and 2-3 private reply options.
 5. The user runs `/beckett prep I need to talk to my manager about workload in my 1:1`.
