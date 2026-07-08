@@ -152,38 +152,36 @@ async function startSidebarFlow({
 
     const user = await lookupSlackConnectedUser(payload.team_id, payload.user_id);
     if (!user) {
-      if (parsed.intent === "decode" || parsed.intent === "respond" || parsed.intent === "rewrite") {
-        const botAccessToken = await lookupSlackWorkspaceBotToken(payload.team_id).catch((error) => {
-          console.error("Slack workspace bot token lookup for guest slash failed", {
-            teamPresent: Boolean(payload.team_id),
-            slackUserPresent: Boolean(payload.user_id),
-            message: error instanceof Error ? error.message : String(error),
-          });
-          return null;
+      const botAccessToken = await lookupSlackWorkspaceBotToken(payload.team_id).catch((error) => {
+        console.error("Slack workspace bot token lookup for guest slash failed", {
+          teamPresent: Boolean(payload.team_id),
+          slackUserPresent: Boolean(payload.user_id),
+          message: error instanceof Error ? error.message : String(error),
         });
-        if (botAccessToken) {
-          const response = await runSlackGuestCoaching({
-            teamId: payload.team_id,
-            slackUserId: payload.user_id,
-            action: "slash_command",
-            prompt: parsed.prompt,
-            messageText: parsed.prompt,
-            intent: parsed.intent,
-          });
-          const guestPayload = buildBeckettPayload({
-            title: "Beckett",
-            subtitle: "",
-            prompt: parsed.prompt,
-            body: response,
-            footer: "Connect Slack in Beckett Settings to use your coaching profile, contact context, broader Slack history, and saved conversations.",
-            hideTitle: true,
-          });
-          await postSlackResponse(responseUrl, guestPayload.text, {
-            blocks: guestPayload.blocks,
-            replaceOriginal: true,
-          });
-          return;
-        }
+        return null;
+      });
+      if (botAccessToken) {
+        const response = await runSlackGuestCoaching({
+          teamId: payload.team_id,
+          slackUserId: payload.user_id,
+          action: "slash_command",
+          prompt: parsed.prompt,
+          messageText: parsed.prompt,
+          intent: parsed.intent,
+        });
+        const guestPayload = buildBeckettPayload({
+          title: "Beckett",
+          subtitle: "",
+          prompt: parsed.prompt,
+          body: response,
+          footer: "Guest mode is on for hackathon judging. Connect Slack in Beckett Settings for profile, contact context, broader Slack history, and saved conversations.",
+          hideTitle: true,
+        });
+        await postSlackResponse(responseUrl, guestPayload.text, {
+          blocks: guestPayload.blocks,
+          replaceOriginal: true,
+        });
+        return;
       }
 
       await postSlackResponse(

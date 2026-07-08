@@ -41,6 +41,8 @@ type GuidedStep =
   | "ask_concern"
   | "confirm_evidence"
   | "ask_rewrite_draft"
+  | "ask_respond_message"
+  | "ask_respond_context"
   | "ask_opening_draft"
   | "ask_practice_goal"
   | "ask_practice_pushback"
@@ -280,6 +282,7 @@ function nextStepForAnswers(flowType: GuidedFlowType, answers: GuidedAnswers): G
   if (flowType === "respond") {
     if (answers.source_channel_id) return null;
     if (!answers.audience) return "ask_audience";
+    if (!hasPastedMessage(answers.initial_request) && !respondContextIsEnough(answers)) return "ask_respond_message";
     return null;
   }
   if (flowType === "decode") return "decode_followup";
@@ -364,6 +367,81 @@ function hasPastedMessage(text?: string) {
   if (!cleaned) return false;
   if (/["“”][^"“”]{3,}["“”]/.test(cleaned)) return true;
   return cleaned.length > 28 && !/^(help me|please|can you|could you|i need|respond|reply|decode|rewrite)\b/i.test(cleaned);
+}
+
+function isLikelyCoworkerMessageText(text: string) {
+  const cleaned = normalizeText(text);
+  if (!cleaned) return false;
+  if (/["“”][^"“”]{3,}["“”]/.test(cleaned)) return true;
+  if (/^(they|she|he|my coworker|my teammate)\s+(said|asked|wrote|sent)\b/i.test(cleaned)) return true;
+  if (/^(i can't|i cannot|i can’t|can't|cannot|can’t|no\b|not able|unable|it has|this has|that would|it would|yes\b)/i.test(cleaned)) return false;
+  return cleaned.length > 45 && /[?.!]/.test(cleaned);
+}
+
+function responseContextValues(answers: GuidedAnswers) {
+  const items = answers.extra_context || [];
+  return {
+    hasPromptedForMessage: items.includes("Respond context asked: message"),
+    hasAskedPattern: items.includes("Respond context asked: pattern"),
+    hasAskedPriority: items.includes("Respond context asked: priority"),
+    hasAskedManager: items.includes("Respond context asked: manager"),
+    hasPastedMessage:
+      hasPastedMessage(answers.initial_request) ||
+      items.some((item) => item.startsWith("Coworker message:") || item.startsWith("Message/paraphrase:")),
+    detailText: items.filter((item) => !item.startsWith("Respond context asked:")).join(" "),
+  };
+}
+
+function respondContextIsEnough(answers: GuidedAnswers) {
+  const values = responseContextValues(answers);
+  if (values.hasPastedMessage) return true;
+  const combined = [
+    answers.initial_request,
+    answers.audience,
+    values.detailText,
+  ].filter(Boolean).join(" ").toLowerCase();
+  const hasPatternDetail = /\b(one[- ]?time|once|twice|again|repeated|keeps|pattern|happened before|first time)\b/.test(combined);
+  const hasPriorityDetail = /\b(deadline|delay|priority|priorities|manager owns|current work|scope|ownership|workload|capacity)\b/.test(combined);
+
+  if (/\b(can't|cannot|don'?t want to|not able to|unable to|can’t)\s+(paste|share)\b/.test(combined)) {
+    return hasPatternDetail || hasPriorityDetail;
+  }
+  if (hasPatternDetail && hasPriorityDetail) return true;
+  return false;
+}
+
+function nextRespondContextQuestion(answers: GuidedAnswers) {
+  const values = responseContextValues(answers);
+  const combined = [
+    answers.initial_request,
+    answers.audience,
+    values.detailText,
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  if (!values.hasPromptedForMessage && !values.hasPastedMessage) {
+    return "Are you able to paste the message from your coworker here? This will help me understand their tone, urgency, how they framed it, and whether this is a one-off request.";
+  }
+  if (!values.hasAskedPattern && /\b(scope|workload|capacity|outside|boundary|take on work|coworker|teammate)\b/.test(combined)) {
+    return "Has this happened before, or is this a one-time ask?";
+  }
+  if (!values.hasAskedPriority && /\b(scope|workload|capacity|deadline|priority|manager|delay|ownership)\b/.test(combined)) {
+    return "Would taking this on delay your current work or change priorities your manager owns?";
+  }
+  if (!values.hasAskedManager && /\b(manager|boss|supervisor|loop|tell|bring this up)\b/.test(combined)) {
+    return "Are you thinking of looping in your manager because this affects workload, ownership, or a repeated pattern?";
+  }
+  if (!values.hasPastedMessage) {
+    return "Can you paraphrase the message if you do not want to paste it exactly?";
+  }
+  return "";
+}
+
+function markerForRespondQuestion(question: string) {
+  if (question.startsWith("Are you able to paste")) return "Respond context asked: message";
+  if (question.startsWith("Has this happened")) return "Respond context asked: pattern";
+  if (question.startsWith("Would taking this on")) return "Respond context asked: priority";
+  if (question.startsWith("Are you thinking of looping")) return "Respond context asked: manager";
+  return "Respond context asked: paraphrase";
 }
 
 function missingCurrentConversationMessage(flowType: GuidedFlowType, session: SlackAgentSession, activeContext: SlackConversationContext | null) {
@@ -679,6 +757,9 @@ function askForStep(session: SlackAgentSession) {
       ].join("\n");
     case "ask_rewrite_draft":
       return `Paste the message you want to rewrite, and I'll tighten it up for ${answers.audience || "the person you're sending it to"}, making sure to keep it clear and kind.`;
+    case "ask_respond_message":
+    case "ask_respond_context":
+      return nextRespondContextQuestion(answers) || "Can you paraphrase the message if you do not want to paste it exactly?";
     case "ask_opening_draft":
       return "Paste the opening you want to try, and I’ll help you make it clear, calm, and ready to say.";
     case "ask_person":
@@ -840,6 +921,7 @@ async function buildEvidenceStep(input: GuidedFlowInput, session: SlackAgentSess
 function promptForFlow(session: SlackAgentSession, followupText?: string) {
   const answers = session.answers;
   const extra = answers.extra_context?.length ? answers.extra_context.map((item) => `- ${item}`).join("\n") : "None.";
+  const respondContext = responseContextValues(answers);
   const openingDraft = answers.extra_context?.find((item) => item.startsWith("Opening draft to coach:")) || "";
   const confirmed = session.confirmed_evidence.length
     ? session.confirmed_evidence.map((item) => `- ${item.text}`).join("\n")
@@ -854,6 +936,7 @@ function promptForFlow(session: SlackAgentSession, followupText?: string) {
     `Outcome: ${answers.outcome || "not specified"}`,
     `Concern/pushback: ${answers.concern || answers.practice_pushback || "not specified"}`,
     `Practice goal: ${answers.practice_goal || "not specified"}`,
+    session.flow_type === "respond" ? `Exact coworker wording provided: ${respondContext.hasPastedMessage ? "yes" : "no"}` : "",
     `Follow-up user reply: ${followupText || "none"}`,
     "",
     "Confirmed possible evidence from Slack:",
@@ -872,6 +955,9 @@ function promptForFlow(session: SlackAgentSession, followupText?: string) {
         "Help the user respond to the Slack conversation. The conversation may be workplace, workplace-adjacent, friendly, or personal; do not refuse just because it is not strictly work-related.",
         base,
         "",
+        "If the exact coworker message is missing but the scenario details are present, draft from the scenario instead of asking for the message again.",
+        "If drafting without exact wording, do not claim tone or urgency from the coworker. Include this short note: Since I don’t have their exact wording, I’ll keep this neutral.",
+        "Never start with 'No Slack message provided.' Never include a 'Quick frame' section.",
         "Return sections: Possible read, Next move, Draft options.",
         "Fold what is uncertain or not knowable into Possible read in one concise sentence.",
         "Draft options must be bullet points labeled Direct but kind, Warm and collaborative, and Concise.",
@@ -1013,6 +1099,13 @@ function mergeAnswersForStep(session: SlackAgentSession, text: string): GuidedAn
 
   if (session.step === "ask_audience") answers.audience = cleaned;
   if (session.step === "ask_rewrite_draft") answers.initial_request = cleaned;
+  if (session.step === "ask_respond_message" || session.step === "ask_respond_context") {
+    const label = isLikelyCoworkerMessageText(cleaned) ? "Coworker message" : "Message/paraphrase";
+    answers.extra_context = [
+      ...(answers.extra_context || []),
+      `${label}: ${cleaned}`,
+    ];
+  }
   if (session.step === "ask_opening_draft") {
     answers.extra_context = [
       ...(answers.extra_context || []),
@@ -1039,7 +1132,19 @@ async function firstSidebarResponse(input: GuidedFlowInput, session: SlackAgentS
     const nextStep = nextStepForAnswers(session.flow_type, session.answers);
     if (nextStep) {
       const updated = await updateSession(session.id, { step: nextStep });
-      return askForStep(updated);
+      const response = askForStep(updated);
+      if (session.flow_type === "respond" && (nextStep === "ask_respond_message" || nextStep === "ask_respond_context")) {
+        await updateSession(updated.id, {
+          answers: {
+            ...updated.answers,
+            extra_context: [
+              ...(updated.answers.extra_context || []),
+              markerForRespondQuestion(response),
+            ],
+          },
+        });
+      }
+      return response;
     }
     return safeCompleteSession(input, session);
   }
@@ -1445,6 +1550,41 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
     return { handled: true, title: flowTitle(session.flow_type), response, actions: guidedActions(updated), coachingThreadId: updated.coaching_thread_id };
   }
 
+  if (session.step === "ask_respond_message" || session.step === "ask_respond_context") {
+    const answers = mergeAnswersForStep(session, text);
+    const enough = respondContextIsEnough(answers);
+    const nextQuestion = enough ? "" : nextRespondContextQuestion(answers);
+    if (nextQuestion) {
+      const updated = await updateSession(session.id, {
+        answers: {
+          ...answers,
+          extra_context: [
+            ...(answers.extra_context || []),
+            markerForRespondQuestion(nextQuestion),
+          ],
+        },
+        step: "ask_respond_context",
+      });
+      await persistGuidedTurn({ input, session: updated, userText: text, beckettText: nextQuestion });
+      return { handled: true, title: flowTitle(updated.flow_type), response: nextQuestion, actions: guidedActions(updated), coachingThreadId: updated.coaching_thread_id };
+    }
+
+    const updated = await updateSession(session.id, {
+      answers,
+      step: session.step,
+    });
+    const response = await safeCompleteSession(input, updated);
+    const draftOptions = await saveSlackDraftOptions(updated.id, response);
+    await persistGuidedTurn({ input, session: updated, userText: text, beckettText: response });
+    return {
+      handled: true,
+      title: flowTitle(updated.flow_type),
+      response,
+      actions: guidedActions(updated, draftOptions),
+      coachingThreadId: updated.coaching_thread_id,
+    };
+  }
+
   if (session.step === "ask_opening_draft") {
     const answers = mergeAnswersForStep(session, text);
     const updated = await updateSession(session.id, {
@@ -1471,8 +1611,20 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
 
   if (nextStep) {
     const response = askForStep(updated);
-    await persistGuidedTurn({ input, session: updated, userText: text, beckettText: response });
-    return { handled: true, title: flowTitle(session.flow_type), response, actions: guidedActions(updated), coachingThreadId: updated.coaching_thread_id };
+    const nextUpdated =
+      session.flow_type === "respond" && (nextStep === "ask_respond_message" || nextStep === "ask_respond_context")
+        ? await updateSession(updated.id, {
+            answers: {
+              ...updated.answers,
+              extra_context: [
+                ...(updated.answers.extra_context || []),
+                markerForRespondQuestion(response),
+              ],
+            },
+          })
+        : updated;
+    await persistGuidedTurn({ input, session: nextUpdated, userText: text, beckettText: response });
+    return { handled: true, title: flowTitle(session.flow_type), response, actions: guidedActions(nextUpdated), coachingThreadId: nextUpdated.coaching_thread_id };
   }
 
   const response = await safeCompleteSession(input, updated);

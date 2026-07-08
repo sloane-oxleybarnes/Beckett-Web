@@ -967,7 +967,64 @@ async function handleHistoryButtonResponse({
   try {
     if (!teamId || !slackUserId) return;
     const user = await lookupSlackConnectedUser(teamId, slackUserId);
-    if (!user?.botAccessToken || !isAllowedSlackPlan(user)) return;
+    if (!user?.botAccessToken || !isAllowedSlackPlan(user)) {
+      const botAccessToken = await lookupSlackWorkspaceBotToken(teamId).catch((error) => {
+        console.error("Slack workspace bot token lookup for guest history action failed", {
+          teamPresent: Boolean(teamId),
+          slackUserPresent: Boolean(slackUserId),
+          message: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      });
+      if (
+        botAccessToken &&
+        actionId.startsWith(SLACK_HISTORY_QUICK_ACTION_ID) &&
+        (flowType === "respond" ||
+          flowType === "rewrite" ||
+          flowType === "decode" ||
+          flowType === "prep" ||
+          flowType === "practice")
+      ) {
+        const channelId = payload.channel?.id;
+        if (!channelId) return;
+
+        if (flowType === "decode" || flowType === "respond") {
+          const instructionPayload = buildBeckettPayload({
+            title: "Beckett",
+            subtitle: "",
+            body: selectedMessageInstructions(flowType),
+            hideTitle: true,
+          });
+          await slackApiPost(botAccessToken, "chat.postMessage", {
+            channel: channelId,
+            ...instructionPayload,
+          });
+          return;
+        }
+
+        const prompt = quickPrompt(flowType);
+        const response = await runSlackGuestCoaching({
+          teamId,
+          slackUserId,
+          action: "agent_message",
+          prompt,
+          messageText: prompt,
+          intent: flowType,
+        });
+        const payloadToPost = buildBeckettPayload({
+          title: "Beckett",
+          subtitle: "",
+          body: response,
+          footer: "Guest mode is on for hackathon judging. Connect Slack in Beckett Settings for profile, contact context, broader Slack history, and saved conversations.",
+          hideTitle: true,
+        });
+        await slackApiPost(botAccessToken, "chat.postMessage", {
+          channel: channelId,
+          ...payloadToPost,
+        });
+      }
+      return;
+    }
     const thread = threadId ? await loadSlackCoachingThread({ threadId, userId: user.id }) : null;
 
     if (actionId === SLACK_HISTORY_ARCHIVE_ACTION_ID && threadId) {

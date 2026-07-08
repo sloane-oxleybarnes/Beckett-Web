@@ -161,10 +161,6 @@ function extractSlackPermalinkContext(text: string) {
   }
 }
 
-function guestModeFooter() {
-  return "Connect Slack in Beckett Settings to use your coaching profile, contact context, broader Slack history, and saved conversations.";
-}
-
 function responseDetailForSlackIntent(intent: SlackCoachingIntent) {
   if (isCompactSlackIntent(intent)) return "quick";
   if (intent === "prep" || intent === "practice") return "longer";
@@ -463,27 +459,6 @@ async function respondToAgentMessage({
 
     if (botAccessToken) {
       const intent = assistantIntent;
-      if (intent === "prep" || intent === "practice") {
-        const payload = buildBeckettPayload({
-          title: "Beckett",
-          subtitle: "",
-          body: [
-            "Prep and practice use your Beckett profile and saved coaching setup.",
-            "",
-            "Connect Slack from Beckett Settings, then come back here to use that flow.",
-          ].join("\n"),
-          footer: "You can still paste a message here for lightweight decode, respond, or rewrite help.",
-          hideTitle: true,
-        });
-
-        await slackApiPost(botAccessToken, "chat.postMessage", {
-          channel: channelId,
-          thread_ts: threadTs,
-          ...payload,
-        });
-        return;
-      }
-
       try {
         const messageText = isAssistantStarterPrompt(text) ? "" : text;
         const response = await runSlackGuestCoaching({
@@ -499,7 +474,7 @@ async function respondToAgentMessage({
           subtitle: "",
           prompt: isAssistantStarterPrompt(text) ? undefined : text,
           body: response,
-          footer: guestModeFooter(),
+          footer: "Guest mode is on for hackathon judging. Connect Slack in Beckett Settings for profile, contact context, broader Slack history, and saved conversations.",
           hideTitle: true,
         });
 

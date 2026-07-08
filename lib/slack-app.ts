@@ -534,6 +534,7 @@ export function slackConnectResponse(origin: string, detail?: string) {
 }
 
 export function getSlackGuestDailyLimit() {
+  if (process.env.SLACK_GUEST_FULL_ACCESS === "true") return 999999;
   const configured = Number(process.env.SLACK_GUEST_DAILY_AI_LIMIT);
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SLACK_GUEST_DAILY_LIMIT;
 }
@@ -769,6 +770,12 @@ export async function lookupSlackConnectedUser(teamId: string, slackUserId: stri
 }
 
 export async function lookupSlackWorkspaceBotToken(teamId: string) {
+  const envBotToken =
+    process.env.SLACK_BOT_TOKEN?.trim() ||
+    process.env.SLACK_WORKSPACE_BOT_TOKEN?.trim() ||
+    process.env.SLACK_APP_BOT_TOKEN?.trim() ||
+    null;
+
   if (!teamId) return null;
 
   const { data, error } = await supabaseAdmin
@@ -782,7 +789,7 @@ export async function lookupSlackWorkspaceBotToken(teamId: string) {
 
   if (error) throw error;
   const metadata = metadataRecord(data?.metadata);
-  return typeof metadata.access_token === "string" ? metadata.access_token : null;
+  return typeof metadata.access_token === "string" ? metadata.access_token : envBotToken;
 }
 
 export async function slackApiPost<T>(accessToken: string, method: string, body: Record<string, unknown>) {
@@ -1916,10 +1923,10 @@ export async function runSlackGuestCoaching({
     action,
     hasSlackContext: Boolean(cleanMessageText),
   });
-  const system = `You are Beckett, a workplace and workplace-adjacent communication coach for neurodivergent professionals.
+const system = `You are Beckett, a workplace and workplace-adjacent communication coach for neurodivergent professionals.
 You are responding inside Slack, so be concise, practical, and easy to scan.
 The Slack user is using guest mode. You do not have their Beckett coaching profile, contact memory, saved history, or broader Slack search.
-Help with workplace, workplace-adjacent, friendly, logistics, and personal Slack conversations when the user asks for decode, respond, or rewrite help.
+Help with workplace, workplace-adjacent, friendly, logistics, and personal Slack conversations when the user asks for decode, respond, rewrite, prep, or practice help.
 Do not refuse because a message is personal or casual.
 Do not claim certainty about another person's intent. Use phrases like "may" or "likely" when interpreting tone.
 Do not hallucinate reactions, comfort, rapport, agreement, annoyance, or pushback that is not visible in the provided Slack text.
@@ -1927,6 +1934,9 @@ Always separate visible facts from possible interpretation when decoding.
 Fold what is uncertain or not knowable into the Possible read section in one concise sentence; never include a standalone "What's not knowable", "What is not knowable", "What isn't knowable", or "What not to over-read" section.
 If there is not enough text to analyze, ask the user to paste or paraphrase the message.
 For reply drafting, include 2-3 Slack-ready bullet options when useful: - Direct but kind, - Warm and collaborative, and - Concise.
+For prep or practice, give a useful lightweight coaching response from the user request without asking them to connect a Beckett profile.
+For prep, use concise sections: Goal, Say this first, If they push back, Watch for, Practice next.
+For practice, start the role-play with a short setup and one realistic first line from the other person.
 Format with short plain-language section labels and bullets. Do not use markdown tables, markdown bold markers, or literal asterisks; Beckett formats headings separately.
 ${slackAgentToolInstruction(agentTool)}
 ${beckettBoundaryPrompt()}`;
@@ -1941,8 +1951,12 @@ ${beckettBoundaryPrompt()}`;
     cleanMessageText,
   ].join("\n");
 
-  const text = await callAnthropic(system, [{ role: "user", content: userPrompt }], 420);
-  return fitSlackAnswer(text.trim() || "I could not generate a response for that Slack request.", MAX_QUICK_SLACK_ANSWER_LENGTH);
+  const longerGuestIntent = intent === "prep" || intent === "practice";
+  const text = await callAnthropic(system, [{ role: "user", content: userPrompt }], longerGuestIntent ? 650 : 420);
+  return fitSlackAnswer(
+    text.trim() || "I could not generate a response for that Slack request.",
+    longerGuestIntent ? MAX_LONGER_SLACK_ANSWER_LENGTH : MAX_QUICK_SLACK_ANSWER_LENGTH
+  );
 }
 
 export function handleSlackAiError(error: unknown) {
