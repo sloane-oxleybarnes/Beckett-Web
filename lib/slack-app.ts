@@ -804,16 +804,16 @@ export async function setSlackAgentSuggestedPrompts({
     title,
     prompts: [
       {
-        title: "Decode a Message",
-        message: "Help me decode the current message without over-reading it.",
+        title: "Decode a Selected Message",
+        message: "Show me how to decode a specific Slack message with Beckett.",
       },
       {
-        title: "Respond to a Message",
-        message: "Help me draft a clear response to the current conversation.",
+        title: "Respond to a Selected Message",
+        message: "Show me how to draft a response from a specific Slack message with Beckett.",
       },
       {
-        title: "Rewrite a Message",
-        message: "Help me rewrite my response so it is clearer and kinder.",
+        title: "Rewrite a Draft",
+        message: "Help me rewrite this draft so it is clearer and kinder.",
       },
       {
         title: "Prep / Practice",

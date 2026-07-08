@@ -102,10 +102,39 @@ function isAssistantStarterPrompt(text: string) {
   const normalized = text.trim().toLowerCase();
   return [
     "help me decode the current message without over-reading it.",
+    "show me how to decode a specific slack message with beckett.",
     "help me draft a clear response to the current conversation.",
+    "show me how to draft a response from a specific slack message with beckett.",
     "help me rewrite my response so it is clearer and kinder.",
+    "help me rewrite this draft so it is clearer and kinder.",
     "help me prepare for a difficult conversation.",
   ].includes(normalized);
+}
+
+function starterPromptMissingContextMessage(intent: SlackCoachingIntent) {
+  if (intent === "rewrite") {
+    return [
+      "Send me the draft you want to clean up, and I’ll make it clearer while keeping your meaning.",
+      "",
+      "If the rewrite depends on a specific Slack conversation, use the message’s ⋯ menu or send me a Slack message link too.",
+    ].join("\n");
+  }
+
+  const action =
+    intent === "respond"
+      ? "draft a response"
+      : "decode a message";
+
+  return [
+    `I can ${action} from the latest Slack conversation when you start me from that conversation.`,
+    "",
+    "From this Beckett Messages button, Slack did not send me the open channel or DM, so I can’t safely choose the most recent message.",
+    "",
+    "Use one of these instead:",
+    "- Click the message’s ⋯ menu and choose Beckett - Decode or Beckett - Respond.",
+    `- Type /beckett ${intent} in the Slack conversation you want me to use.`,
+    "- Send me a Slack message link.",
+  ].join("\n");
 }
 
 function slackTimestampFromPermalink(value: string | null | undefined) {
@@ -893,7 +922,7 @@ async function respondToAgentMessage({
       const payload = buildBeckettPayload({
         title: "Beckett",
         subtitle: "",
-        body: "I lost the saved context for this Beckett thread. Send me a link to the Slack message or thread you want to continue from, and I’ll pick it back up.",
+        body: starterPromptMissingContextMessage(assistantIntent),
         footer: slackContextDebugLine(coachingContext),
         hideTitle: true,
       });
