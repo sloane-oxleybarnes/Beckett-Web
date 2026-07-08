@@ -287,8 +287,72 @@ function removeStandaloneSlackUncertaintySections(text: string) {
   return kept.join("\n");
 }
 
+function canonicalSlackHeading(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "possible read") return "Possible read";
+  if (normalized === "next move") return "Next move";
+  if (normalized === "draft options") return "Draft options";
+  return null;
+}
+
+function canonicalDraftLabel(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "direct but kind") return "Direct but kind";
+  if (normalized === "warm and collaborative") return "Warm and collaborative";
+  if (normalized === "concise") return "Concise";
+  return null;
+}
+
+function formatSlackCoachingDisplayText(text: string) {
+  const lines = text.split("\n");
+  const formatted: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const trimmed = line.trim();
+    const heading = canonicalSlackHeading(trimmed.replace(/^~\s*|\s*~$/g, "").replace(/:$/, ""));
+    if (heading) {
+      formatted.push(`~ ${heading} ~`);
+      continue;
+    }
+
+    const draftMatch = trimmed.match(/^[-•]?\s*(Direct but kind|Warm and collaborative|Concise)\s*:?\s*(.*)$/i);
+    if (draftMatch) {
+      const label = canonicalDraftLabel(draftMatch[1]) || draftMatch[1];
+      const inlineText = draftMatch[2]?.trim();
+      if (inlineText) {
+        formatted.push(`- ${label}: ${inlineText}`);
+        continue;
+      }
+
+      let nextIndex = index + 1;
+      while (nextIndex < lines.length && !lines[nextIndex].trim()) nextIndex += 1;
+      const nextLine = lines[nextIndex]?.trim();
+      const nextIsHeading = nextLine
+        ? Boolean(canonicalSlackHeading(nextLine.replace(/^~\s*|\s*~$/g, "").replace(/:$/, "")))
+        : false;
+      const nextIsDraftLabel = nextLine
+        ? /^[-•]?\s*(Direct but kind|Warm and collaborative|Concise)\s*:?\s*/i.test(nextLine)
+        : false;
+
+      if (nextLine && !nextIsHeading && !nextIsDraftLabel) {
+        formatted.push(`- ${label}: ${nextLine}`);
+        index = nextIndex;
+        continue;
+      }
+
+      formatted.push(`- ${label}:`);
+      continue;
+    }
+
+    formatted.push(line);
+  }
+
+  return formatted.join("\n");
+}
+
 export function cleanSlackDisplayText(text: string) {
-  return removeStandaloneSlackUncertaintySections(text)
+  const plainText = removeStandaloneSlackUncertaintySections(text)
     .replace(/\*\*([^*\n][^*]*?)\*\*/g, "$1")
     .replace(/(^|\s)\*([^*\n][^*]*?)\*(?=\s|$|[.,!?;:])/g, "$1$2")
     .replace(/\*/g, "")
@@ -296,6 +360,7 @@ export function cleanSlackDisplayText(text: string) {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+  return formatSlackCoachingDisplayText(plainText);
 }
 
 function formatSlackMrkdwnForBlocks(text: string) {
