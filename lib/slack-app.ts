@@ -68,6 +68,7 @@ export type SlackConversationContext = {
   messageCount: number;
   broaderSearchUsed?: boolean;
   retrievalMethod?: string;
+  relevantUserIds?: string[];
 };
 
 export function isCompactSlackIntent(intent: SlackCoachingIntent) {
@@ -178,6 +179,19 @@ function splitSlackScopes(value: unknown) {
 
 function slackUnavailable(reason: SlackContextFailureReason, retrievalMethod?: string): SlackConversationContext {
   return { text: null, status: "unavailable", failureReason: reason, messageCount: 0, retrievalMethod };
+}
+
+function normalizeSlackUserId(value: string | null | undefined) {
+  const match = String(value || "").match(/\bU[A-Z0-9]{6,}\b/);
+  return match?.[0] || null;
+}
+
+function uniqueSlackUserIds(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map(normalizeSlackUserId).filter(Boolean) as string[]));
+}
+
+function slackUserIdsFromMessages(messages: Array<SlackHistoryMessage | undefined>) {
+  return uniqueSlackUserIds(messages.map((message) => message?.user));
 }
 
 async function noteSlackContextValidation(userId: string, failureReason: SlackContextFailureReason | null) {
@@ -955,6 +969,23 @@ function buildBroaderSearchQuery(prompt: string, activeContext?: string | null) 
   return deduped || prompt.slice(0, 240);
 }
 
+function isRelationshipHistoryPrompt(prompt: string) {
+  return /\b(relationship|history|pattern|vibe|dynamic|overall|usually|typically|how are things with|where.*stand|what.*between us|context with)\b/i.test(prompt);
+}
+
+function buildTargetedBroaderSearchQuery({
+  prompt,
+  activeContext,
+  slackUserId,
+}: {
+  prompt: string;
+  activeContext?: string | null;
+  slackUserId: string;
+}) {
+  const base = buildBroaderSearchQuery(prompt, activeContext);
+  return `with:<@${slackUserId}> ${base}`.trim();
+}
+
 export async function lookupSlackUserProfile(accessToken: string, userId: string) {
   const cacheKey = `${accessToken.slice(-8)}:${userId}`;
   const cached = slackUserNameCache.get(cacheKey);
@@ -1073,6 +1104,11 @@ export async function fetchSlackConversationContext({
     : fallbackReplyData?.ok
       ? await formatMessages(fallbackReplyData.messages)
       : [];
+  const relevantUserIds = uniqueSlackUserIds([
+    ...slackUserIdsFromMessages(historyData?.messages || []),
+    ...slackUserIdsFromMessages(replyData?.messages || []),
+    ...slackUserIdsFromMessages(fallbackReplyData?.messages || []),
+  ]);
 
   if (!historyMessages.length && !threadMessages.length) {
     const failedData = historyData && !historyData.ok ? historyData : replyData && !replyData.ok ? replyData : fallbackReplyData;
@@ -1114,28 +1150,26 @@ export async function fetchSlackConversationContext({
     failureReason: null,
     messageCount,
     retrievalMethod,
+    relevantUserIds,
   } satisfies SlackConversationContext;
 }
 
-export async function fetchSlackBroaderContext({
+async function runSlackBroaderSearch({
   accessToken,
-  prompt,
-  activeContext,
+  query,
   contextChannelId,
   actionToken,
+  strategy,
 }: {
-  accessToken: string | null;
-  prompt: string;
-  activeContext?: string | null;
+  accessToken: string;
+  query: string;
   contextChannelId?: string | null;
   actionToken?: string | null;
+  strategy: string;
 }) {
-  if (!accessToken) return slackUnavailable("missing_token");
-
-  const query = buildBroaderSearchQuery(prompt, activeContext);
   const body: Record<string, unknown> = {
     query,
-    content_types: "messages,users",
+    content_types: "messages",
     channel_types: "public_channel,private_channel,mpim,im",
     include_context_messages: true,
     limit: MAX_SLACK_BROAD_CONTEXT_RESULTS,
@@ -1146,14 +1180,18 @@ export async function fetchSlackBroaderContext({
   const data = await slackApiPost<SlackSearchContextResponse>(accessToken, "assistant.search.context", body).catch(
     () => null
   );
+  const method = `assistant.search.context ${strategy}`;
   if (!data?.ok) {
     return slackUnavailable(
       data?.error === "missing_scope" ? "missing_scope" : "slack_api_error",
-      `assistant.search.context${data?.error ? ` error:${data.error}` : " request_failed"}`
+      `${method}${data?.error ? ` error:${data.error}` : " request_failed"}`
     );
   }
 
-  const formatted = getSearchResults(data)
+  const results = getSearchResults(data);
+  if (!results.length) return slackUnavailable("no_messages", `${method} no_results`);
+
+  const formatted = results
     .map((result) => {
       const text = compactText(extractSearchText(result), 380);
       if (!text) return null;
@@ -1162,7 +1200,7 @@ export async function fetchSlackBroaderContext({
     .filter(Boolean)
     .slice(0, MAX_SLACK_BROAD_CONTEXT_RESULTS) as string[];
 
-  if (!formatted.length) return slackUnavailable("no_messages");
+  if (!formatted.length) return slackUnavailable("no_messages", `${method} parser_empty`);
 
   const context = ["Relevant prior Slack history from live search:", ...formatted].join("\n");
   return {
@@ -1174,7 +1212,65 @@ export async function fetchSlackBroaderContext({
     failureReason: null,
     messageCount: formatted.length,
     broaderSearchUsed: true,
+    retrievalMethod: method,
   } satisfies SlackConversationContext;
+}
+
+export async function fetchSlackBroaderContext({
+  accessToken,
+  prompt,
+  activeContext,
+  contextChannelId,
+  actionToken,
+  relevantSlackUserIds = [],
+}: {
+  accessToken: string | null;
+  prompt: string;
+  activeContext?: string | null;
+  contextChannelId?: string | null;
+  actionToken?: string | null;
+  relevantSlackUserIds?: string[];
+}) {
+  if (!accessToken) return slackUnavailable("missing_token");
+
+  const normalizedUserIds = uniqueSlackUserIds(relevantSlackUserIds);
+  const relationshipSearch = isRelationshipHistoryPrompt(prompt);
+  const attempted: string[] = [];
+  let firstFailure: SlackConversationContext | null = null;
+
+  if (relationshipSearch && normalizedUserIds.length) {
+    for (const userId of normalizedUserIds.slice(0, 3)) {
+      const targeted = await runSlackBroaderSearch({
+        accessToken,
+        query: buildTargetedBroaderSearchQuery({ prompt, activeContext, slackUserId: userId }),
+        contextChannelId,
+        actionToken,
+        strategy: `with:<@${userId}>`,
+      });
+      if (targeted.status === "available") return targeted;
+      attempted.push(targeted.retrievalMethod || `assistant.search.context with:<@${userId}>`);
+      firstFailure ||= targeted;
+      if (targeted.failureReason === "missing_scope") return targeted;
+    }
+  }
+
+  const generic = await runSlackBroaderSearch({
+    accessToken,
+    query: buildBroaderSearchQuery(prompt, activeContext),
+    contextChannelId,
+    actionToken,
+    strategy: relationshipSearch && normalizedUserIds.length ? "generic_fallback" : "generic",
+  });
+  if (generic.status === "available") return generic;
+
+  if (attempted.length) {
+    return slackUnavailable(
+      generic.failureReason || firstFailure?.failureReason || "no_messages",
+      [...attempted, generic.retrievalMethod || "assistant.search.context generic"].join("; ")
+    );
+  }
+
+  return generic;
 }
 
 export async function buildSlackCoachingContext({
@@ -1184,6 +1280,7 @@ export async function buildSlackCoachingContext({
   contextChannelId,
   actionToken,
   includeBroaderContext = true,
+  relevantSlackUserIds = [],
 }: {
   user: SlackConnectedUser;
   prompt: string;
@@ -1191,6 +1288,7 @@ export async function buildSlackCoachingContext({
   contextChannelId?: string | null;
   actionToken?: string | null;
   includeBroaderContext?: boolean;
+  relevantSlackUserIds?: string[];
 }) {
   const broaderContext = includeBroaderContext
     ? await fetchSlackBroaderContext({
@@ -1199,6 +1297,10 @@ export async function buildSlackCoachingContext({
         activeContext: activeContext?.text,
         contextChannelId,
         actionToken,
+        relevantSlackUserIds: uniqueSlackUserIds([
+          ...(activeContext?.relevantUserIds || []),
+          ...relevantSlackUserIds,
+        ]),
       })
     : slackUnavailable("no_messages");
 

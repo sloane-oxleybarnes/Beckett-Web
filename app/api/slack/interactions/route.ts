@@ -643,6 +643,7 @@ async function sendMessageShortcutResponse({
       activeContext: channelContext,
       contextChannelId: payload.channel?.id,
       includeBroaderContext: shouldUseBroaderSlackContext("respond", prompt),
+      relevantSlackUserIds: [payload.message?.user].filter(Boolean) as string[],
     });
     const relationshipNote =
       authorRelationship && !authorRelationship.linked && authorRelationship.slackIdentifier
