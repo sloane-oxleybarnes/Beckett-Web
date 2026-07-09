@@ -6,7 +6,9 @@ export const runtime = "nodejs";
 type SlackCoachingIntent = "respond" | "rewrite" | "decode" | "prep" | "practice";
 
 type SlashCommandPayload = {
+  api_app_id?: string;
   team_id?: string;
+  team_domain?: string;
   user_id?: string;
   channel_id?: string;
   channel_name?: string;
@@ -48,7 +50,9 @@ const removedSlashSubcommands = new Set(["draft", "clarity", "boundary", "follow
 function parseSlashCommand(rawBody: string): SlashCommandPayload {
   const params = new URLSearchParams(rawBody);
   return {
+    api_app_id: params.get("api_app_id") || undefined,
     team_id: params.get("team_id") || undefined,
+    team_domain: params.get("team_domain") || undefined,
     user_id: params.get("user_id") || undefined,
     channel_id: params.get("channel_id") || undefined,
     channel_name: params.get("channel_name") || undefined,
@@ -438,9 +442,15 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const verification = verifySlackCommandRequest(req, rawBody);
   if (!verification.ok) {
+    const payload = parseSlashCommand(rawBody);
     console.error("Slack slash command verification failed", {
       status: verification.status,
       message: verification.message,
+      apiAppId: payload.api_app_id || null,
+      teamId: payload.team_id || null,
+      teamDomain: payload.team_domain || null,
+      command: payload.command || null,
+      channelId: payload.channel_id || null,
       hasTimestamp: Boolean(req.headers.get("x-slack-request-timestamp")),
       hasSignature: Boolean(req.headers.get("x-slack-signature")),
     });
