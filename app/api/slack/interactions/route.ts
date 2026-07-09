@@ -137,19 +137,17 @@ function buildShortcutPrompt(
   authorLabel?: string | null,
   intent: MessageShortcutIntent = "respond"
 ) {
-  const channel =
-    payload.channel?.name && payload.channel.name !== "directmessage"
-      ? `#${payload.channel.name}`
-      : "this DM";
-  const author = authorLabel || payload.message?.username || payload.message?.user || "the other person";
+  const author = authorLabel || payload.message?.username || null;
+  const channel = payload.channel?.name && payload.channel.name !== "directmessage" ? ` in #${payload.channel.name}` : "";
+  const source = author ? ` from ${author}${channel}` : "";
   if (intent === "decode") {
     return [
-      `Help me decode this message from ${author} in ${channel}.`,
+      `Help me decode this message${source}.`,
       "What is visible, what might be underneath it, and what should I pay attention to?",
     ].join(" ");
   }
   return [
-    `Help me draft a response to this message from ${author} in ${channel}.`,
+    `Help me draft a response to this message${source}.`,
     "Give me a short read, the next move, and three Slack-ready response options.",
   ].join(" ");
 }
@@ -610,12 +608,45 @@ async function sendMessageShortcutResponse({
         messageText,
         intent,
       });
+      const agentDelivery = await postSlackAgentMessage({
+        botAccessToken,
+        slackUserId,
+        title: slackHistoryTitle(intent, "selected message"),
+        text: [
+          intent === "decode"
+            ? "Let’s read this message privately."
+            : "Let’s draft a response privately.",
+          "",
+          intent === "decode"
+            ? "Reply in this thread so I can keep this message, read, and follow-ups saved together."
+            : "Reply in this thread so I can keep this message, drafts, and follow-ups saved together.",
+          "",
+          response,
+        ].join("\n\n"),
+      });
+
+      if (agentDelivery.ok) {
+        const ack = buildBeckettPayload({
+          title: "Beckett",
+          subtitle: "Message coaching",
+          body: "I moved this into our private Beckett conversation.",
+        });
+        await postSlackResponse(responseUrl, ack.text, {
+          blocks: ack.blocks,
+          replaceOriginal: true,
+        });
+        return;
+      }
+
       const responsePayload = buildBeckettPayload({
         title: "Beckett",
         subtitle: "",
-        prompt: guestPrompt,
-        body: response,
-        footer: "Connect Slack in Beckett Settings to use your coaching profile, contact context, broader Slack history, and saved conversations.",
+        body: [
+          "I prepared this privately here because the Beckett coach panel was not available.",
+          "",
+          response,
+        ].join("\n"),
+        footer: "Guest mode is on for judging. Connecting Slack adds profile, contacts, history, and saved conversations.",
         hideTitle: true,
       });
       await postSlackResponse(responseUrl, responsePayload.text, {
