@@ -128,6 +128,8 @@ export type SlackDraftOption = {
 
 const GUIDED_TRIGGER_RE =
   /\b(help me prepare|prep\b|prepare\b|practice\b|respond\b|reply\b|rewrite\b|decode\b|understand\b|1:1|one-on-one|manager|raise|promotion|salary|workload|feedback|boundary|pushback|difficult conversation|clarity)\b/i;
+const RESPOND_AFTER_OPENER_FALLBACK =
+  "I started this thread, but had trouble generating the response. Paste the message or add one detail here and I’ll pick it back up.";
 
 function normalizeText(text: string) {
   return text.replace(/\s+/g, " ").trim();
@@ -402,10 +404,15 @@ function respondContextIsEnough(answers: GuidedAnswers) {
   ].filter(Boolean).join(" ").toLowerCase();
   const hasPatternDetail = /\b(one[- ]?time|once|twice|again|repeated|keeps|pattern|happened before|first time)\b/.test(combined);
   const hasPriorityDetail = /\b(deadline|delay|priority|priorities|manager owns|current work|scope|ownership|workload|capacity)\b/.test(combined);
+  const hasClearReplyGoal = /\b(reply|respond|answer|say|ask|tell)\b/.test(combined);
+  const hasNamedTarget = /\b(to|for|from)\s+@?[a-z][a-z'-]+|\bmanager\b|\bboss\b|\bcoworker\b|\bteammate\b|\bclient\b|\bcustomer\b/i.test(combined);
+  const hasQuotedOrTargetPhrase = /["“”][^"“”]{3,}["“”]/.test(answers.initial_request || "") || /\bmeans by\b|\bwhat (?:he|she|they) means\b|\bwithout sounding\b|\bnot sound\b/i.test(combined);
 
   if (/\b(can't|cannot|don'?t want to|not able to|unable to|can’t)\s+(paste|share)\b/.test(combined)) {
     return hasPatternDetail || hasPriorityDetail;
   }
+  if (hasClearReplyGoal && hasNamedTarget && hasQuotedOrTargetPhrase) return true;
+  if (hasClearReplyGoal && hasPriorityDetail && /\boutside (?:of )?my scope|scope|workload|capacity\b/.test(combined)) return true;
   if (hasPatternDetail && hasPriorityDetail) return true;
   return false;
 }
@@ -1199,8 +1206,11 @@ export async function startGuidedSlackFlow({
       session
     );
 
-    if (response && user.botAccessToken) {
-      const draftOptions = intent === "respond" ? await saveSlackDraftOptions(session.id, response) : [];
+    if (!response) response = RESPOND_AFTER_OPENER_FALLBACK;
+
+    if (user.botAccessToken) {
+      const isFallbackResponse = response === RESPOND_AFTER_OPENER_FALLBACK;
+      const draftOptions = !isFallbackResponse && intent === "respond" ? await saveSlackDraftOptions(session.id, response) : [];
       await appendSlackCoachingMessage({
         threadId: coachingThread?.id,
         user,
@@ -1225,6 +1235,14 @@ export async function startGuidedSlackFlow({
         thread_ts: postedTs,
         ...payload,
       });
+      console.info("Slack guided flow first response attempted", {
+        intent,
+        sessionPresent: Boolean(session.id),
+        sourceChannelPresent: Boolean(sourceChannelId),
+        responseGenerated: Boolean(response),
+        responsePosted: Boolean(postedResponse.ok && postedResponse.ts),
+        failureReason: postedResponse.ok ? null : postedResponse.error || "slack_post_failed",
+      });
       if (postedResponse.ok && postedResponse.ts) {
         await recordSlackCoachingBotMessage({
           threadId: coachingThread?.id,
@@ -1233,6 +1251,43 @@ export async function startGuidedSlackFlow({
           messageTs: postedResponse.ts,
           kind: "reply",
         }).catch(() => null);
+      } else if (!isFallbackResponse) {
+        const fallbackPayload = buildBeckettPayload({
+          title: "Beckett",
+          subtitle: "",
+          body: RESPOND_AFTER_OPENER_FALLBACK,
+          hideTitle: true,
+        });
+        const postedFallback = await slackApiPost<{ ts?: string }>(user.botAccessToken, "chat.postMessage", {
+          channel: postedChannelId,
+          thread_ts: postedTs,
+          ...fallbackPayload,
+        }).catch((error) => {
+          console.error("Slack guided flow fallback post threw", {
+            intent,
+            sessionPresent: Boolean(session.id),
+            sourceChannelPresent: Boolean(sourceChannelId),
+            message: error instanceof Error ? error.message : String(error),
+          });
+          return null;
+        });
+        console.info("Slack guided flow fallback attempted", {
+          intent,
+          sessionPresent: Boolean(session.id),
+          sourceChannelPresent: Boolean(sourceChannelId),
+          responsePosted: Boolean(postedFallback?.ok && postedFallback.ts),
+          failureReason: postedFallback?.ok ? null : postedFallback?.error || "fallback_post_failed",
+        });
+        if (postedFallback?.ok && postedFallback.ts) {
+          response = RESPOND_AFTER_OPENER_FALLBACK;
+          await recordSlackCoachingBotMessage({
+            threadId: coachingThread?.id,
+            userId: user.id,
+            channelId: postedChannelId,
+            messageTs: postedFallback.ts,
+            kind: "error",
+          }).catch(() => null);
+        }
       }
       if (coachingThread?.id) {
         scheduleSlackBackgroundTask(
@@ -1252,7 +1307,7 @@ export async function startGuidedSlackFlow({
       sourceChannelPresent: Boolean(sourceChannelId),
       message: error instanceof Error ? error.message : String(error),
     });
-    response = "I started the private thread, but had trouble generating the response. Try the command again, or paste the message here and I’ll work from that.";
+    response = RESPOND_AFTER_OPENER_FALLBACK;
     await updateSlackCoachingThread(coachingThread?.id, {
       summary: response,
       status: "active",
