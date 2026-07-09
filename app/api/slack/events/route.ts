@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   buildBeckettPayload,
+  buildGuestSlackContextPacket,
   buildSlackCoachingContext,
   configureSlackAgentSurface,
   fetchSlackConversationContext,
@@ -460,7 +461,17 @@ async function respondToAgentMessage({
     if (botAccessToken) {
       const intent = assistantIntent;
       try {
-        const messageText = isAssistantStarterPrompt(text) ? "" : text;
+        const linkedSlackContext = extractSlackPermalinkContext(text);
+        const guestContext = await buildGuestSlackContextPacket({
+          botAccessToken,
+          channelId: linkedSlackContext?.channelId || activeChannelId || channelId,
+          selectedMessageTs: linkedSlackContext?.messageTs,
+          threadTs: linkedSlackContext?.threadTs,
+          selectedMessageText: isAssistantStarterPrompt(text) ? "" : text,
+          userRequest: text,
+          currentSlackUserId: slackUserId,
+        });
+        const messageText = isAssistantStarterPrompt(text) ? guestContext.text : guestContext.text || text;
         const response = await runSlackGuestCoaching({
           teamId,
           slackUserId,

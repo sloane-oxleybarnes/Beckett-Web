@@ -1408,6 +1408,71 @@ export async function fetchLatestSlackMessageContext({
   };
 }
 
+export async function buildGuestSlackContextPacket({
+  botAccessToken,
+  channelId,
+  channelName,
+  selectedMessageText,
+  selectedMessageTs,
+  threadTs,
+  latestMessageText,
+  currentSlackUserId,
+  userRequest,
+}: {
+  botAccessToken: string | null;
+  channelId?: string | null;
+  channelName?: string | null;
+  selectedMessageText?: string | null;
+  selectedMessageTs?: string | null;
+  threadTs?: string | null;
+  latestMessageText?: string | null;
+  currentSlackUserId?: string | null;
+  userRequest?: string | null;
+}) {
+  const sections: string[] = [];
+  const selected = selectedMessageText?.trim();
+  const latest = latestMessageText?.trim();
+  const request = userRequest?.trim();
+  if (selected) sections.push(["Selected Slack message:", selected].join("\n"));
+  if (!selected && latest) sections.push(["Target latest Slack message:", latest].join("\n"));
+  if (request) sections.push(["User request:", request].join("\n"));
+
+  let context: SlackConversationContext | null = null;
+  if (botAccessToken && channelId) {
+    context = selectedMessageTs || threadTs
+      ? await fetchSlackConversationContext({
+          accessToken: botAccessToken,
+          channelId,
+          channelName,
+          messageTs: selectedMessageTs,
+          threadTs,
+        })
+      : (await fetchLatestSlackMessageContext({
+          accessToken: botAccessToken,
+          channelId,
+          channelName,
+          currentSlackUserId,
+        }))?.context || await fetchSlackConversationContext({
+          accessToken: botAccessToken,
+          channelId,
+          channelName,
+        });
+  }
+
+  if (context?.text) sections.push(["Surrounding Slack context:", context.text].join("\n"));
+  else if (selected || latest) {
+    sections.push("I’m working from the message I could see because I couldn’t read the surrounding conversation.");
+  }
+
+  return {
+    text: sections.filter(Boolean).join("\n\n"),
+    context,
+    messageCount: context?.messageCount || 0,
+    contextStatus: context?.status || (selected || latest || request ? "available" : "unavailable"),
+    contextFailureReason: context?.failureReason || null,
+  };
+}
+
 async function runSlackBroaderSearch({
   accessToken,
   query,

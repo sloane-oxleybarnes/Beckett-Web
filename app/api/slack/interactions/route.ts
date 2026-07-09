@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   buildAskedResponsePayload,
   buildBeckettPayload,
+  buildGuestSlackContextPacket,
   buildSlackCoachingContext,
   fetchSlackConversationContext,
   handleSlackAiError,
@@ -601,12 +602,22 @@ async function sendMessageShortcutResponse({
       }
 
       const guestPrompt = buildShortcutPrompt(payload, null, intent);
+      const guestContext = await buildGuestSlackContextPacket({
+        botAccessToken,
+        channelId: payload.channel?.id,
+        channelName: payload.channel?.name,
+        selectedMessageText: messageText,
+        selectedMessageTs: payload.message?.ts,
+        threadTs: payload.message?.thread_ts,
+        userRequest: guestPrompt,
+        currentSlackUserId: slackUserId,
+      });
       const response = await runSlackGuestCoaching({
         teamId,
         slackUserId,
         action: "message_shortcut",
         prompt: guestPrompt,
-        messageText,
+        messageText: guestContext.text || messageText,
         intent,
       });
       const agentDelivery = await postSlackAgentMessage({
@@ -1082,12 +1093,18 @@ async function handleHistoryButtonResponse({
         }
 
         const prompt = quickPrompt(flowType);
+        const guestContext = await buildGuestSlackContextPacket({
+          botAccessToken,
+          channelId,
+          userRequest: prompt,
+          currentSlackUserId: slackUserId,
+        });
         const response = await runSlackGuestCoaching({
           teamId,
           slackUserId,
           action: "agent_message",
           prompt,
-          messageText: prompt,
+          messageText: guestContext.text || prompt,
           intent: flowType,
         });
         const payloadToPost = buildBeckettPayload({

@@ -220,6 +220,7 @@ async function startSidebarFlow({
   try {
     const {
       buildBeckettPayload,
+      buildGuestSlackContextPacket,
       fetchLatestSlackMessageContext,
       isAllowedSlackPlan,
       lookupSlackConnectedUser,
@@ -265,12 +266,21 @@ async function startSidebarFlow({
               latestSource.targetText,
             ].join("\n")
           : parsed.prompt;
+        const guestContext = await buildGuestSlackContextPacket({
+          botAccessToken,
+          channelId: payload.channel_id,
+          channelName: payload.channel_name,
+          latestMessageText: latestSource?.targetText,
+          selectedMessageTs: latestSource?.targetTs,
+          userRequest: latestSourcePrompt,
+          currentSlackUserId: payload.user_id,
+        });
         const response = await runSlackGuestCoaching({
           teamId: payload.team_id,
           slackUserId: payload.user_id,
           action: "slash_command",
           prompt: latestSourcePrompt,
-          messageText: latestSource?.context?.text || latestSource?.targetText || parsed.prompt,
+          messageText: guestContext.text || latestSource?.context?.text || latestSource?.targetText || parsed.prompt,
           intent: parsed.intent,
         });
         const opener =
