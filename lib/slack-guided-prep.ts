@@ -451,6 +451,47 @@ function markerForRespondQuestion(question: string) {
   return "Respond context asked: paraphrase";
 }
 
+function extractQuotedPhrase(text?: string) {
+  const match = (text || "").match(/["“”]([^"“”]{3,120})["“”]/);
+  return match?.[1]?.trim() || "";
+}
+
+function fallbackResponseForSession(session: SlackAgentSession) {
+  if (session.flow_type !== "respond") return RESPOND_AFTER_OPENER_FALLBACK;
+
+  const request = session.answers.initial_request || "";
+  const phrase = extractQuotedPhrase(request);
+  const person =
+    request.match(/\b(?:reply to|respond to|answer|ask|tell)\s+([A-Z][a-z]+)\b/)?.[1] ||
+    session.answers.audience ||
+    "them";
+  const topic = phrase || "what they mean";
+  const direct = phrase
+    ? `Can you clarify what you mean by “${phrase}”? I want to make sure I revise the right part.`
+    : "Can you clarify what you want me to focus on? I want to make sure I respond to the right thing.";
+  const warm = phrase
+    ? `That makes sense. When you say “${phrase},” do you mean the value needs to show up earlier, or that the flow itself is hard to follow?`
+    : "That makes sense. Can you point me to the part that feels least clear so I can tighten the right thing?";
+  const concise = phrase
+    ? `When you say “${phrase},” what part should I focus on first?`
+    : "What part should I focus on first?";
+
+  return [
+    "~ Possible read ~",
+    `I had trouble generating the full coaching response, so I’m giving you a safe draft from what you already shared. The safest move is to sound curious and specific with ${person}, not defensive.`,
+    "",
+    "I’m drafting from what you shared here. If you paste the original message, I can make this more precise.",
+    "",
+    "~ Next move ~",
+    `Ask one clarifying question about ${topic} so you know what to change before you revise.`,
+    "",
+    "~ Draft options ~",
+    `- Direct but kind: “${direct}”`,
+    `- Warm and collaborative: “${warm}”`,
+    `- Concise: “${concise}”`,
+  ].join("\n");
+}
+
 function missingCurrentConversationMessage(flowType: GuidedFlowType, session: SlackAgentSession, activeContext: SlackConversationContext | null) {
   if (flowType !== "respond" && flowType !== "decode") return "";
   if (!session.answers.source_channel_id) return "";
@@ -1206,10 +1247,11 @@ export async function startGuidedSlackFlow({
       session
     );
 
-    if (!response) response = RESPOND_AFTER_OPENER_FALLBACK;
+    if (!response) response = fallbackResponseForSession(session);
 
     if (user.botAccessToken) {
-      const isFallbackResponse = response === RESPOND_AFTER_OPENER_FALLBACK;
+      const fallbackResponse = fallbackResponseForSession(session);
+      const isFallbackResponse = response === fallbackResponse;
       const draftOptions = !isFallbackResponse && intent === "respond" ? await saveSlackDraftOptions(session.id, response) : [];
       await appendSlackCoachingMessage({
         threadId: coachingThread?.id,
@@ -1255,7 +1297,7 @@ export async function startGuidedSlackFlow({
         const fallbackPayload = buildBeckettPayload({
           title: "Beckett",
           subtitle: "",
-          body: RESPOND_AFTER_OPENER_FALLBACK,
+          body: fallbackResponse,
           hideTitle: true,
         });
         const postedFallback = await slackApiPost<{ ts?: string }>(user.botAccessToken, "chat.postMessage", {
@@ -1279,7 +1321,7 @@ export async function startGuidedSlackFlow({
           failureReason: postedFallback?.ok ? null : postedFallback?.error || "fallback_post_failed",
         });
         if (postedFallback?.ok && postedFallback.ts) {
-          response = RESPOND_AFTER_OPENER_FALLBACK;
+          response = fallbackResponse;
           await recordSlackCoachingBotMessage({
             threadId: coachingThread?.id,
             userId: user.id,
@@ -1307,7 +1349,7 @@ export async function startGuidedSlackFlow({
       sourceChannelPresent: Boolean(sourceChannelId),
       message: error instanceof Error ? error.message : String(error),
     });
-    response = RESPOND_AFTER_OPENER_FALLBACK;
+    response = fallbackResponseForSession(session);
     await updateSlackCoachingThread(coachingThread?.id, {
       summary: response,
       status: "active",
