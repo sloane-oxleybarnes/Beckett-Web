@@ -458,6 +458,14 @@ export async function POST(req: NextRequest) {
   }
 
   const payload = parseSlashCommand(rawBody);
+  console.info("Slack slash command verified", {
+    apiAppId: payload.api_app_id || null,
+    teamId: payload.team_id || null,
+    teamDomain: payload.team_domain || null,
+    command: payload.command || null,
+    channelId: payload.channel_id || null,
+  });
+
   if (payload.ssl_check === "1") return NextResponse.json({ ok: true });
 
   const text = payload.text?.trim() || "";
