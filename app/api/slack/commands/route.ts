@@ -6,9 +6,11 @@ import {
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
   lookupSlackWorkspaceBotToken,
+  postSlackAgentMessage,
   postSlackResponse,
   runSlackGuestCoaching,
   scheduleSlackBackgroundTask,
+  slackApiPost,
   verifySlackRequest,
 } from "@/lib/slack-app";
 import { startGuidedSlackFlow } from "@/lib/slack-guided-prep";
@@ -161,20 +163,92 @@ async function startSidebarFlow({
         return null;
       });
       if (botAccessToken) {
+        const latestSource = parsed.useLatestSourceMessage
+          ? await fetchLatestSlackMessageContext({
+              accessToken: botAccessToken,
+              channelId: payload.channel_id,
+              channelName: payload.channel_name,
+              currentSlackUserId: payload.user_id,
+            })
+          : null;
+        const latestSourcePrompt = latestSource?.targetText
+          ? [
+              parsed.prompt,
+              "",
+              "Target latest Slack message:",
+              latestSource.targetText,
+            ].join("\n")
+          : parsed.prompt;
         const response = await runSlackGuestCoaching({
           teamId: payload.team_id,
           slackUserId: payload.user_id,
           action: "slash_command",
-          prompt: parsed.prompt,
-          messageText: parsed.prompt,
+          prompt: latestSourcePrompt,
+          messageText: latestSource?.context?.text || latestSource?.targetText || parsed.prompt,
           intent: parsed.intent,
         });
+        const opener =
+          parsed.intent === "decode"
+            ? "Let’s read this message privately."
+            : parsed.intent === "respond"
+              ? "Let’s draft a response privately."
+              : parsed.intent === "rewrite"
+                ? "Let’s clean up this wording privately."
+                : parsed.intent === "practice"
+                  ? "Let’s practice this conversation privately."
+                  : "Let’s prep this conversation privately.";
+        const guidance =
+          parsed.intent === "decode"
+            ? "Reply in this thread so I can keep this message, read, and follow-ups saved together."
+            : parsed.intent === "respond"
+              ? "Reply in this thread so I can keep this message, drafts, and follow-ups saved together."
+              : "Reply in this thread so I can keep the setup and follow-ups saved together.";
+        const agentDelivery = await postSlackAgentMessage({
+          botAccessToken,
+          slackUserId: payload.user_id,
+          title: `${parsed.intent[0].toUpperCase()}${parsed.intent.slice(1)}: Slack conversation`,
+          text: [opener, "", guidance].join("\n\n"),
+        });
+
+        let agentReplyPosted = false;
+        if (agentDelivery.ok && "channelId" in agentDelivery && "ts" in agentDelivery) {
+          const responsePayload = buildBeckettPayload({
+            title: "Beckett",
+            subtitle: "",
+            body: response,
+            hideTitle: true,
+          });
+          const reply = await slackApiPost(botAccessToken, "chat.postMessage", {
+            channel: agentDelivery.channelId,
+            thread_ts: agentDelivery.ts,
+            ...responsePayload,
+          });
+          agentReplyPosted = Boolean(reply.ok);
+          if (!agentReplyPosted) {
+            console.error("Slack guest slash assistant reply failed", {
+              teamPresent: Boolean(payload.team_id),
+              slackUserPresent: Boolean(payload.user_id),
+              error: reply.error || "agent_reply_failed",
+            });
+          }
+        }
+
+        if (agentReplyPosted) {
+          await postSlackResponse(responseUrl, "I moved this into our private Beckett conversation.", {
+            replaceOriginal: true,
+          });
+          return;
+        }
+
         const guestPayload = buildBeckettPayload({
           title: "Beckett",
           subtitle: "",
-          prompt: parsed.prompt,
-          body: response,
-          footer: "Guest mode is on for hackathon judging. Connect Slack in Beckett Settings for profile, contact context, broader Slack history, and saved conversations.",
+          body: [
+            "I prepared this privately here because the Beckett coach panel was not available.",
+            "",
+            response,
+          ].join("\n"),
+          footer: "Guest mode is on for judging. Connecting Slack adds profile, contacts, history, and saved conversations.",
           hideTitle: true,
         });
         await postSlackResponse(responseUrl, guestPayload.text, {
