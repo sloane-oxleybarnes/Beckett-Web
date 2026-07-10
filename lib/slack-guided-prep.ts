@@ -157,6 +157,62 @@ function inferPerson(text: string) {
   return named?.[1] || "";
 }
 
+function normalizePersonForUserDisplay(person?: string | null) {
+  const cleaned = normalizeText(person || "")
+    .replace(/\bmy\b/gi, "your")
+    .replace(/\bour\b/gi, "your")
+    .replace(/\bme\b/gi, "you")
+    .replace(/\bi\b/gi, "you");
+  return cleaned;
+}
+
+function prepTopicFromInitialRequest(text: string) {
+  const lower = text.toLowerCase();
+  if (/\bworkload\b|\btoo much\b|\bcapacity\b|\boverloaded\b|\bpriorit(?:y|ies|ize)\b|\bdeadline\b|\bscope\b|\bownership\b/.test(lower)) {
+    return "workload, priorities, or capacity";
+  }
+  if (/\bboundary\b|\bafter-hours\b|\bweekend\b|\bavailable\b|\bfocus time\b/.test(lower)) {
+    return "boundaries or availability";
+  }
+  if (/\bpto\b|\btime off\b|\bvacation\b|\bweek off\b|\bday off\b|\bwedding\b|\bout of office\b|\booo\b/.test(lower)) {
+    return "time off, coverage, or handoff";
+  }
+  if (/\braise\b|\bpromotion\b|\bsalary\b|\bcompensation\b|\bcareer level\b|\btitle\b/.test(lower)) {
+    return "raise, promotion, or career next steps";
+  }
+  if (/\bfeedback\b|\bconstructive\b|\bconflict\b|\btension\b|\bdisagree\b|\bfrustrated\b|\bhandoff\b/.test(lower)) {
+    return "feedback, conflict, or expectations";
+  }
+  if (/\bclarity\b|\bunclear\b|\bdecision\b|\bdefinition of done\b|\btimeline\b|\bnext steps?\b/.test(lower)) {
+    return "clarity, decisions, or next steps";
+  }
+  return "";
+}
+
+function inferPrepOutcomeFromInitialRequest(text: string) {
+  const lower = text.toLowerCase();
+  if (/\bclearer priorities\b|\bpriority order\b|\bprioritize\b|\bwhat to prioritize\b/.test(lower)) {
+    return "a clear priority order and next steps.";
+  }
+  if (/\bmore time\b|\bextension\b|\bmove the deadline\b|\badjust(?:ed)? deadline\b/.test(lower)) {
+    return "alignment on timing and what needs to change.";
+  }
+  if (/\breduced scope\b|\breduce scope\b|\bsmaller scope\b|\bwhat can move\b|\btake off my plate\b/.test(lower)) {
+    return "agreement on what can move, shrink, or be taken off your plate.";
+  }
+  if (/\bset a boundary\b|\bclear boundary\b|\bafter-hours boundary\b|\bfocus time\b/.test(lower)) {
+    return "a clear boundary and shared expectations.";
+  }
+  return "";
+}
+
+function initialPrepTopicFromAnswers(answers: GuidedAnswers) {
+  return (answers.extra_context || [])
+    .find((item) => item.startsWith("Initial prep topic:"))
+    ?.replace(/^Initial prep topic:\s*/i, "")
+    .replace(/\.$/, "");
+}
+
 function inferConversationType(text: string) {
   const lower = text.toLowerCase();
   if (/\bpto\b|\btime off\b|\bvacation\b|\bweek off\b|\bday off\b|\bwedding\b|\bout of office\b|\booo\b/.test(lower)) return "time off conversation";
@@ -258,6 +314,8 @@ function initialAnswers(
   flowType: GuidedFlowType,
   source?: { channelId?: string | null; channelName?: string | null; threadTs?: string | null }
 ): GuidedAnswers {
+  const initialRequest = normalizeText(text);
+  const prepTopic = flowType === "prep" || flowType === "practice" ? prepTopicFromInitialRequest(initialRequest) : "";
   const sourceAudience =
     flowType === "respond" || flowType === "rewrite" || flowType === "decode"
       ? source?.channelName
@@ -267,15 +325,16 @@ function initialAnswers(
           : ""
       : "";
   return {
-    initial_request: normalizeText(text),
-    person: flowType === "prep" || flowType === "practice" ? inferPerson(text) : "",
+    initial_request: initialRequest,
+    person: flowType === "prep" || flowType === "practice" ? normalizePersonForUserDisplay(inferPerson(text)) : "",
     conversation_type: inferConversationType(text),
     scenario: flowType === "prep" || flowType === "practice" ? inferPrepScenario(text) : "general",
     source_channel_id: source?.channelId || undefined,
     source_channel_name: source?.channelName || undefined,
     source_thread_ts: source?.threadTs || undefined,
     audience: sourceAudience || undefined,
-    extra_context: [],
+    outcome: flowType === "prep" ? inferPrepOutcomeFromInitialRequest(initialRequest) || undefined : undefined,
+    extra_context: prepTopic ? [`Initial prep topic: ${prepTopic}.`] : [],
   };
 }
 
@@ -837,6 +896,7 @@ function shouldSwitchToMessageDecode(text: string) {
 function askForStep(session: SlackAgentSession) {
   const answers = session.answers;
   const scenario = scenarioFromAnswers(answers);
+  const initialPrepTopic = initialPrepTopicFromAnswers(answers);
   switch (session.step) {
     case "ask_audience":
       if (session.flow_type === "rewrite") {
@@ -864,11 +924,12 @@ function askForStep(session: SlackAgentSession) {
       ].join("\n");
     case "ask_outcome":
       return [
-        `Got it, this will be a conversation with ${answers.person || "this person"}.`,
+        `Got it, this will be a conversation with ${normalizePersonForUserDisplay(answers.person) || "this person"}.`,
+        initialPrepTopic ? `I have the topic as ${initialPrepTopic}.` : "",
         "",
         "What outcome do you want from the conversation?",
         outcomeExampleForScenario(scenario),
-      ].join("\n");
+      ].filter(Boolean).join("\n");
     case "ask_concern":
       return [
         "Finally, what are you worried they may push back on, misunderstand, or react poorly to?",
@@ -876,7 +937,7 @@ function askForStep(session: SlackAgentSession) {
       ].filter(Boolean).join("\n");
     case "ask_practice_goal":
       return [
-        `Got it. I’ll role-play as ${answers.person || "the other person"}.`,
+        `Got it. I’ll role-play as ${normalizePersonForUserDisplay(answers.person) || "the other person"}.`,
         "",
         "What do you want to practice getting better at?",
         "For example: staying direct, not over-apologizing, handling pushback, or asking for clarity.",
@@ -1139,7 +1200,7 @@ function mergeAnswersForStep(session: SlackAgentSession, text: string): GuidedAn
       `Opening draft to coach: ${cleaned}`,
     ];
   }
-  if (session.step === "ask_person") answers.person = cleaned;
+  if (session.step === "ask_person") answers.person = normalizePersonForUserDisplay(cleaned);
   if (session.step === "ask_outcome") answers.outcome = cleaned;
   if (session.step === "ask_concern") answers.concern = cleaned;
   if (session.step === "ask_practice_goal") answers.practice_goal = cleaned;
