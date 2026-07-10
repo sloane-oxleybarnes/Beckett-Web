@@ -501,6 +501,10 @@ function userMessageShouldOverrideGuidedStep(session: SlackAgentSession, text: s
   return /\?/.test(cleaned) && cleaned.length > 40;
 }
 
+function isPracticeRoleplayRequest(text: string) {
+  return /\b(can we practice|let'?s practice|practice (?:this|the|my|our|whole)|practice the whole conversation|role[- ]?play|rehearse|you can be|you be|i'?ll ask|i will ask|pretend you(?:'re| are)|be my manager|be my boss|be my teammate|be my coworker|be my client|opening|pushback)\b/i.test(text);
+}
+
 function nextRespondContextQuestion(answers: GuidedAnswers) {
   const values = responseContextValues(answers);
   const combined = [
@@ -1069,8 +1073,11 @@ function promptForFlow(session: SlackAgentSession, followupText?: string) {
         "Start a workplace conversation role-play.",
         base,
         "",
-        "Return a short setup summary, then speak as the other person in the practice.",
+        "The user wants to rehearse, not receive another prep card. Do not return sections like Goal, Say this first, If they push back, Watch for, or Practice next.",
+        "Start with one short setup line, then speak as the other person in the practice.",
+        "Example shape: Okay. I’ll be your manager. Manager: \"Sure, what’s going on with your workload?\"",
         "Use realistic but not hostile pushback. Keep it concise so the user can reply.",
+        "If the user asks for coaching mid-practice, pause role-play, give brief coaching, then invite them to continue.",
       ].join("\n");
     case "prep":
       if (openingDraft) {
@@ -1539,6 +1546,36 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
   if (session && isStartOver(text)) {
     await updateSession(session.id, { status: "completed" });
     session = null;
+  }
+
+  if (session && session.flow_type === "prep" && isPracticeRoleplayRequest(text)) {
+    const updated = await updateSession(session.id, {
+      flow_type: "practice",
+      step: "ask_practice_goal",
+      status: "active",
+      answers: {
+        ...session.answers,
+        practice_goal: /pushback/i.test(text)
+          ? "practice handling pushback"
+          : /opening/i.test(text)
+            ? "practice the opening"
+            : "practice the whole conversation",
+        practice_pushback: session.answers.concern || session.answers.practice_pushback || "realistic manager questions or pushback",
+        extra_context: [
+          ...(session.answers.extra_context || []),
+          `User asked to switch from prep into role-play: ${text}`,
+        ],
+      },
+    });
+    const response = await safeCompleteSession(input, updated, text);
+    await persistGuidedTurn({ input, session: updated, userText: text, beckettText: response });
+    return {
+      handled: true,
+      title: "Practice",
+      response,
+      actions: guidedActions(updated),
+      coachingThreadId: updated.coaching_thread_id,
+    };
   }
 
   if (session && userMessageShouldOverrideGuidedStep(session, text)) {
