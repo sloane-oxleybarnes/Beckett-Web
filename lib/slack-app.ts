@@ -692,7 +692,13 @@ function slackIntentInstruction(intent: SlackCoachingIntent) {
     case "rewrite":
       return "Slack intent hint: The user likely wants editing or rewriting. Bias toward a rewritten version, but if their latest message asks a different question, answer that instead.";
     case "decode":
-      return "Slack intent hint: The user likely wants tone/subtext analysis. Bias toward a concise read, but if they ask for drafting, feedback assessment, prep, or something else, switch to that.";
+      return [
+        "Slack intent hint: The user likely wants tone/subtext analysis. Bias toward a concise read, but if they ask for drafting, feedback assessment, prep, or something else, switch to that.",
+        "For decode answers, use exactly these headings when they fit: Possible read and Next move.",
+        "Keep decode answers short: 1-2 sentences under Possible read and 1-3 bullets or questions under Next move.",
+        "Do not use separate headings like What's visible, What might be underneath, or What to pay attention to unless the user explicitly asks for a deeper breakdown.",
+        "If a phrase is ambiguous, Next move should include concrete clarifying questions the user could ask.",
+      ].join(" ");
     case "relationship":
       return "Slack intent hint: The user likely wants a broad relationship, history, vibe, pattern, or dynamic read. Do not force single-message decode language unless the user asks about one specific message.";
     case "draft":
