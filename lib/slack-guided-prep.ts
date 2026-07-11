@@ -4,6 +4,8 @@ import {
   buildSlackThreadArchiveAction,
   buildSlackExplainMoreAction,
   createSlackCoachingThread,
+  formatSlackCoachingMessages,
+  loadSlackCoachingMessages,
   recordSlackCoachingBotMessage,
   scheduleSlackInactivityStartCard,
   summarizeSlackCoachingResponse,
@@ -189,6 +191,10 @@ function practiceHasStarted(answers: GuidedAnswers) {
 
 function isPracticeCoachingRequest(text?: string) {
   return /\b(how did that sound|was that okay|did that work|coach me|feedback|make that clearer|make it clearer|try again|what should i change|was i too|was that too)\b/i.test(text || "");
+}
+
+function isPracticeStyleDetail(text?: string) {
+  return /\b(they (?:are|can be|usually|tend to|will|would)|quick to|push back|defensive|don'?t leave|doesn'?t leave|asks? a lot|problem[- ]?solv|dismiss|vague|direct|warm|busy|no room)\b/i.test(text || "");
 }
 
 function prepTopicFromInitialRequest(text: string) {
@@ -1017,7 +1023,7 @@ async function buildEvidenceStep(_input: GuidedFlowInput, session: SlackAgentSes
   return askForStep(nextSession);
 }
 
-function promptForFlow(session: SlackAgentSession, followupText?: string) {
+function promptForFlow(session: SlackAgentSession, followupText?: string, recentTranscript?: string) {
   const answers = session.answers;
   const extra = answers.extra_context?.length ? answers.extra_context.map((item) => `- ${item}`).join("\n") : "None.";
   const respondContext = responseContextValues(answers);
@@ -1049,6 +1055,8 @@ function promptForFlow(session: SlackAgentSession, followupText?: string) {
     "",
     "Additional user context:",
     extra,
+    recentTranscript ? "\nRecent role-play transcript:" : "",
+    recentTranscript || "",
   ].join("\n");
   const escalationInstruction = shouldIncludeEscalationGuidance(answers, followupText)
     ? "Because the user mentioned scope, workload, manager/HR, policy, safety, repeated boundary issues, or a power dynamic, include a short manager/HR escalation note only if it is appropriate. For workload/scope, usually give the coworker reply first, then one concise note on when/how to loop in a manager. For harassment, discrimination, safety, retaliation, or policy concerns, suggest HR or the appropriate internal channel without over-dramatizing."
@@ -1104,10 +1112,12 @@ function promptForFlow(session: SlackAgentSession, followupText?: string) {
           "",
           `Role-play persona: ${personaLabel}.`,
           `Role-play tension/pushback to weave in naturally: ${practicePushback}.`,
+          "Use the Recent role-play transcript as memory for what has already happened. If the user refers to what they said earlier, look there first.",
           isPracticeCoachingRequest(followupText)
             ? "The user is asking for coaching. Pause role-play, give brief feedback on their last line, then invite them to continue."
             : `Stay in character as ${personaLabel}. Respond directly to the user's latest line as that person would in the conversation.`,
           "Return only one concise turn. Do not restart the scenario, do not repeat setup, and do not ask 'go ahead, what do you say?' again.",
+          "Do not ask what the user said, whether role-play has started, or whether they are about to give their opening line. The thread already contains the practice history.",
           "Do not return prep sections like Goal, Say this first, If they push back, Watch for, or Practice next.",
         ].join("\n");
       }
@@ -1152,7 +1162,18 @@ function promptForFlow(session: SlackAgentSession, followupText?: string) {
 }
 
 async function completeSession(input: GuidedFlowInput, session: SlackAgentSession, followupText?: string) {
-  const prompt = promptForFlow(session, followupText);
+  const recentPracticeTranscript =
+    session.flow_type === "practice" && session.coaching_thread_id
+      ? formatSlackCoachingMessages(
+          await loadSlackCoachingMessages({
+            threadId: session.coaching_thread_id,
+            userId: input.user.id,
+            limit: 10,
+          }).catch(() => []),
+          2400
+        )
+      : "";
+  const prompt = promptForFlow(session, followupText, recentPracticeTranscript);
   const contextChannelId = input.activeChannelId || session.answers.source_channel_id || null;
   const contextChannelName = session.answers.source_channel_name || null;
   const activeContext =
@@ -1644,14 +1665,29 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
   }
 
   if (session && session.flow_type === "practice" && practiceHasStarted(session.answers)) {
-    const response = await safeCompleteSession(input, session, text);
-    await persistGuidedTurn({ input, session, userText: text, beckettText: response });
+    const activeSession = isPracticeStyleDetail(text)
+      ? await updateSession(session.id, {
+          answers: {
+            ...session.answers,
+            practice_pushback: [
+              session.answers.practice_pushback || session.answers.concern,
+              text,
+            ].filter(Boolean).join(" "),
+            extra_context: [
+              ...(session.answers.extra_context || []),
+              `Practice style/detail from user: ${text}`,
+            ],
+          },
+        })
+      : session;
+    const response = await safeCompleteSession(input, activeSession, text);
+    await persistGuidedTurn({ input, session: activeSession, userText: text, beckettText: response });
     return {
       handled: true,
       title: "Practice",
       response,
-      actions: guidedActions(session),
-      coachingThreadId: session.coaching_thread_id,
+      actions: guidedActions(activeSession),
+      coachingThreadId: activeSession.coaching_thread_id,
     };
   }
 
