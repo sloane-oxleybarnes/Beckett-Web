@@ -155,13 +155,10 @@ async function scheduleGuestInactivityStartCard({
   botAccessToken: string;
   channelId: string;
 }) {
-  const { SLACK_INACTIVITY_START_CARD_DELAY_MS, buildSlackStartCardPayload } = await import("@/lib/slack-history");
-  const { slackApiPost } = await import("@/lib/slack-app");
-  await new Promise((resolve) => setTimeout(resolve, SLACK_INACTIVITY_START_CARD_DELAY_MS));
-  const payload = buildSlackStartCardPayload("inactivity");
-  await slackApiPost(botAccessToken, "chat.postMessage", {
-    channel: channelId,
-    ...payload,
+  const { scheduleSlackInactivityStartCard } = await import("@/lib/slack-history");
+  await scheduleSlackInactivityStartCard({
+    botAccessToken,
+    channelId,
   });
 }
 

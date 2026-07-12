@@ -639,14 +639,8 @@ export function buildSlackStartCardPayload(variant: "archived" | "inactivity" = 
   });
 }
 
-function wait(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export async function scheduleSlackInactivityStartCard({
   botAccessToken,
-  threadId,
-  userId,
   channelId,
 }: {
   botAccessToken?: string | null;
@@ -654,42 +648,32 @@ export async function scheduleSlackInactivityStartCard({
   userId?: string | null;
   channelId?: string | null;
 }) {
-  if (!botAccessToken || !threadId || !userId || !channelId) return;
+  if (!botAccessToken || !channelId) return;
 
-  const scheduledThread = await loadSlackCoachingThread({ threadId, userId }).catch(() => null);
-  const scheduledUpdatedAt = scheduledThread?.updated_at;
-  if (!scheduledThread || scheduledThread.archived_at || !scheduledUpdatedAt) return;
-
-  await wait(SLACK_INACTIVITY_START_CARD_DELAY_MS);
-
-  const latestThread = await loadSlackCoachingThread({ threadId, userId }).catch(() => null);
-  if (!latestThread || latestThread.archived_at || latestThread.status === "archived") return;
-  if (latestThread.updated_at !== scheduledUpdatedAt) return;
-
-  const { count, error } = await supabaseAdmin
-    .from("slack_coaching_bot_messages")
-    .select("id", { count: "exact", head: true })
-    .eq("coaching_thread_id", threadId)
-    .eq("user_id", userId)
-    .eq("kind", "inactivity_start_card")
-    .gte("created_at", scheduledUpdatedAt);
-
-  if (error) throw error;
-  if ((count || 0) > 0) return;
-
-  const posted = await slackApiPost<{ ts?: string }>(botAccessToken, "chat.postMessage", {
+  const payload = buildSlackStartCardPayload("inactivity");
+  const marker = "Want to start something new?";
+  const pending = await slackApiPost<{
+    scheduled_messages?: Array<{ id?: string; text?: string }>;
+  }>(botAccessToken, "chat.scheduledMessages.list", {
     channel: channelId,
-    ...buildSlackStartCardPayload("inactivity"),
-  });
-  if (posted.ok && posted.ts) {
-    await recordSlackCoachingBotMessage({
-      threadId,
-      userId,
-      channelId,
-      messageTs: posted.ts,
-      kind: "inactivity_start_card",
-    });
+    limit: 100,
+  }).catch(() => null);
+
+  for (const scheduled of pending?.scheduled_messages || []) {
+    if (!scheduled.id || !String(scheduled.text || "").includes(marker)) continue;
+    await slackApiPost(botAccessToken, "chat.deleteScheduledMessage", {
+      channel: channelId,
+      scheduled_message_id: scheduled.id,
+    }).catch(() => null);
   }
+
+  const postAt = Math.ceil((Date.now() + SLACK_INACTIVITY_START_CARD_DELAY_MS) / 1000);
+  const scheduled = await slackApiPost(botAccessToken, "chat.scheduleMessage", {
+    channel: channelId,
+    post_at: postAt,
+    ...payload,
+  });
+  if (!scheduled.ok) throw new Error(scheduled.error || "slack_schedule_message_failed");
 }
 
 export async function publishSlackConnectHome({

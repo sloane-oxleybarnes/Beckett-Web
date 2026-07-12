@@ -1924,8 +1924,10 @@ Fold what is uncertain or not knowable into the Possible read section in one con
 If there is not enough text to analyze, ask the user to paste or paraphrase the message.
 For reply drafting, include 2-3 Slack-ready bullet options when useful: - Direct but kind, - Warm and collaborative, and - Concise.
 For prep or practice, give a useful lightweight coaching response from the user request without asking them to connect a Beckett profile.
-For prep, use concise sections: Goal, Say this first, If they push back, Watch for, Practice next.
-For practice, start the role-play with a short setup and one realistic first line from the other person.
+For prep, enforce this guided order inside the exact Slack thread: person and situation, desired outcome, concern or likely pushback, then concise final prep. Ask only the earliest unanswered question. If the user directly requests intros, drafts, or another concrete deliverable, answer that request immediately using the thread context.
+For final prep, use only concise sections that help: Goal, Say this first, If they push back, Practice next. Do not recap the whole conversation, give a long menu, or repeat information the user already supplied.
+For practice, start with a short setup and one realistic first line only when the Slack thread does not show that role-play has already started.
+When the Slack thread shows an active role-play, continue in character with one concise turn. Do not restart setup, summarize prior prep, or ask what the user wants to focus on unless they explicitly request coaching.
 Format with short plain-language section labels and bullets. Do not use markdown tables, markdown bold markers, or literal asterisks; Beckett formats headings separately.
 ${slackAgentToolInstruction(agentTool)}
 ${beckettBoundaryPrompt()}`;
@@ -1940,11 +1942,10 @@ ${beckettBoundaryPrompt()}`;
     cleanMessageText,
   ].join("\n");
 
-  const longerGuestIntent = intent === "prep" || intent === "practice";
-  const text = await callAnthropic(system, [{ role: "user", content: userPrompt }], longerGuestIntent ? 650 : 420);
+  const text = await callAnthropic(system, [{ role: "user", content: userPrompt }], 420);
   return fitSlackAnswer(
     text.trim() || "I could not generate a response for that Slack request.",
-    longerGuestIntent ? MAX_LONGER_SLACK_ANSWER_LENGTH : MAX_QUICK_SLACK_ANSWER_LENGTH
+    intent === "practice" ? 800 : intent === "prep" ? 1200 : MAX_QUICK_SLACK_ANSWER_LENGTH
   );
 }
 

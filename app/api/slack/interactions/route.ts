@@ -49,7 +49,6 @@ import {
   recordSlackCoachingBotMessage,
   scheduleSlackInactivityStartCard,
   slackHistoryTitle,
-  SLACK_INACTIVITY_START_CARD_DELAY_MS,
   SLACK_HISTORY_EXPLAIN_MORE_ACTION_ID,
   SLACK_HISTORY_ARCHIVE_ACTION_ID,
   SLACK_HISTORY_CONTINUE_ACTION_ID,
@@ -1062,11 +1061,9 @@ async function scheduleGuestInactivityStartCard({
   botAccessToken: string;
   channelId: string;
 }) {
-  await new Promise((resolve) => setTimeout(resolve, SLACK_INACTIVITY_START_CARD_DELAY_MS));
-  const payload = buildSlackStartCardPayload("inactivity");
-  await slackApiPost(botAccessToken, "chat.postMessage", {
-    channel: channelId,
-    ...payload,
+  await scheduleSlackInactivityStartCard({
+    botAccessToken,
+    channelId,
   });
 }
 
@@ -1122,22 +1119,29 @@ async function handleHistoryButtonResponse({
           return;
         }
 
-        const prompt = quickPrompt(flowType);
-        const response = await runSlackGuestCoaching({
-          teamId,
-          slackUserId,
-          action: "agent_message",
-          prompt,
-          // Quick actions are explicit new-conversation entry points. Do not
-          // seed them from recent Beckett DM/channel history.
-          messageText: prompt,
-          intent: flowType,
-        });
+        const response = flowType === "prep"
+          ? [
+              "Let’s prep this conversation together.",
+              "",
+              "First, who are you talking to, and what is the conversation about?",
+              "You can describe their role or tag them with @.",
+            ].join("\n")
+          : flowType === "practice"
+            ? [
+                "Let’s set up the practice.",
+                "",
+                "Who should I role-play, and what conversation are you practicing?",
+              ].join("\n")
+            : [
+                "Let’s rewrite your message.",
+                "",
+                "Who is it going to, where will you send it, and what draft do you have so far?",
+              ].join("\n");
         const payloadToPost = buildBeckettPayload({
           title: "Beckett",
           subtitle: "",
           body: response,
-          footer: "Guest mode is on for hackathon judging. Connect Slack in Beckett Settings for profile, contact context, broader Slack history, and saved conversations.",
+          footer: "Guest mode • Connect Beckett for personalized context.",
           hideTitle: true,
         });
         const openerText = flowType === "practice"

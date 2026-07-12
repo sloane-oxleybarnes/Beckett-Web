@@ -205,6 +205,32 @@ function continuationIntentForText(text: string, currentIntent: SlackCoachingInt
   return currentIntent;
 }
 
+function guestIntentFromExactThread(context: string, fallback: SlackCoachingIntent): SlackCoachingIntent {
+  if (/\b(let'?s practice|practice the whole conversation|role-?play|you be my|what do you say first|i['’]ll be (?:your|the))\b/i.test(context)) {
+    return "practice";
+  }
+  if (/\b(let'?s prep|prepare for (?:a|this) conversation|prep this conversation)\b/i.test(context)) {
+    return "prep";
+  }
+  return fallback;
+}
+
+function guestPracticePrompt(text: string, context: string) {
+  const practiceStarted = /\b(go ahead.{0,40}what do you say|what do you say first|role-?play (?:has )?started|i['’]ll be (?:your|the)|you be my manager)\b/i.test(context);
+  if (!practiceStarted) return text;
+  if (/\b(how did that sound|was that okay|coach me|feedback|what should i change|try again)\b/i.test(text)) {
+    return `The role-play is already in progress. Pause in-character role-play, coach the user's latest line, then invite them to continue. Latest user line: ${text}`;
+  }
+  return `The role-play is already in progress. Continue in character as the other person from the exact Slack thread. Respond directly to the user's latest in-character line with one concise realistic turn. Do not restart setup and do not ask what they want to focus on. Latest user line: ${text}`;
+}
+
+function guestPrepPrompt(text: string) {
+  if (/\b(intro|intros|opening|openers|first line|how (?:do|should) i start|what should i say first)\b/i.test(text)) {
+    return `The user is in an active guided Prep thread and directly asked for opening lines. Give exactly 3 concise Slack-ready openings: Direct, Collaborative, and Concise. Use the person, goal, and concern already present in the exact thread. Do not recap the setup, ask them to choose a focus, or add more than one short closing question. Latest request: ${text}`;
+  }
+  return `Continue the active guided Prep flow using only this exact Slack thread. Follow this order: (1) person and situation, (2) desired outcome, (3) concern or likely pushback, (4) concise final prep. Identify which fields the user has already answered in the thread and ask only the earliest missing question. If all three are present, give a short prep with Goal, Say this first, If they push back, and Practice next. Do not recap prior answers, offer a long menu, add generic reassurance, or invent a different flow. Latest user answer: ${text}`;
+}
+
 function slackHistoryFailureMessage(reason: string | null | undefined) {
   switch (reason) {
     case "missing_token":
@@ -538,7 +564,6 @@ async function respondToAgentMessage({
     });
 
     if (botAccessToken) {
-      const intent = assistantIntent;
       try {
         const linkedSlackContext = extractSlackPermalinkContext(text);
         const guestContext = await buildGuestSlackContextPacket({
@@ -553,20 +578,25 @@ async function respondToAgentMessage({
           currentSlackUserId: slackUserId,
         });
         const messageText = isAssistantStarterPrompt(text) ? guestContext.text : guestContext.text || text;
+        const intent = guestIntentFromExactThread(messageText, assistantIntent);
+        const guestPrompt = intent === "practice"
+          ? guestPracticePrompt(text, messageText)
+          : intent === "prep"
+            ? guestPrepPrompt(text)
+            : text;
         const response = await runSlackGuestCoaching({
           teamId,
           slackUserId,
           action: "agent_message",
-          prompt: text,
+          prompt: guestPrompt,
           messageText,
           intent,
         });
         const payload = buildBeckettPayload({
           title: "Beckett",
           subtitle: "",
-          prompt: isAssistantStarterPrompt(text) ? undefined : text,
           body: response,
-          footer: "Guest mode is on for hackathon judging. Connect Slack in Beckett Settings for profile, contact context, broader Slack history, and saved conversations.",
+          footer: "Guest mode • Connect Beckett for personalized context.",
           hideTitle: true,
         });
 
