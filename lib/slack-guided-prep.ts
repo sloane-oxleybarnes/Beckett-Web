@@ -873,6 +873,20 @@ async function findActiveSession({
   return (data as SlackAgentSession | null) || null;
 }
 
+export async function hasActiveGuidedSlackSession({
+  teamId,
+  slackUserId,
+  channelId,
+  threadTs,
+}: {
+  teamId: string;
+  slackUserId: string;
+  channelId: string;
+  threadTs?: string | null;
+}) {
+  return Boolean(await findActiveSession({ teamId, slackUserId, channelId, threadTs }));
+}
+
 async function createSession({
   user,
   teamId,

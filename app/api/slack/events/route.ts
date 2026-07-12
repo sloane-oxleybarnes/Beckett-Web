@@ -19,7 +19,7 @@ import {
   type SlackCoachingIntent,
   verifySlackRequest,
 } from "@/lib/slack-app";
-import { handleGuidedSlackPrep } from "@/lib/slack-guided-prep";
+import { handleGuidedSlackPrep, hasActiveGuidedSlackSession } from "@/lib/slack-guided-prep";
 import {
   appendSlackCoachingMessage,
   buildSlackExplainMoreAction,
@@ -454,6 +454,56 @@ async function continueExistingSlackCoachingThread({
   return { thread, response };
 }
 
+async function postSlackCoachingContinuation({
+  user,
+  channelId,
+  threadTs,
+  continuation,
+}: {
+  user: NonNullable<Awaited<ReturnType<typeof lookupSlackConnectedUser>>>;
+  channelId: string;
+  threadTs: string;
+  continuation: NonNullable<Awaited<ReturnType<typeof continueExistingSlackCoachingThread>>>;
+}) {
+  const botAccessToken = user.botAccessToken;
+  if (!botAccessToken) return;
+  const payload = buildBeckettPayload({
+    title: "Beckett",
+    subtitle: "",
+    body: continuation.response,
+    hideTitle: true,
+  });
+
+  const posted = await slackApiPost<{ ts?: string }>(botAccessToken, "chat.postMessage", {
+    channel: channelId,
+    thread_ts: threadTs,
+    ...payload,
+  });
+  if (posted.ok && posted.ts) {
+    await recordSlackCoachingBotMessage({
+      threadId: continuation.thread.id,
+      userId: user.id,
+      channelId,
+      messageTs: posted.ts,
+      kind: "reply",
+    }).catch(() => null);
+    scheduleSlackBackgroundTask(
+      "Slack inactivity start card failed",
+      scheduleSlackInactivityStartCard({
+        botAccessToken,
+        threadId: continuation.thread.id,
+        userId: user.id,
+        channelId,
+      })
+    );
+  }
+  await slackApiPost(botAccessToken, "assistant.threads.setStatus", {
+    channel_id: channelId,
+    thread_ts: threadTs,
+    status: "",
+  }).catch(() => null);
+}
+
 async function respondToAgentMessage({
   teamId,
   slackUserId,
@@ -602,6 +652,36 @@ async function respondToAgentMessage({
       return;
     }
 
+    // A reply inside a saved shortcut/coaching thread should continue that
+    // conversation before broad trigger words are allowed to start a new flow.
+    // Active guided sessions retain priority so their step-by-step state works.
+    const hasActiveGuidedSession = await hasActiveGuidedSlackSession({
+      teamId,
+      slackUserId,
+      channelId,
+      threadTs,
+    });
+    if (!hasActiveGuidedSession) {
+      const savedContinuation = await continueExistingSlackCoachingThread({
+        user,
+        teamId,
+        slackUserId,
+        channelId,
+        threadTs,
+        text,
+        intent: assistantIntent,
+      });
+      if (savedContinuation) {
+        await postSlackCoachingContinuation({
+          user,
+          channelId,
+          threadTs,
+          continuation: savedContinuation,
+        });
+        return;
+      }
+    }
+
     const guidedPrep = await handleGuidedSlackPrep({
       user,
       teamId,
@@ -667,41 +747,12 @@ async function respondToAgentMessage({
       intent: assistantIntent,
     });
     if (continuedThread) {
-      const payload = buildBeckettPayload({
-        title: "Beckett",
-        subtitle: "",
-        body: continuedThread.response,
-        hideTitle: true,
+      await postSlackCoachingContinuation({
+        user,
+        channelId,
+        threadTs,
+        continuation: continuedThread,
       });
-
-      const postedContinuation = await slackApiPost<{ ts?: string }>(user.botAccessToken, "chat.postMessage", {
-        channel: channelId,
-        thread_ts: threadTs,
-        ...payload,
-      });
-      if (postedContinuation.ok && postedContinuation.ts) {
-        await recordSlackCoachingBotMessage({
-          threadId: continuedThread.thread.id,
-          userId: user.id,
-          channelId,
-          messageTs: postedContinuation.ts,
-          kind: "reply",
-        }).catch(() => null);
-        scheduleSlackBackgroundTask(
-          "Slack inactivity start card failed",
-          scheduleSlackInactivityStartCard({
-            botAccessToken: user.botAccessToken,
-            threadId: continuedThread.thread.id,
-            userId: user.id,
-            channelId,
-          })
-        );
-      }
-      await slackApiPost(user.botAccessToken, "assistant.threads.setStatus", {
-        channel_id: channelId,
-        thread_ts: threadTs,
-        status: "",
-      }).catch(() => null);
       return;
     }
 
