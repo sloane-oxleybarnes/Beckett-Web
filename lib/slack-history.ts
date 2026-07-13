@@ -829,7 +829,24 @@ export async function scheduleSlackInactivityStartCard({
   if (!botAccessToken || !channelId) return;
 
   const payload = buildSlackStartCardPayload("inactivity");
-  const knownScheduledId = beckettSlackScheduledMessages.get(channelId);
+  const generation = crypto.randomUUID();
+  const { data: previousSchedule, error: previousScheduleError } = await supabaseAdmin
+    .from("slack_inactivity_schedules")
+    .select("scheduled_message_id")
+    .eq("channel_id", channelId)
+    .maybeSingle();
+  const { error: reservationError } = await supabaseAdmin
+    .from("slack_inactivity_schedules")
+    .upsert({
+      channel_id: channelId,
+      generation,
+      scheduled_message_id: null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "channel_id" });
+  const durableReservation = !previousScheduleError && !reservationError;
+  const knownScheduledId = durableReservation
+    ? previousSchedule?.scheduled_message_id
+    : beckettSlackScheduledMessages.get(channelId);
   if (knownScheduledId) {
     const removedKnown = await slackApiPost(botAccessToken, "chat.deleteScheduledMessage", {
       channel: channelId,
@@ -850,7 +867,7 @@ export async function scheduleSlackInactivityStartCard({
     limit: 100,
   }).catch(() => null);
 
-  for (const scheduled of pending?.scheduled_messages || []) {
+  for (const scheduled of durableReservation ? [] : pending?.scheduled_messages || []) {
     // This bot only schedules inactivity cards. Slack does not reliably return
     // block-kit fallback text from scheduledMessages.list, so filtering on the
     // visible marker left older timers alive and caused duplicate menus.
@@ -880,7 +897,30 @@ export async function scheduleSlackInactivityStartCard({
   });
   if (!scheduled.ok) throw new Error(scheduled.error || "slack_schedule_message_failed");
   if (scheduled.scheduled_message_id) {
-    beckettSlackScheduledMessages.set(channelId, scheduled.scheduled_message_id);
+    if (durableReservation) {
+      await supabaseAdmin
+        .from("slack_inactivity_schedules")
+        .update({
+          scheduled_message_id: scheduled.scheduled_message_id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("channel_id", channelId)
+        .eq("generation", generation);
+      const { data: currentReservation } = await supabaseAdmin
+        .from("slack_inactivity_schedules")
+        .select("generation")
+        .eq("channel_id", channelId)
+        .maybeSingle();
+      if (currentReservation?.generation !== generation) {
+        await slackApiPost(botAccessToken, "chat.deleteScheduledMessage", {
+          channel: channelId,
+          scheduled_message_id: scheduled.scheduled_message_id,
+        }).catch(() => null);
+        return;
+      }
+    } else {
+      beckettSlackScheduledMessages.set(channelId, scheduled.scheduled_message_id);
+    }
   }
 
   // Several Slack event paths can finish at nearly the same time. Re-list after
@@ -891,7 +931,7 @@ export async function scheduleSlackInactivityStartCard({
     channel: channelId,
     limit: 100,
   }).catch(() => null);
-  const markerSchedules = (after?.scheduled_messages || [])
+  const markerSchedules = (durableReservation ? [] : after?.scheduled_messages || [])
     .filter((item) => item.id)
     .sort((a, b) => {
       const timeDifference = Number(b.post_at || 0) - Number(a.post_at || 0);
