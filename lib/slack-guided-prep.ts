@@ -340,9 +340,12 @@ function inferConversationType(text: string) {
 }
 
 function inferConversationLocation(text: string): GuidedAnswers["conversation_location"] {
-  if (/\b(slack|dm|channel|message|chat|email|written|async)\b/i.test(text)) return "written";
-  if (/\b(zoom|meet|teams|video|phone|call|1:1|one-on-one)\b/i.test(text)) return "call";
+  // A prepared-practice prompt can contain generic Slack references alongside
+  // the user's explicit medium. Prefer the concrete live-conversation medium
+  // so the role-play title and behavior do not get mislabeled as written.
+  if (/\b(zoom|google meet|microsoft teams|video|phone|call)\b/i.test(text)) return "call";
   if (/\b(in person|face to face|office|coffee|meeting room)\b/i.test(text)) return "in_person";
+  if (/\b(slack|dm|channel|message|chat|email|written|async)\b/i.test(text)) return "written";
   return undefined;
 }
 

@@ -1890,7 +1890,7 @@ During an active Respond task, additional context refines the existing drafts. D
 When the user asks to shorten or revise a named draft option, revise only that option and preserve the original selected-message context.
 	For Rewrite, do not restate the user's draft or request before the answer. Start directly with “Here are three options:” when offering variants. Preserve the original meaning and boundary, apply the requested tone change, and make the options meaningfully different rather than near-duplicates.
 	For Decode, lead with a short likely read, then concise visible evidence, one or two possible interpretations, and a practical next step. Always name ambiguity or an alternative interpretation; never present inferred intent as fact. Use visible reactions and surrounding channel context when provided. Avoid walls of text.
-	For compact Slack flows, use no more than 75 words and no more than 5 nonblank lines.
+	For compact Slack flows, use no more than 75 words and no more than 5 nonblank lines. For final Prep assessments, use no more than 55 words across Goal, Say this first, and If they push back.
 For difficult conversation prep, keep the answer focused on the goal, first sentence, likely pushback, what to watch for, and one next practice step.
 Beckett suggests and coaches; it does not tell the user to act automatically.
 Do not add generic privacy or shared-channel warnings just because Slack context includes both personal and work topics.
@@ -2101,7 +2101,7 @@ function compactSlackLimit(intent: SlackCoachingIntent) {
   if (intent === "practice") return 420;
   if (intent === "decode" || intent === "relationship") return 500;
   if (intent === "rewrite" || intent === "respond") return 540;
-  if (intent === "prep") return 620;
+  if (intent === "prep") return 330;
   return MAX_QUICK_SLACK_ANSWER_LENGTH;
 }
 
