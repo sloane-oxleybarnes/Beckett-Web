@@ -258,6 +258,17 @@ function getGuestPrepPracticeAction(payload: SlackInteractionPayload) {
   }
 }
 
+function guestPracticePersona(personAndSituation: string) {
+  const text = personAndSituation.toLowerCase();
+  if (/\b(manager|boss|supervisor)\b/.test(text)) return "your manager";
+  if (/\b(client|customer)\b/.test(text)) return "your client";
+  if (/\b(direct report|employee)\b/.test(text)) return "your direct report";
+  if (/\b(teammate|coworker|colleague)\b/.test(text)) return "your teammate";
+  const mention = personAndSituation.match(/<@([A-Z0-9]+)(?:\|([^>]+))?>/);
+  if (mention?.[2]) return mention[2];
+  return "the other person";
+}
+
 async function handleGuestPrepPracticeAction({
   payload,
   prepThreadTs,
@@ -279,12 +290,13 @@ async function handleGuestPrepPracticeAction({
     : prep.location === "call"
       ? "We’ll practice it like a live call."
       : "We’ll practice it like an in-person conversation.";
+  const persona = guestPracticePersona(prep.person);
   const opened = await postSlackAgentMessage({
     botAccessToken,
     slackUserId,
     title: "Practice conversation",
     text: [
-      `I’ll play ${prep.person}. ${mediumInstruction}`,
+      `I’ll play ${persona}. ${mediumInstruction}`,
       "Reply as yourself. I’ll stay in character until you say `pause`, `stop practice`, or ask for feedback.",
     ].join("\n\n"),
   });
@@ -296,7 +308,7 @@ async function handleGuestPrepPracticeAction({
     state: {
       threadTs: opened.ts,
       prepThreadTs,
-      person: prep.person,
+      person: persona,
       location: prep.location,
       outcome: prep.outcome,
       concern: prep.concern,
@@ -309,17 +321,18 @@ async function handleGuestPrepPracticeAction({
     action: "agent_message",
     intent: "practice",
     messageText: [
-      `Practice role-play with ${prep.person}.`,
+      `Practice role-play with ${persona}.`,
       `Conversation medium: ${mediumInstruction}`,
       `Desired outcome: ${prep.outcome}`,
       `Concern or likely pushback: ${prep.concern}`,
     ].join("\n"),
     prompt: [
-      `Begin a role-play as ${prep.person}.`,
+      `Begin a role-play as ${persona}.`,
       `Conversation location: ${mediumInstruction}`,
       `The user's desired outcome: ${prep.outcome}`,
       `Likely concern or pushback: ${prep.concern}`,
-      "Give only one short, natural opening line in character. Do not coach, explain, summarize, or ask if the user is ready.",
+      "Give only one short, neutral opening line that hands the conversation to the user, such as asking what they want to discuss.",
+      "Do not invent prior small talk, ask how their week is going, coach, explain, summarize, or ask if the user is ready.",
     ].join("\n"),
   });
   await slackApiPost(botAccessToken, "chat.postMessage", {
