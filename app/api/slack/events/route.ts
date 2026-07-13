@@ -118,6 +118,10 @@ function isSlackRetrievalRequest(text: string) {
   return /\b(what did we (?:decide|agree)|what was decided|did we (?:delay|move|change)|when (?:is|was|did).*launch|find (?:the|our).*decision|what happened with)\b/i.test(text);
 }
 
+function isSlackIdentityRequest(text: string) {
+  return /^(?:who am i(?: in slack)?|what(?:'s| is) my (?:name|slack identity)|do you know who i am)\??$/i.test(text.trim());
+}
+
 function guestSessionIntent(flowType: SlackGuestFlowType): SlackCoachingIntent {
   return flowType === "retrieval" ? "general" : flowType;
 }
@@ -952,6 +956,22 @@ async function respondToAgentMessage({
       thread_ts: threadTs,
       text: "Beckett Slack coaching is available for beta and pro users.",
     });
+    return;
+  }
+
+  if (isSlackIdentityRequest(text)) {
+    const identity = user.name
+      ? `You’re ${user.name}. Slack authenticated this request to your connected Beckett account.`
+      : "Slack authenticated you to your connected Beckett account, but your Beckett profile does not have a preferred name yet.";
+    await slackApiPost(user.botAccessToken, "chat.postMessage", {
+      channel: channelId,
+      thread_ts: threadTs,
+      ...buildBeckettPayload({ title: "Beckett", subtitle: "", body: identity, hideTitle: true }),
+    });
+    scheduleSlackBackgroundTask(
+      "Slack identity inactivity start card failed",
+      scheduleSlackInactivityStartCard({ botAccessToken: user.botAccessToken, channelId })
+    );
     return;
   }
 

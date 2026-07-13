@@ -34,7 +34,7 @@ This is the Slack-only hackathon path for using Beckett inside Slack Desktop. It
 7. In Slack app settings, enable **Agents** and App Home's **Home tab**. Use the Agent messaging experience when prompted.
 8. Install or reinstall the Slack app into the test workspace.
 9. Sign into Beckett staging and connect Slack from Settings so the Slack user ID maps to a Beckett user.
-10. After changing scopes, reinstall/reconnect Slack from Beckett Settings so the bot receives `assistant:write`, `im:write`, and `im:history`, and the user receives `groups:history`, `mpim:history`, and the `search:read.*` scopes.
+10. After changing scopes, reinstall/reconnect Slack from Beckett Settings so the bot receives `assistant:write`, `im:write`, and `im:history`, and the user receives `groups:history`, `mpim:history`, the RTS `search:read.*` scopes, and legacy `search:read` for the sandbox fallback.
 11. Run the latest Supabase migration so Slack Home can store privacy-safe coaching history metadata.
 
 ## Slack-Only Hackathon Test Plan

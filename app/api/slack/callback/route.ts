@@ -10,6 +10,7 @@ const REQUIRED_SLACK_USER_SCOPES = [
   "im:history",
   "mpim:history",
   "users:read",
+  "search:read",
   "search:read.public",
   "search:read.private",
   "search:read.im",

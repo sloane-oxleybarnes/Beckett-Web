@@ -557,6 +557,11 @@ function assistantThreadTitle(flowType: GuidedFlowType, sourceLabel: string) {
   return `${flowTitle(flowType)}: ${sourceLabel}`.slice(0, 80);
 }
 
+function preparedPracticeSourceLabel(answers: GuidedAnswers) {
+  const person = normalizePersonForUserDisplay(answers.person) || "the other person";
+  return `${person} · ${conversationLocationLabel(answers.conversation_location)}`;
+}
+
 function hasPastedMessage(text?: string) {
   const cleaned = normalizeText(text || "");
   if (!cleaned) return false;
@@ -1200,7 +1205,7 @@ function promptForFlow(session: SlackAgentSession, followupText?: string, recent
         "If the user supplies more context in this Respond thread, use it to refine the requested drafts. Do not ask what kind of Beckett help they want or offer Decode/Respond/Rewrite choices.",
         "Prefer sections when they fit: Possible read, Next move, Draft options.",
         "Fold what is uncertain or not knowable into Possible read in one concise sentence.",
-        "Draft options must be bullet points labeled Direct but kind, Warm and collaborative, and Concise.",
+        "Draft options must be bullet points labeled Direct but kind, Warm and collaborative, and Concise. Keep all options together under 60 words.",
         escalationInstruction,
       ].join("\n");
     case "rewrite":
@@ -1210,7 +1215,7 @@ function promptForFlow(session: SlackAgentSession, followupText?: string, recent
         "",
         "The audience is optional. Never ask who the message is for or where it will be sent; rewrite from the draft immediately.",
         "When offering variants, begin directly with 'Here are three options:' and do not recap the user's request.",
-        "Keep all three options together under 90 words.",
+        "Keep all three options together under 55 words, with one line per option.",
         "Preserve the original meaning and boundary, apply the requested tone change, and make each option meaningfully different.",
         "Keep the rewritten message Slack-ready, calm when requested, and easy to copy without making it needlessly apologetic.",
       ].join("\n");
@@ -1231,7 +1236,7 @@ function promptForFlow(session: SlackAgentSession, followupText?: string, recent
         base,
         "",
         "Lead with a short likely read, followed by concise visible evidence, one or two possible interpretations, and a practical next step.",
-        "Keep the complete response under 100 words.",
+        "Keep the complete response under 65 words.",
         "Use visible reactions and surrounding channel context when they are provided.",
         "Fold what is visible and what is uncertain into Possible read without adding a standalone uncertainty section.",
         "End by asking whether the user wants help drafting a response.",
@@ -1284,7 +1289,7 @@ function promptForFlow(session: SlackAgentSession, followupText?: string, recent
         "",
         "Use exactly these three short sections: ~ Goal ~, ~ Say this first ~, ~ If they push back ~.",
         "Keep each section to 1-2 short bullets or sentences. Do not add more sections, a recap, or another setup question.",
-        "Keep the complete response under 100 words, including the final practice question.",
+        "Keep the complete response under 75 words, including the final practice question.",
         "Make it feel like a calm coach helping the user know what to do next, not a full strategy memo.",
         "If no extra examples were provided, still prep from the user's stated scenario. Do not say you need the actual pattern before helping.",
         "Do not claim you cannot access DMs, private channels, or Slack history unless the prompt gives a specific Slack failure reason.",
@@ -1531,7 +1536,9 @@ export async function startGuidedSlackFlow({
         threadTs: sourceThreadTs,
       })
     : null);
-  const sourceLabel = sourceLabelForFlow({
+  const sourceLabel = intent === "practice" && seededPrompt.includes("Prepared conversation context.")
+    ? preparedPracticeSourceLabel(answers)
+    : sourceLabelForFlow({
     channelName: sourceChannelName,
     activeContext: sourceActiveContext,
     userName: user.name,

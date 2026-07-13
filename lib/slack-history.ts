@@ -822,7 +822,6 @@ export async function scheduleSlackInactivityStartCard({
   if (!botAccessToken || !channelId) return;
 
   const payload = buildSlackStartCardPayload("inactivity");
-  const marker = "Want to start something new?";
   const pending = await slackApiPost<{
     scheduled_messages?: Array<{ id?: string; text?: string }>;
   }>(botAccessToken, "chat.scheduledMessages.list", {
@@ -831,7 +830,10 @@ export async function scheduleSlackInactivityStartCard({
   }).catch(() => null);
 
   for (const scheduled of pending?.scheduled_messages || []) {
-    if (!scheduled.id || !String(scheduled.text || "").includes(marker)) continue;
+    // This bot only schedules inactivity cards. Slack does not reliably return
+    // block-kit fallback text from scheduledMessages.list, so filtering on the
+    // visible marker left older timers alive and caused duplicate menus.
+    if (!scheduled.id) continue;
     await slackApiPost(botAccessToken, "chat.deleteScheduledMessage", {
       channel: channelId,
       scheduled_message_id: scheduled.id,
@@ -860,7 +862,7 @@ export async function scheduleSlackInactivityStartCard({
     limit: 100,
   }).catch(() => null);
   const markerSchedules = (after?.scheduled_messages || [])
-    .filter((item) => item.id && String(item.text || "").includes(marker))
+    .filter((item) => item.id)
     .sort((a, b) => {
       const timeDifference = Number(b.post_at || 0) - Number(a.post_at || 0);
       return timeDifference || String(b.id).localeCompare(String(a.id));

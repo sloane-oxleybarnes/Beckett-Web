@@ -20,7 +20,7 @@ const MAX_SLACK_CONTEXT_LENGTH = 7000;
 const MAX_SLACK_BROAD_CONTEXT_LENGTH = 2600;
 const MAX_SLACK_BROAD_CONTEXT_RESULTS = 12;
 const MAX_SLACK_ASKED_PROMPT_LENGTH = 650;
-const MAX_QUICK_SLACK_ANSWER_LENGTH = 1200;
+const MAX_QUICK_SLACK_ANSWER_LENGTH = 650;
 const MAX_LONGER_SLACK_ANSWER_LENGTH = 2000;
 const DEFAULT_SLACK_GUEST_DAILY_LIMIT = 5;
 export const SLACK_SLASH_QUICK_ACTION_ID = "beckett_slash_quick";
@@ -31,6 +31,7 @@ export const REQUIRED_SLACK_USER_SCOPES = [
   "im:history",
   "mpim:history",
   "users:read",
+  "search:read",
   "search:read.public",
   "search:read.private",
   "search:read.im",
@@ -169,8 +170,14 @@ type SlackSearchContextResponse = {
   error?: string;
   results?: unknown[] | { messages?: unknown[]; files?: unknown[]; channels?: unknown[] };
   matches?: unknown[];
-  messages?: { matches?: unknown[] };
+  messages?: unknown[] | { matches?: unknown[] };
   items?: unknown[];
+};
+
+type SlackLegacySearchResponse = {
+  ok?: boolean;
+  error?: string;
+  messages?: { matches?: unknown[] };
 };
 
 type SlackSearchInfoResponse = {
@@ -1000,12 +1007,18 @@ function extractSearchLabel(result: unknown) {
   return channelName ? `#${channelName}` : userName ? userName : source || "Slack result";
 }
 
+function extractSearchPermalink(result: unknown) {
+  if (!result || typeof result !== "object") return "";
+  return pickString(result, ["permalink"]);
+}
+
 function getSearchResults(data: SlackSearchContextResponse | null) {
   if (!data?.ok) return [];
+  if (Array.isArray(data.messages)) return data.messages;
   if (data.results && !Array.isArray(data.results) && Array.isArray(data.results.messages)) return data.results.messages;
   if (Array.isArray(data.results)) return data.results;
   if (Array.isArray(data.matches)) return data.matches;
-  if (Array.isArray(data.messages?.matches)) return data.messages.matches;
+  if (data.messages && !Array.isArray(data.messages) && Array.isArray(data.messages.matches)) return data.messages.matches;
   if (Array.isArray(data.items)) return data.items;
   return [];
 }
@@ -1462,6 +1475,51 @@ async function runSlackBroaderSearch({
   } satisfies SlackConversationContext;
 }
 
+async function runLegacySlackMessageSearch({
+  accessToken,
+  query,
+}: {
+  accessToken: string;
+  query: string;
+}) {
+  const data = await slackApiFetch<SlackLegacySearchResponse>(
+    accessToken,
+    "search.messages",
+    new URLSearchParams({ query, count: String(MAX_SLACK_BROAD_CONTEXT_RESULTS), sort: "score" })
+  ).catch(() => null);
+  const method = "search.messages fallback";
+  if (!data?.ok) {
+    console.warn("Slack message search fallback unavailable", {
+      error: data?.error || "request_failed",
+    });
+    return slackUnavailable(slackContextFailureReasonForError(data?.error), `${method} error:${data?.error || "request_failed"}`);
+  }
+
+  const results = Array.isArray(data.messages?.matches) ? data.messages.matches : [];
+  const formatted = results
+    .map((result) => {
+      const text = compactText(extractSearchText(result), 380);
+      if (!text) return null;
+      const permalink = extractSearchPermalink(result);
+      return `${extractSearchLabel(result)}: ${text}${permalink ? ` (${permalink})` : ""}`;
+    })
+    .filter(Boolean)
+    .slice(0, MAX_SLACK_BROAD_CONTEXT_RESULTS) as string[];
+  if (!formatted.length) return slackUnavailable("no_messages", `${method} no_results`);
+
+  const context = ["Relevant prior Slack history from live search:", ...formatted].join("\n");
+  return {
+    text: context.length <= MAX_SLACK_BROAD_CONTEXT_LENGTH
+      ? context
+      : `${context.slice(0, MAX_SLACK_BROAD_CONTEXT_LENGTH - 40).trim()}\n[Broader context trimmed]`,
+    status: "available",
+    failureReason: null,
+    messageCount: formatted.length,
+    broaderSearchUsed: true,
+    retrievalMethod: method,
+  } satisfies SlackConversationContext;
+}
+
 async function fetchSlackRealTimeSearchInfo(accessToken: string | null) {
   if (!accessToken) {
     return {
@@ -1511,10 +1569,19 @@ export async function fetchSlackBroaderContext({
 
   const rtsInfo = await fetchSlackRealTimeSearchInfo(accessToken);
   if (!rtsInfo.available) {
-    return slackUnavailable(
+    const unavailable = slackUnavailable(
       slackContextFailureReasonForError(rtsInfo.error),
       `assistant.search.info error:${rtsInfo.error || "unavailable"}`
     );
+    if (unavailable.failureReason === "feature_not_enabled") {
+      const fallback = await runLegacySlackMessageSearch({
+        accessToken,
+        query: buildBroaderSearchQuery(prompt, activeContext),
+      });
+      if (fallback.status === "available") return fallback;
+      unavailable.retrievalMethod = [unavailable.retrievalMethod, fallback.retrievalMethod].filter(Boolean).join("; ");
+    }
+    return unavailable;
   }
 
   const normalizedUserIds = uniqueSlackUserIds(relevantSlackUserIds);
@@ -1552,6 +1619,14 @@ export async function fetchSlackBroaderContext({
     strategy: relationshipSearch && orderedUserIds.length ? "generic_fallback" : "generic",
   });
   if (generic.status === "available") return generic;
+  if (generic.failureReason === "feature_not_enabled" || generic.failureReason === "no_messages") {
+    const fallback = await runLegacySlackMessageSearch({
+      accessToken,
+      query: buildBroaderSearchQuery(prompt, activeContext),
+    });
+    if (fallback.status === "available") return fallback;
+    generic.retrievalMethod = [generic.retrievalMethod, fallback.retrievalMethod].filter(Boolean).join("; ");
+  }
   if (attempted.length) {
     return slackUnavailable(
       generic.failureReason || firstFailure?.failureReason || "no_messages",
@@ -1782,8 +1857,9 @@ export async function runSlackCoaching({
     isRelationshipRequest && contextStatus === "available" && !broaderSearchUsed;
 
   const system = `You are Beckett, a workplace and workplace-adjacent communication coach for neurodivergent professionals.
-You are responding inside Slack, so be concise, practical, and easy to scan.
-Slack has already authenticated the requester separately from people they tag. Treat a tagged third party as the other person, never ask whether the requester is that tagged person, and never expose Slack user or team IDs.
+	You are responding inside Slack, so be concise, practical, and easy to scan.
+	The Slack-authenticated requester is ${user.name || "a connected Beckett user"}. If asked who the requester is, use this identity and never claim that you cannot access it.
+	Slack has already authenticated the requester separately from people they tag. Treat a tagged third party as the other person, never ask whether the requester is that tagged person, and never expose Slack user or team IDs.
 Help the user understand tone, subtext, context, next steps, and possible replies across workplace, workplace-adjacent, friendly, and personal Slack conversations.
 Slack flow labels are hints, not rules. Always respond to the user's latest actual request, even if it means switching from decode to drafting, from respond to feedback analysis, from prep to a direct answer, or from a guided flow to one focused clarifying question.
 Every response should be generated from the user's current message plus available context. Do not sound like a fixed template. Use the suggested section shapes only when they genuinely fit.
@@ -1812,8 +1888,9 @@ For reply drafting, include 2-3 Slack-ready bullet options when useful: - Direct
 For low-stakes social messages with clear visible context, draft useful options immediately. Do not ask about relationship, channel vibe, and desired tone when reasonable defaults are already visible.
 During an active Respond task, additional context refines the existing drafts. Do not ask what kind of help the user wants, offer a menu of other Beckett modes, or ask for the selected message again when it is present in context.
 When the user asks to shorten or revise a named draft option, revise only that option and preserve the original selected-message context.
-For Rewrite, do not restate the user's draft or request before the answer. Start directly with “Here are three options:” when offering variants. Preserve the original meaning and boundary, apply the requested tone change, and make the options meaningfully different rather than near-duplicates.
-For Decode, lead with a short likely read, then concise visible evidence, one or two possible interpretations, and a practical next step. Use visible reactions and surrounding channel context when provided. Avoid walls of text.
+	For Rewrite, do not restate the user's draft or request before the answer. Start directly with “Here are three options:” when offering variants. Preserve the original meaning and boundary, apply the requested tone change, and make the options meaningfully different rather than near-duplicates.
+	For Decode, lead with a short likely read, then concise visible evidence, one or two possible interpretations, and a practical next step. Always name ambiguity or an alternative interpretation; never present inferred intent as fact. Use visible reactions and surrounding channel context when provided. Avoid walls of text.
+	For compact Slack flows, use no more than 75 words and no more than 5 nonblank lines.
 For difficult conversation prep, keep the answer focused on the goal, first sentence, likely pushback, what to watch for, and one next practice step.
 Beckett suggests and coaches; it does not tell the user to act automatically.
 Do not add generic privacy or shared-channel warnings just because Slack context includes both personal and work topics.
@@ -1853,7 +1930,8 @@ ${beckettBoundaryPrompt()}`;
   const relationshipLine = relationshipContext
     ? `\n\nConfirmed relationship context:\n${relationshipContext}`
     : "";
-  const userPrompt = `${coachingProfileContext || "The user has not set specific Beckett coaching preferences yet."}
+  const userPrompt = `Requester identity: ${user.name || "connected Slack user"}.
+${coachingProfileContext || "The user has not set specific Beckett coaching preferences yet."}
 ${responseDetailLine}
 ${contextLine}
 ${relationshipLimitationLine}
@@ -1862,7 +1940,7 @@ ${slackIntentInstruction(intent)}
 User request:
 ${prompt}${relationshipLine}${messageLine}`;
 
-  const maxTokens = responseDetail === "longer" ? 700 : responseDetail === "quick" ? 360 : 800;
+  const maxTokens = responseDetail === "longer" ? 700 : responseDetail === "quick" ? 240 : 800;
   const text = await callAnthropic(system, [{ role: "user", content: userPrompt }], maxTokens);
 
   await trackBetaEvent({
@@ -1890,7 +1968,7 @@ ${prompt}${relationshipLine}${messageLine}`;
       ? `${text.trim()}\n\n${SLACK_RELATIONSHIP_LIMITATION_NOTE}`
       : text;
   const cleaned = withRelationshipLimitation.trim() || "I could not generate a response for that Slack request.";
-  if (responseDetail === "quick") return fitSlackAnswer(cleaned, MAX_QUICK_SLACK_ANSWER_LENGTH);
+  if (responseDetail === "quick") return fitSlackAnswer(compactSlackResponseLayout(cleaned), compactSlackLimit(intent));
   if (responseDetail === "longer") return fitSlackAnswer(cleaned, MAX_LONGER_SLACK_ANSWER_LENGTH);
   return truncateSlackText(cleaned);
 }
@@ -2017,4 +2095,40 @@ export function fitSlackAnswer(text: string, maxLength: number) {
   );
   const cutoff = sentenceEnd > hardLimit * 0.55 ? sentenceEnd + 1 : hardLimit;
   return `${cleaned.slice(0, cutoff).trim()}...`;
+}
+
+function compactSlackLimit(intent: SlackCoachingIntent) {
+  if (intent === "practice") return 420;
+  if (intent === "decode" || intent === "relationship") return 500;
+  if (intent === "rewrite" || intent === "respond") return 540;
+  if (intent === "prep") return 620;
+  return MAX_QUICK_SLACK_ANSWER_LENGTH;
+}
+
+function compactSlackResponseLayout(text: string) {
+  const lines = text.split("\n");
+  const compact: string[] = [];
+  const heading = /^(?:~\s*)?(Possible read|Next move|Goal|Say this first|If they push back)(?:\s*~)?\s*:?$/i;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const current = lines[index].trim();
+    if (!current) continue;
+    const match = current.match(heading);
+    if (!match) {
+      compact.push(current);
+      continue;
+    }
+
+    let nextIndex = index + 1;
+    while (nextIndex < lines.length && !lines[nextIndex].trim()) nextIndex += 1;
+    const next = lines[nextIndex]?.trim();
+    if (next && !heading.test(next)) {
+      compact.push(`~ ${match[1]} ~ ${next.replace(/^[-•]\s*/, "")}`);
+      index = nextIndex;
+    } else {
+      compact.push(`~ ${match[1]} ~`);
+    }
+  }
+
+  return compact.join("\n");
 }
