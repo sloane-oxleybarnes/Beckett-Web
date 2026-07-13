@@ -2,6 +2,7 @@ import { supabaseAdmin } from './server-admin'
 
 const DEFAULT_BETA_DAILY_LIMIT = 30
 const DEFAULT_BETA_DAILY_COURSE_LIMIT = 40
+const DEFAULT_UNLIMITED_AI_EMAILS = ['hello@meetbeckett.co']
 export const UNLIMITED_AI_LIMIT = 999999
 
 export class AiUsageLimitError extends Error {
@@ -32,8 +33,12 @@ export function getDailyCourseAiLimit() {
 }
 
 function getUnlimitedAiEmails() {
-  return (process.env.BETA_UNLIMITED_AI_EMAILS || '')
-    .split(',')
+  return Array.from(
+    new Set([
+      ...DEFAULT_UNLIMITED_AI_EMAILS,
+      ...(process.env.BETA_UNLIMITED_AI_EMAILS || '').split(','),
+    ])
+  )
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean)
 }
