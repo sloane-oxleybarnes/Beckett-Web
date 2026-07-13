@@ -1402,8 +1402,8 @@ async function runSlackBroaderSearch({
 }) {
   const body: Record<string, unknown> = {
     query,
-    content_types: "messages",
-    channel_types: "public_channel,private_channel,mpim,im",
+    content_types: ["messages"],
+    channel_types: ["public_channel", "private_channel", "mpim", "im"],
     include_context_messages: true,
     limit: MAX_SLACK_BROAD_CONTEXT_RESULTS,
   };
@@ -1415,6 +1415,12 @@ async function runSlackBroaderSearch({
   );
   const method = `assistant.search.context ${strategy}`;
   if (!data?.ok) {
+    console.warn("Slack RTS search.context unavailable", {
+      strategy,
+      error: data?.error || "request_failed",
+      contextChannelPresent: Boolean(contextChannelId),
+      actionTokenPresent: Boolean(actionToken),
+    });
     return slackUnavailable(
       slackContextFailureReasonForError(data?.error),
       `${method}${data?.error ? ` error:${data.error}` : " request_failed"}`

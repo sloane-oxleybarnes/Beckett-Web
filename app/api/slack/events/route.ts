@@ -1284,6 +1284,27 @@ async function respondToAgentMessage({
       currentSlackUserId: slackUserId,
     });
 
+    if (isSlackRetrievalRequest(text) && !coachingContext.text) {
+      const payload = buildBeckettPayload({
+        title: "Beckett",
+        subtitle: "Communication coach",
+        prompt: text,
+        body: "I searched Slack in real time, but it did not return a usable message about that decision. Try the project name plus one distinctive keyword, or send me a link to the relevant channel or thread.",
+        hideTitle: true,
+      });
+      await slackApiPost(user.botAccessToken, "chat.postMessage", {
+        channel: channelId,
+        thread_ts: threadTs,
+        ...payload,
+      });
+      await slackApiPost(user.botAccessToken, "assistant.threads.setStatus", {
+        channel_id: channelId,
+        thread_ts: threadTs,
+        status: "",
+      }).catch(() => null);
+      return;
+    }
+
     if (
       isThreadReply &&
       assistantIntent !== "prep" &&

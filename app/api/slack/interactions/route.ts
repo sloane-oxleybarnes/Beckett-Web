@@ -1469,6 +1469,12 @@ async function handleHistoryButtonResponse({
         flowType === "prep" ||
         flowType === "practice")
     ) {
+      const practiceMessages = flowType === "practice" && thread
+        ? await loadSlackCoachingMessages({ threadId: thread.id, userId: user.id, limit: 12 }).catch(() => [])
+        : [];
+      const practiceConcern = [...practiceMessages].reverse().find((message) =>
+        message.role === "user" && /\b(worried|concern|afraid|think i(?:'m| am)|lazy|capable|pushback)\b/i.test(message.content)
+      )?.content;
       if (flowType === "decode" || flowType === "respond") {
         const channelId = payload.channel?.id;
         if (channelId) {
@@ -1497,7 +1503,8 @@ async function handleHistoryButtonResponse({
           ? [
               "Prepared conversation context. Start the whole role-play immediately.",
               thread.summary || thread.prompt_snippet || "Use the completed Prep context.",
-              ...(await loadSlackCoachingMessages({ threadId: thread.id, userId: user.id, limit: 10 }).catch(() => []))
+              `Concern and realistic pushback: ${practiceConcern || "Use realistic resistance that tests the user's goal without becoming hostile."}`,
+              ...practiceMessages
                 .map((message) => `${message.role === "beckett" ? "Beckett" : "User"}: ${message.content}`),
             ].join("\n")
           : quickPrompt(flowType),
