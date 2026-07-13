@@ -1976,6 +1976,9 @@ ${prompt}${relationshipLine}${messageLine}`;
       .find((line) => line && !/^~?\s*(?:result|answer|source)\s*~?:?$/i.test(line));
     return fitSlackAnswer(directResult || cleaned, 220);
   }
+  if (responseDetail === "quick" && intent === "prep") {
+    return compactSlackPrepAssessment(cleaned);
+  }
   if (responseDetail === "quick") return fitSlackAnswer(compactSlackResponseLayout(cleaned), compactSlackLimit(intent));
   if (responseDetail === "longer") return fitSlackAnswer(cleaned, MAX_LONGER_SLACK_ANSWER_LENGTH);
   return truncateSlackText(cleaned);
@@ -2139,4 +2142,34 @@ function compactSlackResponseLayout(text: string) {
   }
 
   return compact.join("\n");
+}
+
+function compactSlackPrepAssessment(text: string) {
+  const compact = compactSlackResponseLayout(text);
+  const limits: Record<string, number> = {
+    goal: 65,
+    "say this first": 105,
+    "if they push back": 95,
+  };
+  const labels = ["Goal", "Say this first", "If they push back"];
+  const sections = new Map<string, string>();
+
+  for (const line of compact.split("\n")) {
+    const match = line.trim().match(/^(?:~\s*)?(Goal|Say this first|If they push back)(?:\s*~)?\s*:?\s*(.*)$/i);
+    if (match) sections.set(match[1].toLowerCase(), match[2].trim());
+  }
+
+  if (sections.size < 3) return fitSlackAnswer(compact, 300);
+
+  return labels.map((label) => {
+    const key = label.toLowerCase();
+    const prefix = `~ ${label} ~ `;
+    const content = sections.get(key) || "";
+    const maxContent = Math.max(20, limits[key] - prefix.length);
+    if (content.length <= maxContent) return `${prefix}${content}`.trim();
+    const slice = content.slice(0, maxContent - 1);
+    const lastSpace = slice.lastIndexOf(" ");
+    const cutoff = lastSpace > maxContent * 0.65 ? lastSpace : slice.length;
+    return `${prefix}${content.slice(0, cutoff).trim()}…`;
+  }).join("\n");
 }
