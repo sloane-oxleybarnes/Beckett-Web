@@ -39,7 +39,8 @@ const slashSubcommands: Record<string, { intent: SlackCoachingIntent; missingTex
   },
   decode: {
     intent: "decode",
-    missingText: 'Add the message you want Beckett to decode, like `/beckett decode "Sure, sounds fine."`.',
+    missingText:
+      'Paste the message you want me to decode after `/beckett decode`, or use Beckett - Decode on a Slack message.',
   },
   prep: {
     intent: "prep",
@@ -218,14 +219,11 @@ function parseBeckettText(rawText: string): ParsedSlackCommand {
 
   const prompt = (match?.[2] || "").trim();
   if (!prompt) {
-    if (definition.intent === "decode" || definition.intent === "respond") {
+    if (definition.intent === "respond") {
       return {
         ok: true,
         intent: definition.intent,
-        prompt:
-          definition.intent === "decode"
-            ? "Decode the latest relevant message in this Slack conversation."
-            : "Draft a response to the latest relevant message in this Slack conversation.",
+        prompt: "Draft a response to the latest relevant message in this Slack conversation.",
         useLatestSourceMessage: true,
       };
     }
