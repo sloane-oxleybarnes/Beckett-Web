@@ -8,6 +8,7 @@ import {
   guestStarterIntent,
   shouldLoadGuestConversationContext,
 } from "../lib/slack-guest-routing.ts";
+import { shouldScheduleSlackInactivityStartCard } from "../lib/slack-inactivity-policy.ts";
 
 test("starter prompts route deterministically without Prep fallback", () => {
   assert.equal(guestStarterIntent("Help me decode a Slack message."), "decode");
@@ -45,6 +46,15 @@ test("Prep extracts an explicit concern instead of asking for it again", () => {
     extractGuestPrepOutcomeAndConcern("I want alignment. I’m concerned they’ll dismiss it.").concern,
     "I’m concerned they’ll dismiss it."
   );
+  const liveFailure = extractGuestPrepOutcomeAndConcern(
+    "I want us to agree on priorities so the workload is realistic. I am worried they will think I cannot prioritize or handle my role."
+  );
+  assert.equal(liveFailure.outcome, "I want us to agree on priorities so the workload is realistic.");
+  assert.equal(liveFailure.concern, "I am worried they will think I cannot prioritize or handle my role.");
+});
+
+test("active Slack coaching never schedules unsolicited start menus", () => {
+  assert.equal(shouldScheduleSlackInactivityStartCard(), false);
 });
 
 test("Practice starts in character without asking which version of the person to play", () => {

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/server-admin";
 import { buildBeckettPayload, slackApiPost, SlackBlock, SlackConnectedUser } from "@/lib/slack-app";
+import { shouldScheduleSlackInactivityStartCard } from "@/lib/slack-inactivity-policy";
 
 export const SLACK_HISTORY_CONTINUE_ACTION_ID = "beckett_history_continue";
 export const SLACK_HISTORY_ARCHIVE_ACTION_ID = "beckett_history_archive";
@@ -869,6 +870,13 @@ export async function scheduleSlackInactivityStartCard({
   channelId?: string | null;
 }) {
   if (!botAccessToken || !channelId) return;
+
+  // Older routes still call this helper after a response. Apply the current
+  // policy here so every Guest and connected-user path also clears old timers.
+  if (!shouldScheduleSlackInactivityStartCard()) {
+    await cancelSlackInactivityStartCard({ botAccessToken, channelId });
+    return;
+  }
 
   const payload = buildSlackStartCardPayload("inactivity");
   const generation = crypto.randomUUID();

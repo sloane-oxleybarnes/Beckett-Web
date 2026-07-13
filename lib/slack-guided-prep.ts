@@ -27,6 +27,7 @@ import {
   SlackConnectedUser,
   SlackConversationContext,
 } from "@/lib/slack-app";
+import { extractGuestPrepOutcomeAndConcern } from "@/lib/slack-guest-routing";
 
 type GuidedFlowType = "respond" | "rewrite" | "decode" | "prep" | "practice";
 type PrepScenario =
@@ -1201,15 +1202,27 @@ function promptForFlow(session: SlackAgentSession, followupText?: string, recent
         "Help the user respond to the Slack conversation. The conversation may be workplace, workplace-adjacent, friendly, or personal; do not refuse just because it is not strictly work-related.",
         base,
         "",
+        respondContext.hasPastedMessage
+          ? "The exact incoming message is already supplied. Treat it as the message the user wants to answer. Do not ask whether it is incoming or outgoing."
+          : "",
+        respondContext.hasPastedMessage
+          ? "Return exactly three immediately usable options labeled Confirm, Negotiate, and Clarify. Do not add a setup question or refer to prior conversations."
+          : "",
         "If the exact coworker message is missing but the scenario details are present, draft from the scenario instead of asking for the message again.",
         "If drafting without exact wording, do not claim tone or urgency from the coworker. Include this short note: Since I don’t have their exact wording, I’ll keep this neutral.",
         "Never start with 'No Slack message provided.' Never include a 'Quick frame' section.",
         "For an obvious low-stakes social message, use the visible message and channel context to give drafts immediately; do not ask multiple questions about relationship, channel vibe, or tone.",
         "If the user supplies more context in this Respond thread, use it to refine the requested drafts. Do not ask what kind of Beckett help they want or offer Decode/Respond/Rewrite choices.",
-        "Prefer sections when they fit: Possible read, Next move, Draft options.",
-        "Fold what is uncertain or not knowable into Possible read in one concise sentence.",
-        "Draft options must be bullet points labeled Direct but kind, Warm and collaborative, and Concise. Keep all options together under 60 words.",
-        escalationInstruction,
+        respondContext.hasPastedMessage
+          ? "Start directly with the three options."
+          : "Prefer sections when they fit: Possible read, Next move, Draft options.",
+        respondContext.hasPastedMessage
+          ? ""
+          : "Fold what is uncertain or not knowable into Possible read in one concise sentence.",
+        respondContext.hasPastedMessage
+          ? "Keep all three options together under 60 words."
+          : "Draft options must be bullet points labeled Direct but kind, Warm and collaborative, and Concise. Keep all options together under 60 words.",
+        respondContext.hasPastedMessage ? "" : escalationInstruction,
       ].join("\n");
     case "rewrite":
       return [
@@ -1336,12 +1349,14 @@ async function completeSession(input: GuidedFlowInput, session: SlackAgentSessio
     session.answers.person ? `Relevant person: ${session.answers.person}` : "",
     session.answers.audience ? `Relevant audience: ${session.answers.audience}` : "",
     session.answers.source_channel_name ? `Relevant channel: #${session.answers.source_channel_name}` : "",
-    session.flow_type === "prep"
+    session.flow_type === "prep" || isCompactSlackIntent(session.flow_type)
       ? ""
       : "Include relevant prior Slack messages with this person or about this topic across authorized channels, DMs, and group DMs.",
   ].filter(Boolean).join("\n");
   const includeBroaderContext =
-    session.flow_type === "prep" ? false : shouldUseBroaderSlackContext(session.flow_type, contextPrompt);
+    session.flow_type === "prep" || isCompactSlackIntent(session.flow_type)
+      ? false
+      : shouldUseBroaderSlackContext(session.flow_type, contextPrompt);
   const coachingContext = await buildSlackCoachingContext({
     user: input.user,
     prompt: contextPrompt,
@@ -1428,7 +1443,11 @@ async function mergeAnswersForStep(input: GuidedFlowInput, session: SlackAgentSe
     answers.conversation_location = answers.conversation_location || inferConversationLocation(cleaned);
   }
   if (session.step === "ask_location") answers.conversation_location = inferConversationLocation(cleaned);
-  if (session.step === "ask_outcome") answers.outcome = cleaned;
+  if (session.step === "ask_outcome") {
+    const extracted = extractGuestPrepOutcomeAndConcern(cleaned);
+    answers.outcome = extracted.outcome || cleaned;
+    if (extracted.concern) answers.concern = extracted.concern;
+  }
   if (session.step === "ask_concern") answers.concern = cleaned;
   if (session.step === "ask_practice_goal") answers.practice_goal = cleaned;
   if (session.step === "ask_practice_pushback") answers.practice_pushback = cleaned;
