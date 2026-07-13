@@ -10,6 +10,7 @@ import {
   isCompactSlackIntent,
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
+  lookupSlackUserProfile,
   lookupSlackWorkspaceBotToken,
   resolveSlackAuthorRelationshipContext,
   runSlackGuestCoaching,
@@ -957,6 +958,18 @@ async function respondToAgentMessage({
       text: "Beckett Slack coaching is available for beta and pro users.",
     });
     return;
+  }
+
+  // The Beckett profile name can be an account or demo label (for example,
+  // "Beckett"). Slack is authoritative for who is actually making this
+  // request, so use the authenticated Slack member's name throughout the
+  // connected experience whenever it is readable.
+  const requesterSlackProfile = await lookupSlackUserProfile(
+    user.accessToken || user.botAccessToken,
+    slackUserId
+  ).catch(() => null);
+  if (requesterSlackProfile?.resolved) {
+    user.name = requesterSlackProfile.name;
   }
 
   if (isSlackIdentityRequest(text)) {
