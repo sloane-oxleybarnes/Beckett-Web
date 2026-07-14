@@ -5,11 +5,15 @@ const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posth
 
 const SAFE_METADATA_KEYS = new Set([
   "action",
+  "completionSource",
   "courseId",
   "courseTitle",
   "event",
   "feedbackSource",
   "integration",
+  "hasComment",
+  "hasReason",
+  "missionKey",
   "mode",
   "page",
   "platform",

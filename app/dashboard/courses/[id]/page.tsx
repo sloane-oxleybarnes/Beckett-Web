@@ -1567,14 +1567,26 @@ export default function CoursePage({ params }: { params: { id: string } }) {
             return (
               <div
                 key={i}
-                onClick={() => setFlippedCards(prev => new Set(prev).add(i))}
-                className={`cursor-pointer border-2 rounded-xl p-6 transition-all duration-200 ${
+                className={`overflow-hidden border-2 rounded-xl transition-all duration-200 ${
                   flipped ? 'bg-primary/5 border-primary' : 'bg-white border-border hover:border-primary'
                 }`}
               >
+                <button
+                  type="button"
+                  aria-expanded={flipped}
+                  aria-controls={`flip-card-${currentSlideIndex}-${i}`}
+                  onClick={() => setFlippedCards(prev => new Set(prev).add(i))}
+                  className={`w-full p-6 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary ${
+                    flipped ? 'text-left' : 'text-center'
+                  }`}
+                >
+                  <p className={`${flipped ? 'text-xs uppercase tracking-wide text-primary' : 'text-lg text-ink'} font-medium`}>
+                    {card.front}
+                  </p>
+                  {!flipped ? <p className="mt-2 text-xs text-ink-light">Tap to flip</p> : null}
+                </button>
                 {flipped ? (
-                  <div>
-                    <p className="text-xs font-medium text-primary uppercase tracking-wide mb-3">{card.front}</p>
+                  <div id={`flip-card-${currentSlideIndex}-${i}`} className="px-6 pb-6">
                     <ul className="space-y-2">
                       {card.back.map((b, j) => (
                         <li key={j} className="text-sm text-ink leading-relaxed flex gap-2">
@@ -1584,12 +1596,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
                       ))}
                     </ul>
                   </div>
-                ) : (
-                  <div className="text-center py-2">
-                    <p className="text-lg font-medium text-ink mb-2">{card.front}</p>
-                    <p className="text-xs text-ink-light">Tap to flip</p>
-                  </div>
-                )}
+                ) : null}
               </div>
             )
           })}

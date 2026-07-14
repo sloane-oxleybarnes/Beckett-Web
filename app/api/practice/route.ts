@@ -4,6 +4,15 @@ import { callAnthropic } from '@/lib/anthropic'
 import { AiUsageLimitError, recordAiUsage } from '@/lib/ai-usage'
 import { trackBetaEvent } from '@/lib/beta-events'
 import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
+import * as Sentry from '@sentry/nextjs'
+
+const METERED_PRACTICE_ACTIONS = new Set([
+  'turn',
+  'debrief',
+  'draft_feedback',
+  'prep_tips',
+  'recommend_format',
+])
 
 function modeInstruction(mode?: string) {
   if (mode === 'professional') {
@@ -69,11 +78,13 @@ export async function POST(req: NextRequest) {
     messages: { role: 'user' | 'assistant'; content: string }[],
     maxTokens: number
   ) => {
-    await recordAiUsage(session.user.id, {
-      source: 'dashboard',
-      action: `practice_${action}`,
-      metadata: { mode: mode || null },
-    })
+    if (METERED_PRACTICE_ACTIONS.has(action)) {
+      await recordAiUsage(session.user.id, {
+        source: 'dashboard',
+        action: `practice_${action}`,
+        metadata: { mode: mode || null },
+      })
+    }
     const result = await callAnthropic(system, messages, maxTokens)
     await trackBetaEvent({
       userId: session.user.id,
@@ -400,7 +411,10 @@ Return only valid JSON. No markdown, no extra text.`
     try {
       const parsed = JSON.parse(extractJsonObject(result)) as Record<string, string>
       return NextResponse.json(parsed)
-    } catch {
+    } catch (error) {
+      Sentry.captureException(error instanceof Error ? error : new Error('Practice debrief returned invalid JSON'), {
+        tags: { route: '/api/practice', action: 'debrief', mode: mode || 'unknown' },
+      })
       return NextResponse.json({ error: 'Failed to parse feedback. Please try again.' }, { status: 500 })
     }
   }
@@ -419,6 +433,9 @@ Return only valid JSON. No markdown, no extra text.`
       )
     }
 
+    Sentry.captureException(error, {
+      tags: { route: '/api/practice' },
+    })
     const message = error instanceof Error ? error.message : 'Practice request failed.'
     return NextResponse.json({ error: message }, { status: 500 })
   }

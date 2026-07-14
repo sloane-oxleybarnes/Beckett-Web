@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import AddToSlackButton from "@/components/integrations/AddToSlackButton";
 
 type WalkthroughStep = {
@@ -72,25 +73,38 @@ const walkthroughSteps: WalkthroughStep[] = [
 
 type CoachWalkthroughProps = {
   shouldShow: boolean;
+  forceShow?: boolean;
+  isBeta?: boolean;
 };
 
-export default function CoachWalkthrough({ shouldShow }: CoachWalkthroughProps) {
-  const [open, setOpen] = useState(shouldShow);
+const WALKTHROUGH_COMPLETED_KEY = "beckett:dashboard-walkthrough-completed";
+
+export default function CoachWalkthrough({ shouldShow, forceShow = false, isBeta = false }: CoachWalkthroughProps) {
+  const router = useRouter();
+  const steps = useMemo(
+    () => walkthroughSteps.filter((walkthroughStep) => !(isBeta && walkthroughStep.target === '[data-tour="start-here"]')),
+    [isBeta]
+  );
+  const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
-  const current = walkthroughSteps[step];
-  const isLast = step === walkthroughSteps.length - 1;
+  const current = steps[step];
+  const isLast = step === steps.length - 1;
 
   const progress = useMemo(
-    () => Math.round(((step + 1) / walkthroughSteps.length) * 100),
-    [step]
+    () => Math.round(((step + 1) / steps.length) * 100),
+    [step, steps.length]
   );
 
   useEffect(() => {
-    if (!shouldShow) return;
+    const completedOnDevice = window.localStorage.getItem(WALKTHROUGH_COMPLETED_KEY) === "true";
+    if (!shouldShow || (completedOnDevice && !forceShow)) {
+      setOpen(false);
+      return;
+    }
     setStep(0);
     setOpen(true);
-  }, [shouldShow]);
+  }, [forceShow, shouldShow]);
 
   useEffect(() => {
     if (!open || !current.target) {
@@ -169,6 +183,7 @@ export default function CoachWalkthrough({ shouldShow }: CoachWalkthroughProps) 
   async function finish() {
     setOpen(false);
     if (typeof window !== "undefined") {
+      window.localStorage.setItem(WALKTHROUGH_COMPLETED_KEY, "true");
       const url = new URL(window.location.href);
       if (url.searchParams.get("tour") === "1") {
         url.searchParams.delete("tour");
@@ -176,7 +191,8 @@ export default function CoachWalkthrough({ shouldShow }: CoachWalkthroughProps) 
         window.history.replaceState(null, "", nextUrl);
       }
     }
-    await fetch("/api/onboarding/walkthrough", { method: "POST", keepalive: true }).catch(() => {});
+    const response = await fetch("/api/onboarding/walkthrough", { method: "POST", keepalive: true }).catch(() => null);
+    if (response?.ok) router.refresh();
   }
 
   if (!open) return null;

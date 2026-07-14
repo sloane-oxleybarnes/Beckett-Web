@@ -52,13 +52,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   } catch { /* table may not exist yet */ }
 
   const tourParam = Array.isArray(searchParams?.tour) ? searchParams?.tour[0] : searchParams?.tour;
+  const isBeta = profile?.plan === "beta";
   const showWalkthrough =
     tourParam === "1" ||
     Boolean(profile?.first_login_complete && !profile?.dashboard_walkthrough_completed_at);
 
   return (
     <div className="w-full max-w-6xl">
-      <CoachWalkthrough shouldShow={showWalkthrough} />
+      <CoachWalkthrough shouldShow={showWalkthrough} forceShow={tourParam === "1"} isBeta={isBeta} />
       {/* Header */}
       <div className="mb-8">
         <h1
@@ -90,7 +91,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
       </section>
 
-      <section className="mb-6">
+      {!isBeta ? <section className="mb-6">
         <div data-tour="start-here" className="rounded-card border border-primary/20 bg-primary-light/40 p-6">
           <p className="text-xs font-medium uppercase tracking-wide text-primary">Start here</p>
           <h2 className="mt-2 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>
@@ -118,7 +119,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </div>
 
-      </section>
+      </section> : null}
 
       <BetaMissionsCard />
 

@@ -4,6 +4,12 @@ import { callAnthropic } from '@/lib/anthropic'
 import { AiUsageLimitError, recordAiUsage } from '@/lib/ai-usage'
 import { trackBetaEvent } from '@/lib/beta-events'
 import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
+import * as Sentry from '@sentry/nextjs'
+
+function extractJsonObject(text: string) {
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+  return cleaned.startsWith('{') ? cleaned : cleaned.match(/\{[\s\S]*\}/)?.[0] || cleaned
+}
 
 export async function POST(req: NextRequest) {
   const diagnostic: { action?: string; courseId?: string | null; userId?: string } = {}
@@ -203,8 +209,11 @@ Return only valid JSON. No markdown, no extra text.`
 
     const result = await callMeteredAnthropic(system, [{ role: 'user', content: user }], 500)
     try {
-      return NextResponse.json(JSON.parse(result.trim()))
-    } catch {
+      return NextResponse.json(JSON.parse(extractJsonObject(result)))
+    } catch (error) {
+      Sentry.captureException(error instanceof Error ? error : new Error('Course debrief returned invalid JSON'), {
+        tags: { route: '/api/courses', action: 'debrief', courseId: body.courseId || 'unknown' },
+      })
       return NextResponse.json({ error: 'Failed to parse feedback. Please try again.' }, { status: 500 })
     }
   }
@@ -230,6 +239,9 @@ Return only valid JSON. No markdown, no extra text.`
       )
     }
 
+    Sentry.captureException(error, {
+      tags: { route: '/api/courses', action: diagnostic.action || 'unknown', courseId: diagnostic.courseId || 'unknown' },
+    })
     const message = error instanceof Error ? error.message : 'Course request failed.'
     return NextResponse.json({ error: message }, { status: 500 })
   }

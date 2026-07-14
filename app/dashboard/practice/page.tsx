@@ -91,7 +91,7 @@ Their goal: "${goal}"`
     practiceContext.recurringPattern ? `What tends to happen with them: ${practiceContext.recurringPattern}` : null,
     practiceContext.stakes ? `Stakes/pressure level: ${practiceContext.stakes}` : null,
     practiceContext.expectedResponse ? `Likely response from them: ${practiceContext.expectedResponse}` : null,
-    practiceContext.practiceFocus ? `What Beckett should help the user practice: ${practiceContext.practiceFocus}` : null,
+    practiceContext.practiceFocus ? `Create realistic opportunities for the user to practice: ${practiceContext.practiceFocus}` : null,
   ].filter(Boolean)
   if (contextLines.length) {
     prompt += `\n\nAdditional context for roleplay:\n${contextLines.join('\n')}`
@@ -117,7 +117,9 @@ Their goal: "${goal}"`
     prompt += `\n\nStart as a composed professional. However, if the user is repeatedly dismissive, rude, or hostile, let your frustration show progressively — shorter responses, more direct pushback, eventually shutting down or disengaging if it continues. Real professionals have limits too.`
   }
 
-  prompt += `\n\nStay in character throughout. Respond as this person realistically would — including appropriate resistance, questions, or emotional reactions. Do not be artificially easy or artificially difficult. Be realistic.`
+  prompt += `\n\nStay in character throughout. Respond as this person realistically would — including appropriate resistance, questions, or emotional reactions. Do not be artificially easy or artificially difficult. Be realistic.
+
+Never act as Beckett or as a communication coach during the roleplay. Do not evaluate the user's wording, praise their communication, suggest a better phrase, or ask them to try saying something differently. Do not mention practice, coaching, feedback, or the user's stated coaching target. Only respond as ${person}.`
   return prompt
 }
 
@@ -640,10 +642,8 @@ export default function PracticePage() {
 
   async function sendMessage() {
     if (!input.trim() || loading) return
-    const wasSentViaPrompt = sentViaPrompt
     const userMsg: Message = { role: 'user', content: input.trim() }
     const next = [...messages, userMsg]
-    const userIndex = next.length - 1
     setMessages(next)
     setInput('')
     setDraftNote(null)
@@ -673,38 +673,7 @@ export default function PracticePage() {
     if (data.text) {
       const aiMsg = data.text.replace(/^["""'']|["""'']$/g, '').trim()
       const withAI = [...next, { role: 'assistant' as const, content: aiMsg }]
-      const assistantIndex = withAI.length - 1
       setMessages(withAI)
-
-      if (!wasSentViaPrompt) {
-        const context = `${person} — ${situation}`
-        fetch('/api/practice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'inline_feedback', mode, userMessage: userMsg.content, context }),
-        })
-          .then(r => r.json())
-          .then((d: { note?: string }) => { if (d.note) setInlineFeedback(prev => ({ ...prev, [userIndex]: d.note as string })) })
-          .catch(() => {})
-      }
-
-      const conversationHistory = withAI.map(m => `[${m.role === 'user' ? 'You' : person}]: ${m.content}`).join('\n')
-      fetch('/api/practice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'assistant_feedback',
-          mode,
-          assistantMessage: aiMsg,
-          conversationHistory,
-          person,
-          situation,
-          goal: effectiveGoal,
-        }),
-      })
-        .then(r => r.json())
-        .then((d: { note?: string }) => { if (d.note) setAssistantFeedback(prev => ({ ...prev, [assistantIndex]: d.note as string })) })
-        .catch(() => {})
 
       loadSuggestedPrompts(aiMsg, withAI.length)
 
