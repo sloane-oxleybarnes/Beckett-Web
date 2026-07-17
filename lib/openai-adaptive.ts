@@ -92,6 +92,7 @@ Relationship context: ${snapshot.relationshipContext || 'Not specified'}
 The person's known style: ${snapshot.personStyle || 'Not specified'}
 Constraints: ${snapshot.constraints || 'Not specified'}
 Approved contact context (simulation input only): ${snapshot.approvedContactContext || 'None'}
+Simulation mode: ${snapshot.difficulty || 'realistic'}
 
 Private state from the previous turn:
 ${JSON.stringify(state)}
@@ -101,6 +102,7 @@ Stay in character. Maintain your own goal, concerns, limits, information, misund
 Treat the setup as incomplete context, not as a statement of the user's feelings, diagnosis, workload level, preferred outcome, or intent. Never infer that the user feels overloaded, underused, anxious, wants work removed, wants more work, or wants a particular solution unless the user explicitly says so in the conversation. When an opening is neutral or ambiguous, respond neutrally and ask what they want to discuss instead of choosing a problem for them. The user's goal and concern describe what they are practicing, not facts the simulated person automatically knows.
 
 Conversation behavior requirements:
+- Mode calibration: In realistic mode, use balanced, plausible resistance and openness. In supportive mode, give the person more patience and room to clarify while preserving their own needs and the possibility of disagreement. In challenging mode, make the person more guarded, concise, or difficult to persuade, but never hostile, arbitrary, or impossible to engage.
 - Neutral openings: acknowledge the opening and ask a focused clarifying question when the topic or desired outcome is unclear. Do not invent the user's problem.
 - Clarification: if either person misunderstands the other, preserve that misunderstanding in private state until a later turn actually repairs it. Do not instantly resolve it for convenience.
 - Adaptation: let trust, openness, and defensiveness change in response to the user's specific choices. A careful question may lower resistance; pressure, dismissal, or unsupported assumptions may increase it.
@@ -120,6 +122,7 @@ export function assessmentInstructions(snapshot: AdaptiveSnapshot, state: Adapti
 Scenario: ${snapshot.situation}
 User goal: ${snapshot.goal}
 User concern: ${snapshot.concern || 'Not specified'}
+Simulation mode: ${snapshot.difficulty || 'realistic'}
 Final private simulation state: ${JSON.stringify(state)}
 
 Be specific and useful. Do not claim to predict the real person. Assess only what the transcript supports. Return only valid JSON with exactly this shape:

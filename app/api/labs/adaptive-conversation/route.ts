@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
 
   const scenarioType = body.scenarioType === 'contact' ? 'contact' : 'general'
   const channel = body.channel === 'phone' ? 'phone' : body.channel === 'video' ? 'video' : 'text'
+  const difficulty = body.difficulty === 'supportive' ? 'supportive' : body.difficulty === 'challenging' ? 'challenging' : 'realistic'
   const person = body.person?.trim() || ''
   const situation = body.situation?.trim() || ''
   const goal = body.goal?.trim() || ''
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
   const snapshot: AdaptiveSnapshot = {
     scenarioType,
     channel,
+    difficulty,
     contactId: scenarioType === 'contact' ? body.contactId : null,
     person,
     situation,
@@ -78,7 +80,7 @@ export async function POST(req: NextRequest) {
       contact_id: snapshot.contactId || null,
       scenario_type: scenarioType,
       channel,
-      difficulty: 'realistic',
+      difficulty,
       lifecycle: 'ready',
       setup_snapshot: snapshot,
       simulation_state: initialAdaptiveState(snapshot),

@@ -13,7 +13,7 @@ type Assessment = AdaptiveAssessment
 type SavedSession = { id: string; setup_snapshot: Setup; transcript: Message[]; assessment: Assessment | null; status: string; updated_at: string }
 
 const blankSetup: Setup = {
-  scenarioType: 'general', channel: 'text', contactId: '', person: '', situation: '', goal: '', concern: '',
+  scenarioType: 'general', channel: 'text', difficulty: 'realistic', contactId: '', person: '', situation: '', goal: '', concern: '',
   relationshipContext: '', personStyle: '', constraints: '', approvedContactContext: '',
 }
 
@@ -247,6 +247,7 @@ export default function AdaptiveConversationSimulator() {
               {(['general', 'contact'] as const).map((type) => <button key={type} type="button" onClick={() => updateSetup('scenarioType', type)} className={`rounded-pill px-4 py-2 text-sm ${setup.scenarioType === type ? 'bg-primary text-white' : 'border border-border bg-white text-ink-mid'}`}>{type === 'general' ? 'General scenario' : 'Existing contact'}</button>)}
             </div>
             <div className="mt-5"><p className="text-sm font-medium">Practice channel</p><div className="mt-2 flex flex-wrap gap-2">{(['text', 'phone', 'video'] as const).map((channel) => <button key={channel} type="button" onClick={() => updateSetup('channel', channel)} className={`rounded-pill px-4 py-2 text-sm ${setup.channel === channel ? 'bg-primary text-white' : 'border border-border bg-white text-ink-mid'}`}>{channel === 'text' ? 'Text conversation' : channel === 'phone' ? 'Phone call' : 'Video call'}</button>)}</div><p className="mt-2 text-xs text-ink-light">Video mode is a modest call layout with optional camera, microphone capture, live captions, and spoken playback. Text remains available if audio fails.</p></div>
+            <div className="mt-5"><p className="text-sm font-medium">Simulation mode</p><div className="mt-2 grid gap-2 sm:grid-cols-3">{(['realistic', 'supportive', 'challenging'] as const).map((difficulty) => <button key={difficulty} type="button" onClick={() => updateSetup('difficulty', difficulty)} className={`rounded-card border px-3 py-3 text-left ${setup.difficulty === difficulty ? 'border-primary bg-primary-light/40' : 'border-border bg-white'}`}><span className="block text-sm font-medium capitalize">{difficulty}</span><span className="mt-1 block text-xs leading-5 text-ink-light">{difficulty === 'realistic' ? 'Balanced and plausible.' : difficulty === 'supportive' ? 'More patient, still authentic.' : 'More guarded, never hostile.'}</span></button>)}</div></div>
             {setup.scenarioType === 'contact' && <label className="mt-5 block text-sm font-medium">Contact<select value={setup.contactId} onChange={(e) => selectContact(e.target.value)} className="mt-2 block w-full rounded-card border border-border bg-white px-3 py-3 font-normal"><option value="">Choose a contact…</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}</select></label>}
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <Field label="Who are you talking to?" value={setup.person} onChange={(v) => updateSetup('person', v)} placeholder="e.g. my manager" />
@@ -265,6 +266,7 @@ export default function AdaptiveConversationSimulator() {
         </section>}
 
         {stage === 'conversation' && endReason && <div className="mx-auto mb-4 max-w-3xl rounded-card border border-primary/20 bg-primary-light/30 p-4 text-sm leading-6"><p className="text-xs font-medium uppercase tracking-wide text-primary">Natural stopping point</p><p className="mt-2">{endReason}</p><p className="mt-2 text-xs text-ink-light">You can finish and assess this conversation, including if it ended with disagreement or ambiguity.</p></div>}
+        {stage === 'conversation' && setup.channel !== 'video' && <p className="mx-auto mb-2 max-w-3xl text-xs text-ink-light">{setup.channel === 'phone' ? 'Phone call' : 'Text conversation'} · <span className="capitalize">{setup.difficulty}</span> mode</p>}
 
         {stage === 'conversation' && setup.channel === 'video' && <VideoCallFrame person={setup.person} messages={messages} typing={typing} speaking={speaking} audioError={audioError} input={input} setInput={setInput} onSubmit={sendMessage} disabled={busy || paused || Boolean(endReason)} />}
 
@@ -274,6 +276,7 @@ export default function AdaptiveConversationSimulator() {
           <p className="mt-2 text-sm leading-6 text-ink-mid">This is the session-specific context GPT‑5.6 will use. It will not change the permanent contact.</p>
           <div className="mt-6 space-y-4 rounded-card bg-[#FBF8F3] p-5 text-sm"><ReviewRow label="Practice channel" value={setup.channel === 'phone' ? 'Phone call' : 'Text conversation'} /><ReviewRow label="Person" value={setup.person} /><ReviewRow label="Situation" value={setup.situation} /><ReviewRow label="Goal" value={setup.goal} /><ReviewRow label="Concern" value={setup.concern || 'Not specified'} /><ReviewRow label="Relationship context" value={setup.relationshipContext || 'Not specified'} />{setup.scenarioType === 'contact' && <ReviewRow label="Approved contact context" value={setup.approvedContactContext || 'No additional context'} />}</div>
           <p className="mt-5 rounded-card border border-primary/20 bg-primary-light/30 p-4 text-sm leading-6 text-ink"><strong>Important:</strong> This is one plausible simulated response, not a prediction of how the real person will behave. New details introduced during role-play remain simulation-only.</p>
+          <p className="mt-3 text-xs text-ink-light">Mode: <span className="font-medium capitalize">{setup.difficulty}</span> · This changes the person’s level of patience and resistance, not the underlying scenario.</p>
           <div className="mt-6 flex flex-wrap gap-3"><button onClick={() => setStage('setup')} className="rounded-pill border border-border px-4 py-2 text-sm">Edit setup</button><button onClick={beginSimulation} disabled={busy} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white disabled:opacity-50">{busy ? 'Starting…' : 'Approve and begin →'}</button></div>
         </section>}
 
