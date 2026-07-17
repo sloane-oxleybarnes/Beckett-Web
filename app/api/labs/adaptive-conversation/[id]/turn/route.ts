@@ -54,7 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const nextTranscript = [
     ...transcript,
     { role: 'user' as const, content: message, turn: transcript.filter((item) => item.role === 'user').length + 1, createdAt: now },
-    { role: 'simulated_person' as const, content: result.reply.trim(), turn: transcript.filter((item) => item.role === 'user').length + 1, createdAt: now },
+    { role: 'simulated_person' as const, content: result.reply.trim(), turn: transcript.filter((item) => item.role === 'user').length + 1, createdAt: now, stateAfter: result.state },
   ]
   const { error: updateError } = await supabase
     .from('adaptive_conversation_sessions')

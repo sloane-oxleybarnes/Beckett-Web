@@ -38,6 +38,7 @@ export type AdaptiveTranscriptItem = {
   content: string
   turn: number
   createdAt: string
+  stateAfter?: AdaptiveState
 }
 
 export type AdaptiveReplayPoint = {
@@ -53,6 +54,16 @@ export type AdaptiveAssessment = {
   strongerResponse: string
   goalProgress: string
   replayPoint: AdaptiveReplayPoint | null
+}
+
+export type AdaptiveReplay = {
+  branchTurn: number
+  transcript: AdaptiveTranscriptItem[]
+  state: AdaptiveState
+  originalTrajectory: AdaptiveTrajectory
+  replayTrajectory: AdaptiveTrajectory
+  originalOutcome: string
+  replayOutcome: string
 }
 
 export type AdaptiveTurnResult = {
@@ -76,6 +87,7 @@ export type AdaptiveSession = {
   simulationState: AdaptiveState
   transcript: AdaptiveTranscriptItem[]
   assessment: AdaptiveAssessment | null
+  replay?: AdaptiveReplay | null
   createdAt?: string
   updatedAt?: string
   completedAt?: string | null
