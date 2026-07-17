@@ -228,6 +228,24 @@ export default function AdaptiveConversationSimulator() {
     else setError('That simulation could not be deleted.')
   }
 
+  function retrySession(item: SavedSession) {
+    const snapshot = item.setup_snapshot
+    setSetup({
+      ...blankSetup,
+      ...snapshot,
+      scenarioType: snapshot.scenarioType === 'contact' ? 'contact' : 'general',
+      channel: snapshot.channel || 'text',
+      difficulty: snapshot.difficulty || 'realistic',
+      contactId: snapshot.contactId || '',
+    })
+    setSessionId(null)
+    setMessages([])
+    setAssessment(null)
+    setReplay(null)
+    setError('')
+    setStage('review')
+  }
+
   if (loading) return <main className="mx-auto max-w-5xl px-6 py-12 text-sm text-ink-mid">Loading the simulator…</main>
 
   const replayMessages = assessment?.replayPoint ? messages.filter((message) => message.turn === assessment.replayPoint?.turn) : []
@@ -296,7 +314,7 @@ export default function AdaptiveConversationSimulator() {
 
         {stage === 'replay' && assessment?.replayPoint && <section className="mx-auto max-w-3xl"><div className="rounded-card border border-border bg-white p-6 shadow-sm"><p className="text-xs font-medium uppercase tracking-wide text-primary">Replay a turning point</p><h2 className="mt-1 text-3xl" style={{ fontFamily: 'var(--font-dm-serif), Georgia, serif' }}>Try the moment again</h2><p className="mt-3 text-sm leading-6 text-ink-mid">The original session is preserved. You are restoring the conversation immediately before exchange {assessment.replayPoint.turn}; your next response will create a separate branch.</p>{replay && <div className="mt-5 grid gap-4 sm:grid-cols-2"><div className="rounded-card bg-[#FBF8F3] p-4"><p className="text-xs font-medium uppercase tracking-wide text-ink-light">Original trajectory</p><p className="mt-2 text-sm font-medium capitalize">{replay.originalTrajectory}</p><p className="mt-2 text-sm leading-6 text-ink-mid">{replay.originalOutcome}</p></div><div className="rounded-card border border-primary/20 bg-primary-light/30 p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Replay trajectory</p><p className="mt-2 text-sm font-medium capitalize">{replay.replayTrajectory}</p><p className="mt-2 text-sm leading-6 text-ink-mid">{replay.replayOutcome}</p></div></div>}{replay && <div className="mt-6 space-y-3 border-t border-border pt-5">{replay.transcript.map((message, index) => <div key={`${message.createdAt}-${index}`} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === 'user' ? 'bg-primary text-white' : 'bg-[#FBF8F3] text-ink'}`}><p className="mb-1 text-[10px] font-medium uppercase tracking-wide opacity-60">{message.role === 'user' ? 'Your replay' : setup.person}</p>{message.content}</div></div>)}</div>}<form onSubmit={sendReplay} className="mt-6 border-t border-border pt-5"><label className="text-sm font-medium">{replay ? 'Continue the replay' : `What would you say differently to ${setup.person}?`}<textarea value={replayInput} onChange={(e) => setReplayInput(e.target.value)} rows={4} placeholder={setup.channel === 'phone' ? 'What would you say out loud?' : 'Try a different response…'} className="mt-2 w-full resize-none rounded-card border border-border px-4 py-3 text-sm outline-none focus:border-primary" disabled={replayBusy} /></label><div className="mt-3 flex justify-between gap-3"><button type="button" onClick={() => setStage('assessment')} className="rounded-pill border border-border px-4 py-2 text-sm">Back to assessment</button><button type="submit" disabled={replayBusy || !replayInput.trim()} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white disabled:opacity-40">{replayBusy ? 'Replaying…' : replay ? 'Continue replay' : 'Try this response →'}</button></div></form></div></section>}
 
-        {stage === 'setup' && savedSessions.length > 0 && <section className="mt-8 rounded-card border border-border bg-white p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-medium uppercase tracking-wide text-ink-light">Saved simulations</p><h2 className="mt-1 text-xl" style={{ fontFamily: 'var(--font-dm-serif), Georgia, serif' }}>Your recent practice</h2></div><p className="text-xs text-ink-light">Full transcripts are saved until you delete them.</p></div><div className="mt-4 divide-y divide-border">{savedSessions.map((item) => <div key={item.id} className="flex items-center justify-between gap-4 py-3"><div><p className="text-sm font-medium">{item.setup_snapshot?.person || 'Conversation'}</p><p className="text-xs text-ink-light">{item.setup_snapshot?.situation || 'Saved simulation'} · {new Date(item.updated_at).toLocaleDateString()}</p></div><button onClick={() => deleteSession(item.id)} className="text-xs text-red-700 hover:underline">Delete</button></div>)}</div></section>}
+        {stage === 'setup' && savedSessions.length > 0 && <section className="mt-8 rounded-card border border-border bg-white p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-medium uppercase tracking-wide text-ink-light">Saved simulations</p><h2 className="mt-1 text-xl" style={{ fontFamily: 'var(--font-dm-serif), Georgia, serif' }}>Your recent practice</h2></div><p className="text-xs text-ink-light">Full transcripts are saved until you delete them.</p></div><div className="mt-4 divide-y divide-border">{savedSessions.map((item) => <div key={item.id} className="flex items-center justify-between gap-4 py-3"><div><p className="text-sm font-medium">{item.setup_snapshot?.person || 'Conversation'}</p><p className="text-xs text-ink-light">{item.setup_snapshot?.situation || 'Saved simulation'} · {new Date(item.updated_at).toLocaleDateString()}</p></div><div className="flex items-center gap-3"><button onClick={() => retrySession(item)} className="text-xs font-medium text-primary hover:underline">Retry this situation</button><button onClick={() => deleteSession(item.id)} className="text-xs text-red-700 hover:underline">Delete</button></div></div>)}</div></section>}
       </div>
     </main>
   )
