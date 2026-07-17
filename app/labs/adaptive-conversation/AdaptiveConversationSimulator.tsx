@@ -230,6 +230,8 @@ export default function AdaptiveConversationSimulator() {
 
   if (loading) return <main className="mx-auto max-w-5xl px-6 py-12 text-sm text-ink-mid">Loading the simulator…</main>
 
+  const replayMessages = assessment?.replayPoint ? messages.filter((message) => message.turn === assessment.replayPoint?.turn) : []
+
   return (
     <main className="min-h-screen bg-[#FBF8F3] px-5 py-8 text-ink sm:px-8">
       <div className="mx-auto max-w-5xl">
@@ -243,6 +245,8 @@ export default function AdaptiveConversationSimulator() {
         </div>
 
         {error && <div role="alert" className="mb-5 rounded-card border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
+
+        {stage === 'replay' && assessment?.replayPoint && <div className="mx-auto mb-4 max-w-3xl rounded-card border border-primary/20 bg-primary-light/30 p-5"><p className="text-xs font-medium uppercase tracking-wide text-primary">Original exchange {assessment.replayPoint.turn}</p>{replayMessages.map((message, index) => <div key={`${message.createdAt}-${index}`} className={`mt-3 rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === 'user' ? 'ml-8 bg-primary text-white' : 'mr-8 bg-white text-ink'}`}><p className="mb-1 text-[10px] font-medium uppercase tracking-wide opacity-60">{message.role === 'user' ? 'You originally said' : setup.person}</p>{message.content}</div>)}<p className="mt-3 text-xs text-ink-light">Your alternate response will replace your original message at this moment.</p></div>}
 
         {stage === 'setup' && <section className="grid gap-6 lg:grid-cols-[1fr_300px]">
           <form onSubmit={reviewSetup} className="rounded-card border border-border bg-white p-6 shadow-sm">
