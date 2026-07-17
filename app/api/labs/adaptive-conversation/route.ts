@@ -9,7 +9,7 @@ export async function GET() {
   const [{ data: sessions, error: sessionsError }, { data: contacts, error: contactsError }] = await Promise.all([
     supabase
       .from('adaptive_conversation_sessions')
-      .select('id, scenario_type, difficulty, status, lifecycle, setup_snapshot, transcript, assessment, created_at, updated_at, completed_at')
+      .select('id, scenario_type, channel, difficulty, status, lifecycle, setup_snapshot, transcript, assessment, created_at, updated_at, completed_at')
       .eq('user_id', session.user.id)
       .order('updated_at', { ascending: false })
       .limit(20),
@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
   if (!body?.approved) return NextResponse.json({ error: 'You must review and approve the simulation context.' }, { status: 400 })
 
   const scenarioType = body.scenarioType === 'contact' ? 'contact' : 'general'
+  const channel = body.channel === 'phone' ? 'phone' : body.channel === 'video' ? 'video' : 'text'
   const person = body.person?.trim() || ''
   const situation = body.situation?.trim() || ''
   const goal = body.goal?.trim() || ''
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
 
   const snapshot: AdaptiveSnapshot = {
     scenarioType,
+    channel,
     contactId: scenarioType === 'contact' ? body.contactId : null,
     person,
     situation,
@@ -75,6 +77,7 @@ export async function POST(req: NextRequest) {
       user_id: session.user.id,
       contact_id: snapshot.contactId || null,
       scenario_type: scenarioType,
+      channel,
       difficulty: 'realistic',
       lifecycle: 'ready',
       setup_snapshot: snapshot,
@@ -82,7 +85,7 @@ export async function POST(req: NextRequest) {
       transcript: [],
       status: 'active',
     })
-    .select('id, scenario_type, difficulty, status, lifecycle, setup_snapshot, transcript, assessment, created_at, updated_at')
+    .select('id, scenario_type, channel, difficulty, status, lifecycle, setup_snapshot, transcript, assessment, created_at, updated_at')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -62,5 +62,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .eq('id', params.id)
     .eq('user_id', session.user.id)
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
-  return NextResponse.json({ reply: result.reply.trim(), signals: result.signals || [], transcript: nextTranscript })
+  return NextResponse.json({
+    reply: result.reply.trim(),
+    signals: result.signals || [],
+    conversationStatus: result.conversationStatus,
+    endReason: result.endReason,
+    transcript: nextTranscript,
+  })
 }

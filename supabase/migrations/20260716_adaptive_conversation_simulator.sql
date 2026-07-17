@@ -7,6 +7,7 @@ create table if not exists public.adaptive_conversation_sessions (
   scenario_type text not null check (scenario_type in ('general', 'contact')),
   difficulty text not null default 'realistic' check (difficulty = 'realistic'),
   status text not null default 'active' check (status in ('active', 'completed', 'abandoned')),
+  channel text not null default 'text' check (channel in ('text', 'phone', 'video')),
   lifecycle text not null default 'ready' check (lifecycle in ('setup', 'ready', 'responding', 'paused', 'help', 'completed', 'abandoned')),
   setup_snapshot jsonb not null default '{}'::jsonb,
   simulation_state jsonb not null default '{}'::jsonb,

@@ -1,4 +1,5 @@
 export type AdaptiveScenarioType = 'general' | 'contact'
+export type AdaptiveChannel = 'text' | 'phone' | 'video'
 export type AdaptiveDifficulty = 'realistic'
 export type AdaptiveSessionStatus = 'active' | 'completed' | 'abandoned'
 export type AdaptiveTurnLifecycle = 'setup' | 'ready' | 'responding' | 'paused' | 'help' | 'completed' | 'abandoned'
@@ -6,6 +7,7 @@ export type AdaptiveTrajectory = 'opening' | 'uncertain' | 'resistant' | 'diseng
 
 export type AdaptiveSnapshot = {
   scenarioType: AdaptiveScenarioType
+  channel: AdaptiveChannel
   contactId?: string | null
   person: string
   situation: string
@@ -57,6 +59,8 @@ export type AdaptiveTurnResult = {
   reply: string
   state: AdaptiveState
   signals: string[]
+  conversationStatus: 'ongoing' | 'ending' | 'ended'
+  endReason: string | null
 }
 
 export type AdaptiveSession = {
@@ -64,6 +68,7 @@ export type AdaptiveSession = {
   userId?: string
   contactId?: string | null
   scenarioType: AdaptiveScenarioType
+  channel: AdaptiveChannel
   difficulty: AdaptiveDifficulty
   status: AdaptiveSessionStatus
   lifecycle: AdaptiveTurnLifecycle
