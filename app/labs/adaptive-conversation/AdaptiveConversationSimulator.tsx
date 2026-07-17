@@ -342,6 +342,7 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
   const peerRef = useRef<RTCPeerConnection | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const recognitionRef = useRef<SpeechRecognizer | null>(null)
+  const savedVoiceTranscriptRef = useRef({ user: '', simulated_person: '' })
 
   async function enableMedia() {
     try {
@@ -365,14 +366,20 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
         for (let index = 0; index < 2; index += 1) {
           const startAt = audioContext.currentTime + index * 0.7
           const oscillator = audioContext.createOscillator()
+          const secondOscillator = audioContext.createOscillator()
           const gain = audioContext.createGain()
           oscillator.frequency.value = 440
+          secondOscillator.frequency.value = 480
           gain.gain.setValueAtTime(0.0001, startAt)
           gain.gain.exponentialRampToValueAtTime(0.08, startAt + 0.03)
           gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.35)
-          oscillator.connect(gain).connect(audioContext.destination)
+          oscillator.connect(gain)
+          secondOscillator.connect(gain)
+          gain.connect(audioContext.destination)
           oscillator.start(startAt)
+          secondOscillator.start(startAt)
           oscillator.stop(startAt + 0.4)
+          secondOscillator.stop(startAt + 0.4)
         }
         await new Promise((resolve) => window.setTimeout(resolve, 1500))
         await audioContext.close()
@@ -390,8 +397,8 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
         try {
           const payload = JSON.parse(event.data) as { type?: string; delta?: string; transcript?: string }
           if (payload.type === 'response.output_audio_transcript.delta' && payload.delta) setLiveCaption((current) => current + payload.delta)
-          if (payload.type === 'conversation.item.input_audio_transcription.completed' && payload.transcript) { setLiveCaption(payload.transcript); void onVoiceTranscript('user', payload.transcript) }
-          if (payload.type === 'response.output_audio_transcript.done' && payload.transcript) { setLiveCaption(payload.transcript); void onVoiceTranscript('simulated_person', payload.transcript) }
+          if (payload.type === 'conversation.item.input_audio_transcription.completed' && payload.transcript && savedVoiceTranscriptRef.current.user !== payload.transcript) { savedVoiceTranscriptRef.current.user = payload.transcript; setLiveCaption(payload.transcript); void onVoiceTranscript('user', payload.transcript) }
+          if (payload.type === 'response.output_audio_transcript.done' && payload.transcript && savedVoiceTranscriptRef.current.simulated_person !== payload.transcript) { savedVoiceTranscriptRef.current.simulated_person = payload.transcript; setLiveCaption(payload.transcript); void onVoiceTranscript('simulated_person', payload.transcript) }
         } catch { /* Ignore non-JSON WebRTC events. */ }
       }
       const offer = await peer.createOffer()
