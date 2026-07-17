@@ -153,6 +153,12 @@ export default function AdaptiveConversationSimulator() {
     finally { setBusy(false); setTyping(false) }
   }
 
+  async function saveVoiceTranscript(role: 'user' | 'simulated_person', content: string) {
+    const item: Message = { role, content, turn: role === 'user' ? messages.filter((message) => message.role === 'user').length + 1 : Math.max(1, messages.filter((message) => message.role === 'user').length), createdAt: new Date().toISOString() }
+    setMessages((current) => [...current, item])
+    if (sessionId) await fetch(`/api/labs/adaptive-conversation/${sessionId}/realtime/transcript`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role, content }) })
+  }
+
   async function askForHelp() {
     if (!sessionId || busy || messages.length < 2) return
     setBusy(true)
@@ -268,7 +274,7 @@ export default function AdaptiveConversationSimulator() {
         {stage === 'conversation' && endReason && <div className="mx-auto mb-4 max-w-3xl rounded-card border border-primary/20 bg-primary-light/30 p-4 text-sm leading-6"><p className="text-xs font-medium uppercase tracking-wide text-primary">Natural stopping point</p><p className="mt-2">{endReason}</p><p className="mt-2 text-xs text-ink-light">You can finish and assess this conversation, including if it ended with disagreement or ambiguity.</p></div>}
         {stage === 'conversation' && setup.channel !== 'video' && <p className="mx-auto mb-2 max-w-3xl text-xs text-ink-light">{setup.channel === 'phone' ? 'Phone call' : 'Text conversation'} · <span className="capitalize">{setup.difficulty}</span> mode</p>}
 
-        {stage === 'conversation' && setup.channel === 'video' && <VideoCallFrame person={setup.person} messages={messages} typing={typing} speaking={speaking} audioError={audioError} input={input} setInput={setInput} onSubmit={sendMessage} disabled={busy || paused || Boolean(endReason)} />}
+        {stage === 'conversation' && (setup.channel === 'video' || setup.channel === 'phone') && <VideoCallFrame sessionId={sessionId} person={setup.person} messages={messages} typing={typing} speaking={speaking} audioError={audioError} input={input} setInput={setInput} onSubmit={sendMessage} onVoiceTranscript={saveVoiceTranscript} disabled={busy || paused || Boolean(endReason)} channel={setup.channel} />}
 
         {stage === 'review' && <section className="mx-auto max-w-3xl rounded-card border border-border bg-white p-6 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Step 2</p>
@@ -301,12 +307,17 @@ type SpeechResultEvent = { results: ArrayLike<{ 0: { transcript: string } }> }
 type SpeechRecognizer = { lang: string; interimResults: boolean; start: () => void; stop: () => void; onresult: ((event: SpeechResultEvent) => void) | null; onend: (() => void) | null; onerror: (() => void) | null }
 type BrowserSpeechWindow = Window & { SpeechRecognition?: new () => SpeechRecognizer; webkitSpeechRecognition?: new () => SpeechRecognizer }
 
-function VideoCallFrame({ person, messages, typing, speaking, audioError, input, setInput, onSubmit, disabled }: { person: string; messages: Message[]; typing: boolean; speaking: boolean; audioError: string; input: string; setInput: (value: string) => void; onSubmit: (event: FormEvent) => void; disabled: boolean }) {
+function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioError, input, setInput, onSubmit, onVoiceTranscript, disabled, channel }: { sessionId: string | null; person: string; messages: Message[]; typing: boolean; speaking: boolean; audioError: string; input: string; setInput: (value: string) => void; onSubmit: (event: FormEvent) => void; onVoiceTranscript: (role: 'user' | 'simulated_person', content: string) => Promise<void>; disabled: boolean; channel: 'phone' | 'video' }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const [cameraOn, setCameraOn] = useState(false)
   const [micOn, setMicOn] = useState(false)
   const [mediaError, setMediaError] = useState('')
+  const [callConnected, setCallConnected] = useState(false)
+  const [callBusy, setCallBusy] = useState(false)
+  const [liveCaption, setLiveCaption] = useState('')
+  const peerRef = useRef<RTCPeerConnection | null>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
   const recognitionRef = useRef<SpeechRecognizer | null>(null)
 
   async function enableMedia() {
@@ -318,6 +329,45 @@ function VideoCallFrame({ person, messages, typing, speaking, audioError, input,
       setMicOn(true)
       setMediaError('')
     } catch { setMediaError('Camera or microphone permission was unavailable. You can continue with the text fallback.') }
+  }
+
+  async function startLiveCall() {
+    if (!sessionId || callBusy || callConnected) return
+    setCallBusy(true)
+    setMediaError('')
+    try {
+      const stream = streamRef.current || await navigator.mediaDevices.getUserMedia({ video: channel === 'video', audio: true })
+      streamRef.current = stream
+      if (videoRef.current && channel === 'video') videoRef.current.srcObject = stream
+      const peer = new RTCPeerConnection()
+      peerRef.current = peer
+      peer.ontrack = (event) => { if (audioRef.current) audioRef.current.srcObject = event.streams[0] }
+      const audioTrack = stream.getAudioTracks()[0]
+      if (audioTrack) peer.addTrack(audioTrack, stream)
+      const events = peer.createDataChannel('oai-events')
+      events.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data) as { type?: string; delta?: string; transcript?: string }
+          if (payload.type === 'response.output_audio_transcript.delta' && payload.delta) setLiveCaption((current) => current + payload.delta)
+          if (payload.type === 'conversation.item.input_audio_transcription.completed' && payload.transcript) { setLiveCaption(payload.transcript); void onVoiceTranscript('user', payload.transcript) }
+          if (payload.type === 'response.output_audio_transcript.done' && payload.transcript) { setLiveCaption(payload.transcript); void onVoiceTranscript('simulated_person', payload.transcript) }
+        } catch { /* Ignore non-JSON WebRTC events. */ }
+      }
+      const offer = await peer.createOffer()
+      await peer.setLocalDescription(offer)
+      const response = await fetch(`/api/labs/adaptive-conversation/${sessionId}/realtime`, { method: 'POST', headers: { 'Content-Type': 'application/sdp' }, body: offer.sdp })
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || 'Realtime voice session could not start.')
+      await peer.setRemoteDescription({ type: 'answer', sdp: await response.text() })
+      events.onopen = () => {
+        events.send(JSON.stringify({ type: 'response.create' }))
+        setCallConnected(true)
+      }
+      setCameraOn(channel === 'video')
+      setMicOn(true)
+    } catch (error) {
+      peerRef.current?.close()
+      setMediaError(error instanceof Error ? error.message : 'Realtime voice could not start. Use the text fallback.')
+    } finally { setCallBusy(false) }
   }
 
   function toggleCamera() {
@@ -349,7 +399,7 @@ function VideoCallFrame({ person, messages, typing, speaking, audioError, input,
     recognition.start()
   }
 
-  useEffect(() => () => { streamRef.current?.getTracks().forEach((track) => track.stop()); recognitionRef.current?.stop() }, [])
+  useEffect(() => () => { peerRef.current?.close(); streamRef.current?.getTracks().forEach((track) => track.stop()); recognitionRef.current?.stop() }, [])
   const latest = [...messages].reverse().find((message) => message.role === 'simulated_person')
-  return <section className="mx-auto mb-5 max-w-3xl rounded-card border border-border bg-[#17202B] p-4 text-white shadow-sm"><div className="flex items-center justify-between"><div><p className="text-xs font-medium uppercase tracking-[0.18em] text-white/60">Beckett video practice</p><h2 className="mt-1 text-xl">Conversation with {person}</h2></div><span className={`rounded-pill px-3 py-1 text-xs ${speaking || typing ? 'bg-emerald-400/20 text-emerald-200' : 'bg-white/10 text-white/70'}`}>{speaking ? 'Speaking' : typing ? 'Connecting…' : 'Live'}</span></div><div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px]"><div className="relative flex min-h-[220px] items-end overflow-hidden rounded-card bg-gradient-to-br from-[#33485C] to-[#111820] p-4"><div className="absolute left-4 top-4 rounded-pill bg-black/25 px-3 py-1 text-xs text-white/80">{person} · AI persona</div><div className="mx-auto mb-5 flex h-28 w-28 items-center justify-center rounded-full border border-white/25 bg-white/10 text-5xl">{person.trim().charAt(0).toUpperCase() || 'B'}</div><div className="absolute bottom-3 left-3 right-3 rounded-card bg-black/40 px-3 py-2 text-sm leading-5">{typing ? `${person} is responding…` : latest?.content || 'Start the conversation below.'}</div></div><div className="relative min-h-[160px] overflow-hidden rounded-card bg-[#263341]">{cameraOn ? <video ref={videoRef} autoPlay muted playsInline className="h-full min-h-[160px] w-full object-cover" /> : <div className="flex h-full min-h-[160px] items-center justify-center px-4 text-center text-xs text-white/60">Your camera is off. You can still practice with voice or text.</div>}<span className="absolute bottom-2 left-2 rounded-pill bg-black/40 px-2 py-1 text-[10px] text-white/80">You</span></div></div><div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" onClick={enableMedia} className="rounded-pill bg-white/15 px-3 py-2 text-xs hover:bg-white/25">{cameraOn || micOn ? 'Permissions ready' : 'Enable camera & mic'}</button><button type="button" onClick={toggleCamera} disabled={!streamRef.current} className="rounded-pill bg-white/10 px-3 py-2 text-xs disabled:opacity-40">{cameraOn ? 'Camera off' : 'Camera on'}</button><button type="button" onClick={toggleMic} disabled={!streamRef.current} className="rounded-pill bg-white/10 px-3 py-2 text-xs disabled:opacity-40">{micOn ? 'Mute mic' : 'Unmute mic'}</button><button type="button" onClick={captureSpeech} disabled={disabled} className="rounded-pill bg-primary px-3 py-2 text-xs">Speak your response</button></div>{(mediaError || audioError) && <p className="mt-3 rounded-card bg-amber-100/10 px-3 py-2 text-xs leading-5 text-amber-100">{mediaError || audioError}</p>}<div className="mt-4 rounded-card bg-white/5 p-3"><p className="text-[10px] font-medium uppercase tracking-wide text-white/50">Live transcript · text fallback</p><form onSubmit={onSubmit} className="mt-2 flex gap-2"><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Type if audio is unavailable…" className="min-w-0 flex-1 rounded-pill border border-white/15 bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40" disabled={disabled} /><button type="submit" disabled={disabled || !input.trim()} className="rounded-pill bg-white px-4 py-2 text-xs font-medium text-ink disabled:opacity-40">Send</button></form></div></section>
+  return <section className="mx-auto mb-5 max-w-3xl rounded-card border border-border bg-[#17202B] p-4 text-white shadow-sm"><audio ref={audioRef} autoPlay /><div className="flex items-center justify-between"><div><p className="text-xs font-medium uppercase tracking-[0.18em] text-white/60">Beckett {channel === 'video' ? 'video' : 'phone'} practice</p><h2 className="mt-1 text-xl">Conversation with {person}</h2></div><span className={`rounded-pill px-3 py-1 text-xs ${speaking || typing ? 'bg-emerald-400/20 text-emerald-200' : 'bg-white/10 text-white/70'}`}>{speaking ? 'Speaking' : typing ? 'Listening…' : callConnected ? 'Live' : 'Ready'}</span></div><div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px]"><div className="relative flex min-h-[220px] items-end overflow-hidden rounded-card bg-gradient-to-br from-[#33485C] to-[#111820] p-4"><div className="absolute left-4 top-4 rounded-pill bg-black/25 px-3 py-1 text-xs text-white/80">{person} · AI persona</div><div className="mx-auto mb-5 flex h-28 w-28 items-center justify-center rounded-full border border-white/25 bg-white/10 text-5xl">{person.trim().charAt(0).toUpperCase() || 'B'}</div><div className="absolute bottom-3 left-3 right-3 rounded-card bg-black/40 px-3 py-2 text-sm leading-5">{liveCaption || (typing ? `${person} is responding…` : latest?.content || 'Start the live conversation below.')}</div></div><div className="relative min-h-[160px] overflow-hidden rounded-card bg-[#263341]">{cameraOn && channel === 'video' ? <video ref={videoRef} autoPlay muted playsInline className="h-full min-h-[160px] w-full object-cover" /> : <div className="flex h-full min-h-[160px] items-center justify-center px-4 text-center text-xs text-white/60">{channel === 'phone' ? 'Phone audio only' : 'Your camera is off. Audio still works.'}</div>}<span className="absolute bottom-2 left-2 rounded-pill bg-black/40 px-2 py-1 text-[10px] text-white/80">You</span></div></div><div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" onClick={startLiveCall} disabled={callBusy || callConnected} className="rounded-pill bg-primary px-3 py-2 text-xs">{callBusy ? 'Connecting…' : callConnected ? 'Live voice connected' : 'Start live voice'}</button><button type="button" onClick={enableMedia} className="rounded-pill bg-white/15 px-3 py-2 text-xs hover:bg-white/25">{cameraOn || micOn ? 'Permissions ready' : 'Enable camera & mic'}</button><button type="button" onClick={toggleCamera} disabled={!streamRef.current || channel !== 'video'} className="rounded-pill bg-white/10 px-3 py-2 text-xs disabled:opacity-40">{cameraOn ? 'Camera off' : 'Camera on'}</button><button type="button" onClick={toggleMic} disabled={!streamRef.current} className="rounded-pill bg-white/10 px-3 py-2 text-xs disabled:opacity-40">{micOn ? 'Mute mic' : 'Unmute mic'}</button><button type="button" onClick={captureSpeech} disabled={disabled || callConnected} className="rounded-pill bg-white/10 px-3 py-2 text-xs">Text transcription fallback</button></div>{(mediaError || audioError) && <p className="mt-3 rounded-card bg-amber-100/10 px-3 py-2 text-xs leading-5 text-amber-100">{mediaError || audioError}</p>}<div className="mt-4 rounded-card bg-white/5 p-3"><p className="text-[10px] font-medium uppercase tracking-wide text-white/50">Live transcript · text fallback</p><form onSubmit={onSubmit} className="mt-2 flex gap-2"><input value={input} onChange={(event) => setInput(event.target.value)} placeholder={callConnected ? 'Voice is live; type if needed…' : 'Type if audio is unavailable…'} className="min-w-0 flex-1 rounded-pill border border-white/15 bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40" disabled={disabled} /><button type="submit" disabled={disabled || !input.trim()} className="rounded-pill bg-white px-4 py-2 text-xs font-medium text-ink disabled:opacity-40">Send</button></form></div></section>
 }

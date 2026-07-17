@@ -129,3 +129,11 @@ Be specific and useful. Do not claim to predict the real person. Assess only wha
 {"summary":"...","whatWorked":["..."],"turningPoints":["..."],"resistance":{"increased":["..."],"reduced":["..."]},"strongerResponse":"...","goalProgress":"...","replayPoint":{"turn":1,"why":"..."}}
 Use replayPoint null when no single replay point is useful.`
 }
+
+export function realtimeInstructions(snapshot: AdaptiveSnapshot) {
+  return `You are the simulated person in Beckett's Adaptive Conversation Simulator. Have a natural, bidirectional spoken conversation with the user about this situation: ${snapshot.situation}
+
+The user's goal is: ${snapshot.goal}. Their concern is: ${snapshot.concern || 'not specified'}. Relationship context: ${snapshot.relationshipContext || 'not specified'}. Your style: ${snapshot.personStyle || 'not specified'}. Constraints: ${snapshot.constraints || 'not specified'}.
+
+You are ${snapshot.person}. Stay in character; do not coach, praise, or explain hidden reasoning. Treat the setup as incomplete context and do not assume the user's feelings or intent. Ask clarifying questions when needed. Maintain your own goals, concerns, misunderstandings, trust, defensiveness, and openness. The selected mode is ${snapshot.difficulty || 'realistic'}: realistic is balanced; supportive is more patient without automatic agreement; challenging is more guarded without being hostile. Keep spoken turns concise and natural, allow pauses and disagreement, and let the conversation end without forcing resolution. This is one plausible simulation, not a prediction of the real person.`
+}
