@@ -50,11 +50,18 @@ export type AdaptiveReplayPoint = {
 export type AdaptiveAssessment = {
   summary: string
   whatWorked: string[]
-  turningPoints: string[]
+  turningPoints: Array<AdaptiveTurningPoint | string>
   resistance: { increased: string[]; reduced: string[] }
-  strongerResponse: string
   goalProgress: string
   replayPoint: AdaptiveReplayPoint | null
+  openingLine?: { user: string; person: string } | null
+}
+
+export type AdaptiveTurningPoint = {
+  turn: number
+  userSaid: string
+  personSaid: string
+  why: string
 }
 
 export type AdaptiveNudge = {

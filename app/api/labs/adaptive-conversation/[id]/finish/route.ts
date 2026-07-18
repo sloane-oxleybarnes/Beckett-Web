@@ -32,6 +32,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     const messageText = error instanceof Error ? error.message : 'The assessment could not be generated.'
     return NextResponse.json({ error: messageText }, { status: 502 })
   }
+  if (snapshot.channel !== 'text') assessment.replayPoint = null
   const now = new Date().toISOString()
   const { error: updateError } = await supabase
     .from('adaptive_conversation_sessions')
