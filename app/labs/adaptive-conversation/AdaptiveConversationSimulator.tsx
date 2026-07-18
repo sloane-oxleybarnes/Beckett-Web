@@ -73,6 +73,13 @@ export default function AdaptiveConversationSimulator() {
       .finally(() => setLoading(false))
   }, [])
 
+  async function refreshHistory() {
+    const res = await fetch('/api/labs/adaptive-conversation')
+    if (!res.ok) return
+    const body = await res.json()
+    setSavedSessions(body.sessions || [])
+  }
+
   function updateSetup(field: keyof Setup, value: string) {
     setSetup((current) => ({ ...current, [field]: value }))
   }
@@ -198,7 +205,10 @@ export default function AdaptiveConversationSimulator() {
   async function stopSimulation() {
     if (!sessionId || busy) return
     setBusy(true)
-    try { await fetch(`/api/labs/adaptive-conversation/${sessionId}/stop`, { method: 'POST' }) }
+    try {
+      await fetch(`/api/labs/adaptive-conversation/${sessionId}/stop`, { method: 'POST' })
+      await refreshHistory()
+    }
     finally { setBusy(false); reset() }
   }
 
@@ -214,7 +224,7 @@ export default function AdaptiveConversationSimulator() {
       const body = await res.json()
       if (!res.ok) throw new Error(body.error || 'The assessment could not be generated.')
       setAssessment(body.assessment)
-      setSavedSessions((current) => current.map((item) => item.id === sessionId ? { ...item, assessment: body.assessment, status: 'completed', updated_at: new Date().toISOString() } : item))
+      await refreshHistory()
     } catch (err) { setError(err instanceof Error ? err.message : 'The assessment could not be generated.'); setStage('conversation') }
     finally { setBusy(false); setAssessmentLoading(false) }
   }
