@@ -25,7 +25,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     model: process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime-2.1',
     instructions: realtimeInstructions(row.setup_snapshot as AdaptiveSnapshot),
     audio: {
-      input: { turn_detection: { type: 'server_vad', create_response: true, interrupt_response: true }, transcription: { model: 'gpt-realtime-whisper' } },
+      // The client explicitly creates the single opening greeting. Keeping
+      // automatic response creation off prevents an empty/ambient audio buffer
+      // from producing a second unsolicited greeting before the user speaks.
+      input: { turn_detection: { type: 'server_vad', create_response: false, interrupt_response: true }, transcription: { model: 'gpt-realtime-whisper' } },
       output: { voice: 'marin' },
     },
   }))

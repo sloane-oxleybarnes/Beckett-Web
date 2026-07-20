@@ -408,6 +408,8 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
   const savedVoiceTranscriptRef = useRef({ user: '', simulated_person: '' })
   const dataChannelRef = useRef<RTCDataChannel | null>(null)
   const supervisedFingerprintRef = useRef('')
+  const openingResponseSentRef = useRef(false)
+  const responsePendingRef = useRef(false)
 
   async function startSandboxAvatar() {
     if (!sessionId || avatarEmbedBusy || avatarEmbedUrl) return
@@ -497,6 +499,8 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
     setCallBusy(true)
     setRinging(String(channel) === 'phone')
     setMediaError('')
+    openingResponseSentRef.current = false
+    responsePendingRef.current = false
     try {
       if (String(channel) === 'phone') {
         const audioContext = new AudioContext()
@@ -532,12 +536,20 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
       const events = peer.createDataChannel('oai-events')
       dataChannelRef.current = events
       events.onopen = () => {
-        events.send(JSON.stringify({ type: 'response.create', response: { instructions: channel === 'phone' ? 'Give a brief, casual hello first, such as "Hey, what\'s up?" Do not mention the setup or guess what the user wants yet.' : undefined } }))
+        if (openingResponseSentRef.current) return
+        openingResponseSentRef.current = true
+        responsePendingRef.current = true
+        events.send(JSON.stringify({ type: 'response.create', response: { instructions: channel === 'phone' ? 'Give one brief, casual hello first, such as "Hey, what\'s up?" Do not mention the setup or guess what the user wants yet.' : undefined } }))
         setCallConnected(true)
       }
       events.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data) as { type?: string; delta?: string; transcript?: string }
+          if (payload.type === 'response.done') responsePendingRef.current = false
+          if (payload.type === 'input_audio_buffer.speech_stopped' && !responsePendingRef.current && events.readyState === 'open') {
+            responsePendingRef.current = true
+            events.send(JSON.stringify({ type: 'response.create' }))
+          }
           if (payload.type === 'response.output_audio_transcript.delta' && payload.delta) setLiveCaption((current) => current + payload.delta)
           if (payload.type === 'conversation.item.input_audio_transcription.completed' && payload.transcript && savedVoiceTranscriptRef.current.user !== payload.transcript) { savedVoiceTranscriptRef.current.user = payload.transcript; setLiveCaption(payload.transcript); void onVoiceTranscript('user', payload.transcript) }
           if (payload.type === 'response.output_audio_transcript.done' && payload.transcript && savedVoiceTranscriptRef.current.simulated_person !== payload.transcript) {
