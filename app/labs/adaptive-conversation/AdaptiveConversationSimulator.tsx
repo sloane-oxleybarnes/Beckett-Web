@@ -293,7 +293,6 @@ export default function AdaptiveConversationSimulator() {
 
   return (
     <main className="min-h-screen bg-[#FBF8F3] px-5 py-8 text-ink sm:px-8">
-      <style>{`@media (min-width: 768px) { section[class*="rounded-[2rem]"] { display: grid; grid-template-columns: 1fr 1fr; } section[class*="rounded-[2rem]"] > div:first-child { min-height: 100%; } section[class*="rounded-[2rem]"] > div:nth-child(2) { display: flex; flex-direction: column; justify-content: center; } }`}</style>
       <div className="mx-auto max-w-5xl">
         <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
