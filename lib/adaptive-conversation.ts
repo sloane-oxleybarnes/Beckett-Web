@@ -70,6 +70,14 @@ export type AdaptiveNudge = {
   examples: string[]
 }
 
+export type AdaptiveSupervision = {
+  state: AdaptiveState
+  shouldNudge: boolean
+  prompt: string
+  examples: string[]
+  nextTurnGuidance: string
+}
+
 export type AdaptiveReplay = {
   branchTurn: number
   transcript: AdaptiveTranscriptItem[]

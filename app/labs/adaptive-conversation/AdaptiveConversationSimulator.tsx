@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useEffect, useRef, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import type { AdaptiveAssessment, AdaptiveNudge, AdaptiveReplay, AdaptiveSnapshot, AdaptiveTranscriptItem } from '@/lib/adaptive-conversation'
 
 type Contact = { id: string; name: string; notes: string | null; relationship_type: string | null; relationship_other: string | null }
@@ -176,7 +176,7 @@ export default function AdaptiveConversationSimulator() {
     setMessages((current) => [...current, item])
     if (sessionId) {
       await fetch(`/api/labs/adaptive-conversation/${sessionId}/realtime/transcript`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role, content }) })
-      if (role === 'simulated_person') void requestNudge()
+      if (role === 'simulated_person' && setup.channel === 'text') void requestNudge()
     }
   }
 
@@ -333,7 +333,7 @@ export default function AdaptiveConversationSimulator() {
         {stage === 'conversation' && setup.channel !== 'video' && <p className="mx-auto mb-2 max-w-3xl text-xs text-ink-light">{setup.channel === 'phone' ? 'Phone call' : 'Text conversation'} · <span className="capitalize">{setup.difficulty}</span> mode</p>}
 
         {stage === 'conversation' && nudge && <div className="mx-auto mb-4 max-w-3xl rounded-card border border-primary/20 bg-primary-light/30 p-4 text-sm leading-6"><p className="text-xs font-medium uppercase tracking-wide text-primary">Beckett’s nudge</p><p className="mt-2">{nudge.prompt}</p>{nudge.examples?.length > 0 && <p className="mt-2 text-ink-mid">Try: “{nudge.examples.join('” or “')}”</p>}<button type="button" onClick={() => { setPaused(true); setHelpText(nudge.prompt); setNudge(null) }} className="mt-3 text-xs font-medium text-primary hover:underline">Pause and work on this</button><button type="button" onClick={() => setNudge(null)} className="ml-4 mt-3 text-xs text-ink-light hover:underline">Keep practicing</button></div>}
-        {stage === 'conversation' && (setup.channel === 'video' || setup.channel === 'phone') && <VideoCallFrame sessionId={sessionId} person={setup.person} messages={messages} typing={typing} speaking={speaking} audioError={audioError} input={input} setInput={setInput} onSubmit={sendMessage} onVoiceTranscript={saveVoiceTranscript} onTranscriptSync={setMessages} onEnd={finishSimulation} onPause={() => setPaused((value) => !value)} paused={paused} disabled={busy} channel={setup.channel} />}
+        {stage === 'conversation' && (setup.channel === 'video' || setup.channel === 'phone') && <VideoCallFrame sessionId={sessionId} person={setup.person} messages={messages} typing={typing} speaking={speaking} audioError={audioError} input={input} setInput={setInput} onSubmit={sendMessage} onVoiceTranscript={saveVoiceTranscript} onTranscriptSync={setMessages} onSupervisorUpdate={setNudge} onEnd={finishSimulation} onPause={() => setPaused((value) => !value)} paused={paused} disabled={busy} channel={setup.channel} />}
 
         {stage === 'review' && <section className="mx-auto max-w-3xl rounded-card border border-border bg-white p-6 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Step 2</p>
@@ -378,7 +378,7 @@ type SpeechResultEvent = { results: ArrayLike<{ 0: { transcript: string } }> }
 type SpeechRecognizer = { lang: string; interimResults: boolean; start: () => void; stop: () => void; onresult: ((event: SpeechResultEvent) => void) | null; onend: (() => void) | null; onerror: (() => void) | null }
 type BrowserSpeechWindow = Window & { SpeechRecognition?: new () => SpeechRecognizer; webkitSpeechRecognition?: new () => SpeechRecognizer }
 
-function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioError, input, setInput, onSubmit, onVoiceTranscript, onTranscriptSync, onEnd, onPause, paused, disabled, channel }: { sessionId: string | null; person: string; messages: Message[]; typing: boolean; speaking: boolean; audioError: string; input: string; setInput: (value: string) => void; onSubmit: (event: FormEvent) => void; onVoiceTranscript: (role: 'user' | 'simulated_person', content: string) => Promise<void>; onTranscriptSync: (messages: Message[]) => void; onEnd: (transcript?: Message[]) => void | Promise<void>; onPause: () => void; paused: boolean; disabled: boolean; channel: 'phone' | 'video' }) {
+function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioError, input, setInput, onSubmit, onVoiceTranscript, onTranscriptSync, onSupervisorUpdate, onEnd, onPause, paused, disabled, channel }: { sessionId: string | null; person: string; messages: Message[]; typing: boolean; speaking: boolean; audioError: string; input: string; setInput: (value: string) => void; onSubmit: (event: FormEvent) => void; onVoiceTranscript: (role: 'user' | 'simulated_person', content: string) => Promise<void>; onTranscriptSync: (messages: Message[]) => void; onSupervisorUpdate: (nudge: AdaptiveNudge) => void; onEnd: (transcript?: Message[]) => void | Promise<void>; onPause: () => void; paused: boolean; disabled: boolean; channel: 'phone' | 'video' }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const [cameraOn, setCameraOn] = useState(false)
@@ -400,6 +400,8 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
   const audioRef = useRef<HTMLAudioElement>(null)
   const recognitionRef = useRef<SpeechRecognizer | null>(null)
   const savedVoiceTranscriptRef = useRef({ user: '', simulated_person: '' })
+  const dataChannelRef = useRef<RTCDataChannel | null>(null)
+  const supervisedFingerprintRef = useRef('')
 
   async function startSandboxAvatar() {
     if (!sessionId || avatarEmbedBusy || avatarEmbedUrl) return
@@ -476,6 +478,17 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
     } catch { setMediaError('Camera or microphone permission was unavailable. You can continue with the text fallback.') }
   }
 
+  const requestLiveSupervision = useCallback(async () => {
+    if (!sessionId) return
+    const response = await fetch(`/api/labs/adaptive-conversation/${sessionId}/supervise`, { method: 'POST' }).catch(() => null)
+    if (!response?.ok) return
+    const body = await response.json().catch(() => null) as { shouldNudge?: boolean; prompt?: string; examples?: string[]; instructions?: string } | null
+    if (body?.shouldNudge && body.prompt) onSupervisorUpdate({ shouldNudge: true, prompt: body.prompt, examples: body.examples || [] })
+    if (String(channel) === 'phone' && body?.instructions && dataChannelRef.current?.readyState === 'open') {
+      dataChannelRef.current.send(JSON.stringify({ type: 'session.update', session: { instructions: body.instructions } }))
+    }
+  }, [channel, onSupervisorUpdate, sessionId])
+
   async function startLiveCall() {
     if (!sessionId || callBusy || callConnected) return
     setCallBusy(true)
@@ -514,6 +527,7 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
       const audioTrack = stream.getAudioTracks()[0]
       if (audioTrack) peer.addTrack(audioTrack, stream)
       const events = peer.createDataChannel('oai-events')
+      dataChannelRef.current = events
       events.onopen = () => {
         events.send(JSON.stringify({ type: 'response.create', response: { instructions: channel === 'phone' ? 'Give a brief, casual hello first, such as "Hey, what\'s up?" Do not mention the setup or guess what the user wants yet.' : undefined } }))
         setCallConnected(true)
@@ -523,7 +537,11 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
           const payload = JSON.parse(event.data) as { type?: string; delta?: string; transcript?: string }
           if (payload.type === 'response.output_audio_transcript.delta' && payload.delta) setLiveCaption((current) => current + payload.delta)
           if (payload.type === 'conversation.item.input_audio_transcription.completed' && payload.transcript && savedVoiceTranscriptRef.current.user !== payload.transcript) { savedVoiceTranscriptRef.current.user = payload.transcript; setLiveCaption(payload.transcript); void onVoiceTranscript('user', payload.transcript) }
-          if (payload.type === 'response.output_audio_transcript.done' && payload.transcript && savedVoiceTranscriptRef.current.simulated_person !== payload.transcript) { savedVoiceTranscriptRef.current.simulated_person = payload.transcript; setLiveCaption(payload.transcript); void onVoiceTranscript('simulated_person', payload.transcript) }
+          if (payload.type === 'response.output_audio_transcript.done' && payload.transcript && savedVoiceTranscriptRef.current.simulated_person !== payload.transcript) {
+            savedVoiceTranscriptRef.current.simulated_person = payload.transcript
+            setLiveCaption(payload.transcript)
+            void (async () => { await onVoiceTranscript('simulated_person', payload.transcript || ''); await requestLiveSupervision() })()
+          }
         } catch { /* Ignore non-JSON WebRTC events. */ }
       }
       const offer = await peer.createOffer()
@@ -579,6 +597,7 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
       }).catch(() => undefined)
     }
     peerRef.current?.close()
+    dataChannelRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     recognitionRef.current?.stop()
   }, [channel, sessionId, avatarEmbedId])
@@ -589,12 +608,20 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
       const response = await fetch(`/api/labs/adaptive-conversation/${sessionId}/liveavatar?embedId=${encodeURIComponent(avatarEmbedId)}`)
       if (!response.ok || cancelled) return
       const body = await response.json().catch(() => null) as { transcript?: Message[] } | null
-      if (!cancelled && Array.isArray(body?.transcript) && body.transcript.length) onTranscriptSync(body.transcript)
+      if (!cancelled && Array.isArray(body?.transcript) && body.transcript.length) {
+        onTranscriptSync(body.transcript)
+        const fingerprint = body.transcript.map((message) => `${message.role}:${message.content}`).join('|')
+        const latestMessage = body.transcript[body.transcript.length - 1]
+        if (latestMessage?.role === 'simulated_person' && fingerprint !== supervisedFingerprintRef.current) {
+          supervisedFingerprintRef.current = fingerprint
+          void requestLiveSupervision()
+        }
+      }
     }
     void syncTranscript()
     const interval = window.setInterval(() => { void syncTranscript() }, 3500)
     return () => { cancelled = true; window.clearInterval(interval) }
-  }, [avatarEmbedId, avatarEmbedUrl, channel, onTranscriptSync, sessionId])
+  }, [avatarEmbedId, avatarEmbedUrl, channel, onTranscriptSync, requestLiveSupervision, sessionId])
   const latest = [...messages].reverse().find((message) => message.role === 'simulated_person')
   if (String(channel) === 'phone') return <PhoneCallFrameCompact audioRef={audioRef} person={person} connected={callConnected} ringing={ringing} connecting={callBusy} paused={paused} caption={liveCaption} error={mediaError || audioError} input={input} setInput={setInput} onStart={startLiveCall} onPause={() => { toggleMic(); onPause() }} onEnd={onEnd} onSubmit={onSubmit} disabled={disabled} />
   return <section className="mx-auto mb-5 max-w-4xl rounded-[2rem] border border-border bg-[#17202B] p-4 text-white shadow-sm sm:p-5"><audio ref={audioRef} autoPlay /><div className="flex items-center justify-between gap-4"><div><p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/55">Beckett video practice</p><h2 className="mt-1 text-xl sm:text-2xl">Conversation with {person}</h2></div><span className={`shrink-0 rounded-pill px-3 py-1 text-xs ${speaking || typing ? 'bg-emerald-400/20 text-emerald-200' : 'bg-white/10 text-white/70'}`}>{speaking ? 'Speaking' : typing ? 'Listening…' : callConnected ? 'Live' : 'Ready'}</span></div><div className="relative mt-4 min-h-[500px] overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-[#34495D] via-[#1F2D3B] to-[#101820] sm:min-h-[580px]">{avatarEmbedUrl ? <iframe src={avatarEmbedUrl} title={`${person} LiveAvatar sandbox`} allow="autoplay; microphone; camera" className="absolute inset-0 h-full w-full border-0" /> : <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center"><div className="absolute left-5 top-5 rounded-pill bg-black/25 px-3 py-1 text-xs text-white/75">{person} · AI persona</div><div className="flex h-28 w-28 items-center justify-center rounded-full border border-white/25 bg-white/10 text-5xl">{person.trim().charAt(0).toUpperCase() || 'B'}</div><p className="mt-5 text-lg text-white/85">Ready when you are.</p><button type="button" onClick={startSandboxAvatar} disabled={avatarEmbedBusy} className="mt-5 rounded-pill bg-primary px-6 py-3 text-sm font-medium text-white shadow-lg shadow-black/20 disabled:opacity-60">{avatarEmbedBusy ? 'Starting conversation…' : 'Start conversation'}</button></div>}{(liveCaption || typing || latest?.content) && <div className="absolute bottom-5 left-5 right-5 rounded-2xl bg-black/55 px-4 py-3 text-sm leading-6 text-white/90 backdrop-blur-sm">{liveCaption || (typing ? `${person} is responding…` : latest?.content)}</div>}<div className="absolute bottom-4 right-4 h-28 w-44 overflow-hidden rounded-xl border border-white/30 bg-[#263341] shadow-xl sm:h-32 sm:w-52">{cameraOn && channel === 'video' ? <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center px-3 text-center text-xs text-white/60">Your camera is off</div>}<span className="absolute bottom-2 left-2 rounded-pill bg-black/50 px-2 py-1 text-[10px] text-white/80">You</span></div></div><div className="mt-4 flex flex-wrap items-center justify-center gap-2">{avatarEmbedUrl && <button type="button" onClick={endSandboxAvatar} disabled={avatarEnding || disabled} className="rounded-pill bg-red-500/80 px-3 py-2 text-xs disabled:opacity-50">{avatarEnding ? 'Ending conversation…' : 'End conversation'}</button>}<>{!avatarEmbedUrl && <button type="button" onClick={startLiveCall} disabled={callBusy || callConnected} className="rounded-pill bg-white/10 px-3 py-2 text-xs">{callBusy ? 'Connecting…' : 'Use audio fallback'}</button>}</><button type="button" onClick={enableMedia} className="rounded-pill bg-white/10 px-3 py-2 text-xs">{cameraOn || micOn ? 'Permissions ready' : 'Enable camera & mic'}</button><button type="button" onClick={toggleCamera} disabled={!streamRef.current} className="rounded-pill bg-white/10 px-3 py-2 text-xs disabled:opacity-40">{cameraOn ? 'Camera off' : 'Camera on'}</button><button type="button" onClick={toggleMic} disabled={!streamRef.current} className="rounded-pill bg-white/10 px-3 py-2 text-xs disabled:opacity-40">{micOn ? 'Mute mic' : 'Unmute mic'}</button><button type="button" onClick={() => setShowTranscript((value) => !value)} className="rounded-pill bg-white/10 px-3 py-2 text-xs">{showTranscript ? 'Hide transcript' : 'Show transcript'}</button>{showTranscript && <button type="button" onClick={captureSpeech} disabled={disabled || callConnected || Boolean(avatarEmbedUrl)} className="rounded-pill bg-white/10 px-3 py-2 text-xs disabled:opacity-40">Use text transcription</button>}</div><p className="mt-3 text-center text-xs leading-5 text-white/50">Video practice uses LiveAvatar sandbox. Your camera preview is optional; captions and text fallback stay off until you turn on the transcript.</p>{(mediaError || audioError || avatarEmbedError) && <p className="mt-3 rounded-card bg-amber-100/10 px-3 py-2 text-xs leading-5 text-amber-100">{mediaError || audioError || avatarEmbedError}</p>}{showTranscript && <div className="mt-4 rounded-card bg-white/5 p-4"><div className="flex items-center justify-between gap-3"><p className="text-[10px] font-medium uppercase tracking-wide text-white/50">Live transcript</p><button type="button" onClick={() => setShowTranscript(false)} className="text-xs text-white/60 hover:text-white">Turn off</button></div><div className="mt-3 max-h-48 space-y-2 overflow-y-auto text-sm leading-6 text-white/85">{messages.length ? messages.slice(-6).map((message, index) => <p key={`${message.createdAt}-${index}`}><span className="font-medium text-white">{message.role === 'user' ? 'You' : person}:</span> {message.content}</p>) : <p className="text-white/45">Your conversation will appear here.</p>}</div><form onSubmit={onSubmit} className="mt-4 flex gap-2"><input value={input} onChange={(event) => setInput(event.target.value)} placeholder={callConnected ? 'Voice is live; type if needed…' : 'Text fallback if needed…'} className="min-w-0 flex-1 rounded-pill border border-white/15 bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40" disabled={disabled} /><button type="submit" disabled={disabled || !input.trim()} className="rounded-pill bg-white px-4 py-2 text-xs font-medium text-ink disabled:opacity-40">Send</button></form></div>}</section>

@@ -1,12 +1,13 @@
 import type {
   AdaptiveAssessment,
   AdaptiveNudge,
+  AdaptiveSupervision,
   AdaptiveSnapshot,
   AdaptiveState,
   AdaptiveTurnResult,
 } from './adaptive-conversation'
 
-export type { AdaptiveAssessment, AdaptiveNudge, AdaptiveSnapshot, AdaptiveState, AdaptiveTurnResult } from './adaptive-conversation'
+export type { AdaptiveAssessment, AdaptiveNudge, AdaptiveSnapshot, AdaptiveState, AdaptiveSupervision, AdaptiveTurnResult } from './adaptive-conversation'
 
 function parseJson<T>(text: string): T {
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
@@ -69,8 +70,30 @@ export function parseAdaptiveNudge(text: string) {
   return parseJson<AdaptiveNudge>(text)
 }
 
+export function parseAdaptiveSupervision(text: string) {
+  return parseJson<AdaptiveSupervision>(text)
+}
+
 export function nudgeInstructions() {
   return `You are Beckett providing a brief, optional coaching nudge during a live conversation practice. Review the transcript and return only JSON: {"shouldNudge":true|false,"prompt":"one concise observation and next move","examples":["one example phrase","optional second example phrase"]}. Set shouldNudge false unless there is clear evidence across more than one turn that the user is escalating tension, repeating an unsupported assumption, becoming too vague to move forward, or losing the other person's engagement. Do not nudge for a normal disagreement, a short reply, an incomplete speech-to-text fragment, a harmless side comment, or a conversation that is progressing normally. Do not invent facts or introduce a new strategy unrelated to the transcript. Do not judge the user or claim to predict the real person. Keep the prompt practical and under 30 words.`
+}
+
+export function supervisionInstructions(snapshot: AdaptiveSnapshot, state: AdaptiveState) {
+  return `You are Beckett's private supervisor for a live Adaptive Conversation Simulator session. Do not role-play as the simulated person and do not write the person's next reply. Review the session snapshot, private state, and transcript, then update the state only from evidence in the conversation.
+
+Session snapshot:
+${JSON.stringify(snapshot)}
+
+Private state before this exchange:
+${JSON.stringify(state)}
+
+For the next turn, provide concise behavioral guidance that can be applied to the live voice persona. Preserve the person's own goals, limits, uncertainty, misunderstandings, trust, defensiveness, openness, and relationship dynamic. Do not reveal the setup or hidden state to the user. Do not force agreement or a tidy resolution. Match the user's register and response length. Keep challenging guidance terse and resistant; keep supportive guidance warmer without turning the person into a coach.
+
+Set shouldNudge true only when the user's behavior shows a meaningful pattern that Beckett should call out now: escalation, repeated assumption, vagueness that blocks progress, or loss of engagement. Do not nudge for ordinary disagreement, a short reply, a harmless aside, or one imperfect turn. If true, make the prompt practical and under 30 words with at most two short example phrases. Otherwise use false, an empty prompt, and an empty examples array.
+
+Return only valid JSON with exactly this shape:
+{"state":{"goal":"...","concerns":["..."],"constraints":["..."],"knownInformation":["..."],"misunderstandings":["..."],"trust":0.0,"defensiveness":0.0,"openness":0.0,"relationshipDynamic":"...","lastReaction":"...","trajectory":"opening|uncertain|resistant|disengaging|resolved"},"shouldNudge":true,"prompt":"...","examples":["..."],"nextTurnGuidance":"short private instruction for the live persona"}
+Use numbers from 0 to 1. Keep nextTurnGuidance under 70 words.`
 }
 
 export function initialAdaptiveState(snapshot: AdaptiveSnapshot): AdaptiveState {
