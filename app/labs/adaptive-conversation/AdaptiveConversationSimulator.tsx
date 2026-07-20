@@ -39,26 +39,7 @@ export default function AdaptiveConversationSimulator() {
   const [replayBusy, setReplayBusy] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const [audioError, setAudioError] = useState('')
-  const spokenMessageRef = useRef('')
   const lastVoiceTranscriptRef = useRef<Record<string, number>>({})
-
-  useEffect(() => {
-    if (setup.channel !== 'video') return
-    const latest = [...messages].reverse().find((message) => message.role === 'simulated_person')
-    if (!latest || latest.content === spokenMessageRef.current || typeof window === 'undefined') return
-    spokenMessageRef.current = latest.content
-    if (!('speechSynthesis' in window)) {
-      setAudioError('Spoken playback is unavailable in this browser. Use the live captions and text fallback below.')
-      return
-    }
-    window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(latest.content)
-    utterance.onstart = () => { setSpeaking(true); setAudioError('') }
-    utterance.onend = () => setSpeaking(false)
-    utterance.onerror = () => { setSpeaking(false); setAudioError('Audio playback failed. Continue with the live captions and text fallback below.') }
-    window.speechSynthesis.speak(utterance)
-    return () => window.speechSynthesis.cancel()
-  }, [messages, setup.channel])
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -124,7 +105,6 @@ export default function AdaptiveConversationSimulator() {
       setNudge(null)
       setSpeaking(false)
       setAudioError('')
-      spokenMessageRef.current = ''
       lastVoiceTranscriptRef.current = {}
       setPaused(false)
       setHelpText('')
@@ -220,7 +200,11 @@ export default function AdaptiveConversationSimulator() {
 
   async function finishSimulation(videoTranscript?: Message[]) {
     const transcript = videoTranscript || messages
-    if (!sessionId || transcript.length < 2 || busy) return
+    if (!sessionId || busy) return
+    if (transcript.length < 2) {
+      setError('The call ended, but Beckett needs at least one complete exchange before it can create a debrief.')
+      return
+    }
     setBusy(true)
     setError('')
     setAssessment(null)
@@ -260,7 +244,7 @@ export default function AdaptiveConversationSimulator() {
     finally { setReplayBusy(false) }
   }
 
-  function reset() { setSetup(blankSetup); setSessionId(null); setMessages([]); setAssessment(null); setAssessmentLoading(false); setReplay(null); setNudge(null); setReplayInput(''); setPaused(false); setHelpText(''); setEndReason(''); setSpeaking(false); setAudioError(''); spokenMessageRef.current = ''; lastVoiceTranscriptRef.current = {}; setStage('setup'); setError('') }
+  function reset() { setSetup(blankSetup); setSessionId(null); setMessages([]); setAssessment(null); setAssessmentLoading(false); setReplay(null); setNudge(null); setReplayInput(''); setPaused(false); setHelpText(''); setEndReason(''); setSpeaking(false); setAudioError(''); lastVoiceTranscriptRef.current = {}; setStage('setup'); setError('') }
 
   async function deleteSession(id: string) {
     if (!window.confirm('Delete this saved simulation and its transcript?')) return
@@ -338,7 +322,7 @@ export default function AdaptiveConversationSimulator() {
         {stage === 'conversation' && setup.channel !== 'video' && <p className="mx-auto mb-2 max-w-3xl text-xs text-ink-light">{setup.channel === 'phone' ? 'Phone call' : 'Text conversation'} · <span className="capitalize">{setup.difficulty}</span> mode</p>}
 
         {stage === 'conversation' && nudge && <div className="mx-auto mb-4 max-w-3xl rounded-card border border-primary/20 bg-primary-light/30 p-4 text-sm leading-6"><p className="text-xs font-medium uppercase tracking-wide text-primary">Beckett’s nudge</p><p className="mt-2">{nudge.prompt}</p>{nudge.examples?.length > 0 && <p className="mt-2 text-ink-mid">Try: “{nudge.examples.join('” or “')}”</p>}<button type="button" onClick={() => { setPaused(true); setHelpText(nudge.prompt); setNudge(null) }} className="mt-3 text-xs font-medium text-primary hover:underline">Pause and work on this</button><button type="button" onClick={() => setNudge(null)} className="ml-4 mt-3 text-xs text-ink-light hover:underline">Keep practicing</button></div>}
-        {stage === 'conversation' && (setup.channel === 'video' || setup.channel === 'phone') && <VideoCallFrame sessionId={sessionId} person={setup.person} messages={messages} typing={typing} speaking={speaking} audioError={audioError} input={input} setInput={setInput} onSubmit={sendMessage} onVoiceTranscript={saveVoiceTranscript} onTranscriptSync={setMessages} onSupervisorUpdate={setNudge} onEnd={finishSimulation} onPause={() => setPaused((value) => !value)} paused={paused} disabled={busy} channel={setup.channel} />}
+        {stage === 'conversation' && (setup.channel === 'video' || setup.channel === 'phone') && <VideoCallFrame sessionId={sessionId} person={setup.person} messages={messages} typing={typing} speaking={speaking} audioError={audioError} input={input} setInput={setInput} onSubmit={sendMessage} onVoiceTranscript={saveVoiceTranscript} onTranscriptSync={setMessages} onSupervisorUpdate={setNudge} onSpeakingChange={setSpeaking} onEnd={finishSimulation} onPause={() => setPaused((value) => !value)} paused={paused} disabled={busy} channel={setup.channel} />}
 
         {stage === 'review' && <section className="mx-auto max-w-3xl rounded-card border border-border bg-white p-6 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Step 2</p>
@@ -383,7 +367,7 @@ type SpeechResultEvent = { results: ArrayLike<{ 0: { transcript: string } }> }
 type SpeechRecognizer = { lang: string; interimResults: boolean; start: () => void; stop: () => void; onresult: ((event: SpeechResultEvent) => void) | null; onend: (() => void) | null; onerror: (() => void) | null }
 type BrowserSpeechWindow = Window & { SpeechRecognition?: new () => SpeechRecognizer; webkitSpeechRecognition?: new () => SpeechRecognizer }
 
-function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioError, input, setInput, onSubmit, onVoiceTranscript, onTranscriptSync, onSupervisorUpdate, onEnd, onPause, paused, disabled, channel }: { sessionId: string | null; person: string; messages: Message[]; typing: boolean; speaking: boolean; audioError: string; input: string; setInput: (value: string) => void; onSubmit: (event: FormEvent) => void; onVoiceTranscript: (role: 'user' | 'simulated_person', content: string) => Promise<void>; onTranscriptSync: (messages: Message[]) => void; onSupervisorUpdate: (nudge: AdaptiveNudge) => void; onEnd: (transcript?: Message[]) => void | Promise<void>; onPause: () => void; paused: boolean; disabled: boolean; channel: 'phone' | 'video' }) {
+function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioError, input, setInput, onSubmit, onVoiceTranscript, onTranscriptSync, onSupervisorUpdate, onSpeakingChange, onEnd, onPause, paused, disabled, channel }: { sessionId: string | null; person: string; messages: Message[]; typing: boolean; speaking: boolean; audioError: string; input: string; setInput: (value: string) => void; onSubmit: (event: FormEvent) => void; onVoiceTranscript: (role: 'user' | 'simulated_person', content: string) => Promise<void>; onTranscriptSync: (messages: Message[]) => void; onSupervisorUpdate: (nudge: AdaptiveNudge) => void; onSpeakingChange: (value: boolean) => void; onEnd: (transcript?: Message[]) => void | Promise<void>; onPause: () => void; paused: boolean; disabled: boolean; channel: 'phone' | 'video' }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const [cameraOn, setCameraOn] = useState(false)
@@ -409,6 +393,15 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
   const supervisedFingerprintRef = useRef('')
   const openingResponseSentRef = useRef(false)
   const responsePendingRef = useRef(false)
+  const pendingTranscriptRef = useRef<Promise<void>[]>([])
+
+  function queueVoiceTranscript(role: 'user' | 'simulated_person', content: string) {
+    const pending = onVoiceTranscript(role, content)
+    pendingTranscriptRef.current.push(pending)
+    void pending.finally(() => {
+      pendingTranscriptRef.current = pendingTranscriptRef.current.filter((item) => item !== pending)
+    }).catch(() => undefined)
+  }
 
   async function startSandboxAvatar() {
     if (!sessionId || avatarEmbedBusy || avatarEmbedUrl) return
@@ -472,15 +465,23 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
   }
 
   async function endLiveCall() {
-    const transcript = messages
     setCallConnected(false)
     setCallBusy(false)
     setRinging(false)
+    onSpeakingChange(false)
     dataChannelRef.current?.close()
     dataChannelRef.current = null
     peerRef.current?.close()
     peerRef.current = null
     recognitionRef.current?.stop()
+    if (audioRef.current) audioRef.current.srcObject = null
+    await Promise.allSettled(pendingTranscriptRef.current)
+    let transcript = messages
+    if (sessionId) {
+      const response = await fetch(`/api/labs/adaptive-conversation/${sessionId}`).catch(() => null)
+      const body = await response?.json().catch(() => null) as { session?: { transcript?: Message[] } } | null
+      if (Array.isArray(body?.session?.transcript) && body.session.transcript.length >= transcript.length) transcript = body.session.transcript
+    }
     await onEnd(transcript)
   }
 
@@ -557,17 +558,17 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
       events.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data) as { type?: string; delta?: string; transcript?: string }
-          if (payload.type === 'response.done') responsePendingRef.current = false
+          if (payload.type === 'response.done') { responsePendingRef.current = false; onSpeakingChange(false) }
           if (payload.type === 'input_audio_buffer.speech_stopped' && !responsePendingRef.current && events.readyState === 'open') {
             responsePendingRef.current = true
             events.send(JSON.stringify({ type: 'response.create' }))
           }
-          if (payload.type === 'response.output_audio_transcript.delta' && payload.delta) setLiveCaption((current) => current + payload.delta)
-          if (payload.type === 'conversation.item.input_audio_transcription.completed' && payload.transcript && savedVoiceTranscriptRef.current.user !== payload.transcript) { savedVoiceTranscriptRef.current.user = payload.transcript; setLiveCaption(payload.transcript); void onVoiceTranscript('user', payload.transcript) }
+          if (payload.type === 'response.output_audio_transcript.delta' && payload.delta) { onSpeakingChange(true); setLiveCaption((current) => current + payload.delta) }
+          if (payload.type === 'conversation.item.input_audio_transcription.completed' && payload.transcript && savedVoiceTranscriptRef.current.user !== payload.transcript) { savedVoiceTranscriptRef.current.user = payload.transcript; setLiveCaption(payload.transcript); queueVoiceTranscript('user', payload.transcript) }
           if (payload.type === 'response.output_audio_transcript.done' && payload.transcript && savedVoiceTranscriptRef.current.simulated_person !== payload.transcript) {
             savedVoiceTranscriptRef.current.simulated_person = payload.transcript
             setLiveCaption(payload.transcript)
-            void (async () => { await onVoiceTranscript('simulated_person', payload.transcript || ''); await requestLiveSupervision() })()
+            void (async () => { queueVoiceTranscript('simulated_person', payload.transcript || ''); await requestLiveSupervision() })()
           }
         } catch { /* Ignore non-JSON WebRTC events. */ }
       }
@@ -659,7 +660,7 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
     return () => { cancelled = true; window.clearInterval(interval) }
   }, [avatarEmbedId, avatarEmbedUrl, channel, onTranscriptSync, requestLiveSupervision, sessionId])
   const latest = [...messages].reverse().find((message) => message.role === 'simulated_person')
-  if (String(channel) === 'phone') return <PhoneCallFrameCompact audioRef={audioRef} person={person} connected={callConnected} ringing={ringing} connecting={callBusy} paused={paused} caption={liveCaption} error={mediaError || audioError} input={input} setInput={setInput} onStart={startLiveCall} onPause={() => { toggleMic(); onPause() }} onEnd={onEnd} onSubmit={onSubmit} disabled={disabled} />
+  if (String(channel) === 'phone') return <PhoneCallFrameCompact audioRef={audioRef} person={person} connected={callConnected} ringing={ringing} connecting={callBusy} paused={paused} caption={liveCaption} error={mediaError || audioError} input={input} setInput={setInput} onStart={startLiveCall} onPause={() => { toggleMic(); onPause() }} onEnd={endLiveCall} onSubmit={onSubmit} disabled={disabled} />
   return <section className="mx-auto mb-5 max-w-4xl rounded-[2rem] border border-border bg-[#17202B] p-4 text-white shadow-sm sm:p-5"><audio ref={audioRef} autoPlay /><div className="flex items-center justify-between gap-4"><div><p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/55">Beckett video practice</p><h2 className="mt-1 text-xl sm:text-2xl">Conversation with {person}</h2></div><span className={`shrink-0 rounded-pill px-3 py-1 text-xs ${speaking || typing ? 'bg-emerald-400/20 text-emerald-200' : 'bg-white/10 text-white/70'}`}>{speaking ? 'Speaking' : typing ? 'Listening…' : callConnected ? 'Live' : 'Ready'}</span></div><div className="relative mt-4 aspect-video overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-[#34495D] via-[#1F2D3B] to-[#101820]">{avatarEmbedUrl ? <iframe src={avatarEmbedUrl} title={`${person} LiveAvatar sandbox`} allow="autoplay; microphone; camera; fullscreen" allowFullScreen onError={() => setAvatarEmbedError('LiveAvatar could not load. Use the Beckett video call to continue.')} className="absolute inset-0 h-full w-full border-0" /> : <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center"><div className="absolute left-5 top-5 rounded-pill bg-black/25 px-3 py-1 text-xs text-white/75">{person} · AI persona</div><div className="flex h-28 w-28 items-center justify-center rounded-full border border-white/25 bg-white/10 text-5xl">{person.trim().charAt(0).toUpperCase() || 'B'}</div><p className="mt-5 text-lg text-white/85">{callConnected ? 'Conversation live. Speak naturally.' : 'Ready when you are.'}</p>{!callConnected && <button type="button" onClick={() => { void startLiveCall(false) }} disabled={callBusy} className="mt-5 rounded-pill bg-primary px-6 py-3 text-sm font-medium text-white shadow-lg shadow-black/20 disabled:opacity-60">{callBusy ? 'Connecting…' : 'Start conversation'}</button>}</div>}{(liveCaption || typing || latest?.content) && <div className="absolute bottom-5 left-5 right-5 rounded-2xl bg-black/55 px-4 py-3 text-sm leading-6 text-white/90 backdrop-blur-sm">{liveCaption || (typing ? `${person} is responding…` : latest?.content)}</div>}<div className="absolute bottom-4 right-4 h-28 w-44 overflow-hidden rounded-xl border border-white/30 bg-[#263341] shadow-xl sm:h-32 sm:w-52">{cameraOn && channel === 'video' ? <video ref={videoRef} autoPlay muted playsInline onLoadedMetadata={(event) => { void event.currentTarget.play().catch(() => undefined) }} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center px-3 text-center text-xs text-white/60">Your camera is off</div>}<span className="absolute bottom-2 left-2 rounded-pill bg-black/50 px-2 py-1 text-[10px] text-white/80">You</span></div></div><div className="mt-4 flex flex-wrap items-center justify-center gap-2">{(avatarEmbedUrl || (callConnected && channel === 'video')) && <button type="button" onClick={avatarEmbedUrl ? endSandboxAvatar : endLiveCall} disabled={avatarEnding || disabled} className="rounded-pill bg-red-500/80 px-3 py-2 text-xs disabled:opacity-50">{avatarEnding ? 'Ending conversation…' : 'End conversation'}</button>}{!avatarEmbedUrl && !callConnected && <button type="button" onClick={startSandboxAvatar} disabled={avatarEmbedBusy || disabled} className="rounded-pill bg-white/10 px-3 py-2 text-xs disabled:opacity-50">{avatarEmbedBusy ? 'Starting animated avatar…' : 'Try animated avatar'}</button>}<button type="button" onClick={avatarEmbedUrl ? switchToAudioFallback : () => startLiveCall(false)} disabled={avatarEnding || callBusy || (callConnected && !avatarEmbedUrl) || disabled} className="rounded-pill bg-white/10 px-3 py-2 text-xs">{avatarEmbedUrl ? 'Switch to Beckett video call' : callBusy ? 'Connecting…' : 'Start camera & mic'}</button><button type="button" onClick={enableMedia} className="rounded-pill bg-white/10 px-3 py-2 text-xs">{cameraOn || micOn ? 'Permissions ready' : 'Enable camera & mic'}</button><button type="button" onClick={toggleCamera} disabled={!streamRef.current} className="rounded-pill bg-white/10 px-3 py-2 text-xs disabled:opacity-40">{cameraOn ? 'Camera off' : 'Camera on'}</button><button type="button" onClick={toggleMic} disabled={!streamRef.current} className="rounded-pill bg-white/10 px-3 py-2 text-xs disabled:opacity-40">{micOn ? 'Mute mic' : 'Unmute mic'}</button><button type="button" onClick={() => setShowTranscript((value) => !value)} className="rounded-pill bg-white/10 px-3 py-2 text-xs">{showTranscript ? 'Hide transcript' : 'Show transcript'}</button>{showTranscript && <button type="button" onClick={captureSpeech} disabled={disabled || callConnected || Boolean(avatarEmbedUrl)} className="rounded-pill bg-white/10 px-3 py-2 text-xs disabled:opacity-40">Use text transcription</button>}</div><p className="mt-3 text-center text-xs leading-5 text-white/50">Video uses Beckett’s live voice call first: your camera preview, microphone, spoken response, optional captions, and the same debrief. LiveAvatar remains an optional animated participant.</p>{(mediaError || audioError || avatarEmbedError) && <p className="mt-3 rounded-card bg-amber-100/10 px-3 py-2 text-xs leading-5 text-amber-100">{mediaError || audioError || avatarEmbedError}</p>}{showTranscript && <div className="mt-4 rounded-card bg-white/5 p-4"><div className="flex items-center justify-between gap-3"><p className="text-[10px] font-medium uppercase tracking-wide text-white/50">Live transcript</p><button type="button" onClick={() => setShowTranscript(false)} className="text-xs text-white/60 hover:text-white">Turn off</button></div><div className="mt-3 max-h-48 space-y-2 overflow-y-auto text-sm leading-6 text-white/85">{messages.length ? messages.slice(-6).map((message, index) => <p key={`${message.createdAt}-${index}`}><span className="font-medium text-white">{message.role === 'user' ? 'You' : person}:</span> {message.content}</p>) : <p className="text-white/45">Your conversation will appear here.</p>}</div><form onSubmit={onSubmit} className="mt-4 flex gap-2"><input value={input} onChange={(event) => setInput(event.target.value)} placeholder={callConnected ? 'Voice is live; type if needed…' : 'Text fallback if needed…'} className="min-w-0 flex-1 rounded-pill border border-white/15 bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40" disabled={disabled} /><button type="submit" disabled={disabled || !input.trim()} className="rounded-pill bg-white px-4 py-2 text-xs font-medium text-ink disabled:opacity-40">Send</button></form></div>}</section>
 }
 
