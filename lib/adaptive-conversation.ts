@@ -1,6 +1,7 @@
 export type AdaptiveScenarioType = 'general' | 'contact'
 export type AdaptiveChannel = 'text' | 'phone' | 'video'
 export type AdaptiveDifficulty = 'realistic' | 'supportive' | 'challenging'
+export type AdaptiveVoicePreference = 'masculine' | 'feminine' | 'gender_neutral'
 export type AdaptiveSessionStatus = 'active' | 'completed' | 'abandoned'
 export type AdaptiveTurnLifecycle = 'setup' | 'ready' | 'responding' | 'paused' | 'help' | 'completed' | 'abandoned'
 export type AdaptiveTrajectory = 'opening' | 'uncertain' | 'resistant' | 'disengaging' | 'resolved'
@@ -18,6 +19,7 @@ export type AdaptiveSnapshot = {
   personStyle: string
   constraints: string
   approvedContactContext?: string
+  voicePreference?: AdaptiveVoicePreference
 }
 
 export type AdaptiveState = {

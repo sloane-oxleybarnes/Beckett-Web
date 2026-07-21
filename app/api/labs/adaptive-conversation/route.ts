@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
   const scenarioType = body.scenarioType === 'contact' ? 'contact' : 'general'
   const channel = body.channel === 'phone' ? 'phone' : body.channel === 'video' ? 'video' : 'text'
   const difficulty = body.difficulty === 'supportive' ? 'supportive' : body.difficulty === 'challenging' ? 'challenging' : 'realistic'
+  const voicePreference = body.voicePreference === 'masculine' ? 'masculine' : body.voicePreference === 'feminine' ? 'feminine' : 'gender_neutral'
   const person = body.person?.trim() || ''
   const situation = body.situation?.trim() || ''
   const goal = body.goal?.trim() || ''
@@ -72,6 +73,7 @@ export async function POST(req: NextRequest) {
     personStyle: body.personStyle?.trim() || '',
     constraints: body.constraints?.trim() || '',
     approvedContactContext,
+    voicePreference,
   }
   const { data, error } = await supabase
     .from('adaptive_conversation_sessions')
