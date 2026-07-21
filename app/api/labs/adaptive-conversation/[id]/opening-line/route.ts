@@ -28,12 +28,18 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   if (error || !row) return NextResponse.json({ error: 'Session not found.' }, { status: 404 })
 
   const snapshot = row.setup_snapshot as AdaptiveSnapshot
+  const channelGuidance = snapshot.channel === 'phone'
+    ? 'This is a phone call. Start with the kind of brief greeting and warmth someone would use when the other person answers (for example, “Hey, how are you?” or “Hi, it’s good to catch you”), then make a natural bridge toward the topic. Do not lead with the request or a formal agenda; the user should have room for a little human chit-chat first.'
+    : 'This is a written conversation. Keep the opening natural for a message and avoid sounding like a formal agenda or a pasted setup summary.'
   const instructions = `You are Beckett drafting one opening line for a workplace conversation practice session.
 
 Return only valid JSON with exactly this shape: {"openingLine":"..."}
 
-Write one natural line the user could actually say to the person. Use the approved setup as private context, but do not assume the user's feelings, intent, or preferred solution. Turn the situation and goal into a coherent topic; do not copy a fragment or paste raw setup text. Do not invent facts. Keep it conversational, specific, and concise (8-24 words). Match the relationship and communication style when provided. Avoid corporate filler, coaching language, and generic wording such as “I wanted to touch base.” This is a suggested starting point, not a prediction of the other person's response.`
+Write one natural line the user could actually say to the person. Use the approved setup as private context, but do not assume the user's feelings, intent, or preferred solution. Turn the situation and goal into a coherent topic; do not copy a fragment or paste raw setup text. Do not invent facts. Keep it conversational, specific, and concise (8-24 words). Match the relationship and communication style when provided. Avoid corporate filler, coaching language, and generic wording such as “I wanted to touch base.” This is a suggested starting point, not a prediction of the other person's response.
+
+${channelGuidance} The line should sound like a real opening, not like Beckett completing the user's goal for them.`
   const input = JSON.stringify({
+    channel: snapshot.channel,
     person: snapshot.person,
     situation: snapshot.situation,
     goal: snapshot.goal,
