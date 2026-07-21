@@ -19,7 +19,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'Realtime voice is not configured.' }, { status: 503 })
   const snapshot = row.setup_snapshot as AdaptiveSnapshot
-  const goalBoundary = `Critical simulation boundary: the user's goal is private practice context, not shared knowledge. Do not infer it, mention it, initiate it, or accomplish it for the user. Never ask them out, propose drinks or hanging out, offer the requested outcome, or manufacture mutual interest before the user explicitly raises that topic. Once they raise it, respond only to their actual wording as the simulated person; do not coach, complete, or take over their ask.`
+  const goalBoundary = `Critical simulation boundary: the user's goal is private practice context, not shared knowledge. Do not infer it, mention it, initiate it, or accomplish it for the user. Never ask them out, propose drinks or hanging out, offer the requested outcome, or manufacture mutual interest before the user explicitly raises that topic. Once they raise it, respond only to their actual wording as the simulated person; do not coach, complete, or take over their ask.
+
+Casual conversation boundary: match a casual or social user with ordinary human conversation. Answer small talk directly with a brief, natural response and a low-stakes, plausible simulation-only detail about your own day when useful; ask a normal follow-up. If they mention bad feedback or a rough call casually, react like a colleague (such as “Oof, that’s rough. What happened?”), not like a coach offering topic options or a debrief. Do not switch into structured coaching unless the user asks for help.`
   const form = new FormData()
   form.set('sdp', sdp)
   form.set('session', JSON.stringify({
