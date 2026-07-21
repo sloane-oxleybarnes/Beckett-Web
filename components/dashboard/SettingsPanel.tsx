@@ -17,15 +17,19 @@ function ConnectRow({
   name,
   description,
   onConnect,
+  onDisconnect,
   connected,
   detail,
+  disconnecting,
 }: {
   icon: string;
   name: string;
   description: string;
   onConnect?: () => void;
+  onDisconnect?: () => void;
   connected?: boolean;
   detail?: string;
+  disconnecting?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
@@ -43,11 +47,23 @@ function ConnectRow({
           </span>
         )}
         <button
+          type="button"
           onClick={() => onConnect?.()}
+          disabled={disconnecting}
           className="text-xs border border-border rounded-pill px-4 py-1.5 text-ink hover:bg-bg transition-colors"
         >
           {connected ? "Reconnect" : "Connect"}
         </button>
+        {connected && onDisconnect && (
+          <button
+            type="button"
+            onClick={onDisconnect}
+            disabled={disconnecting}
+            className="text-xs border border-red-200 rounded-pill px-4 py-1.5 text-red-700 hover:bg-red-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {disconnecting ? "Disconnecting..." : "Disconnect"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -262,6 +278,7 @@ export default function SettingsPage() {
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
+  const [disconnectingProvider, setDisconnectingProvider] = useState<"google" | "slack" | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -298,6 +315,27 @@ export default function SettingsPage() {
   useEffect(() => {
     void loadDiagnostics();
   }, [loadDiagnostics]);
+
+  async function disconnectIntegration(provider: "google" | "slack") {
+    const label = provider === "google" ? "Google (Gmail)" : "Slack";
+    const confirmed = window.confirm(
+      `Disconnect ${label}? Beckett will stop using it for future coaching. Existing Beckett coaching history and contacts will not be deleted.`
+    );
+    if (!confirmed) return;
+
+    setDisconnectingProvider(provider);
+    setDiagnosticsError(null);
+    try {
+      const response = await fetch(`/api/integrations/${provider}`, { method: "DELETE" });
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(result?.error || `Could not disconnect ${label}.`);
+      await loadDiagnostics();
+    } catch (error) {
+      setDiagnosticsError(error instanceof Error ? error.message : `Could not disconnect ${label}.`);
+    } finally {
+      setDisconnectingProvider(null);
+    }
+  }
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -606,7 +644,8 @@ export default function SettingsPage() {
         </p>
         <div className="mb-5 rounded-sm border border-primary/15 bg-primary-light/40 p-3 text-xs leading-relaxed text-ink-mid">
           Gmail is read-only and Slack is used only for context. Beckett cannot send email, post to
-          Slack, move meetings, or change anything without you taking the final action.
+          Slack, move meetings, or change anything without you taking the final action. Disconnecting
+          stops future access but does not delete your existing Beckett coaching history or contacts.
         </div>
         <div className="space-y-4">
           {/* Google / Gmail */}
@@ -626,6 +665,8 @@ export default function SettingsPage() {
                 },
               });
             }}
+            onDisconnect={() => void disconnectIntegration("google")}
+            disconnecting={disconnectingProvider === "google"}
           />
           {/* Slack */}
           <ConnectRow
@@ -637,6 +678,8 @@ export default function SettingsPage() {
             onConnect={() => {
               window.location.href = "/api/slack/connect";
             }}
+            onDisconnect={() => void disconnectIntegration("slack")}
+            disconnecting={disconnectingProvider === "slack"}
           />
           <div className="rounded-sm border border-border bg-bg/60 p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
