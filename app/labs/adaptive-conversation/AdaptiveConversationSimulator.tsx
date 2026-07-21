@@ -462,7 +462,7 @@ function VideoCallFrame({ sessionId, person, messages, typing, speaking, audioEr
       const next = target.slice(0, shown.length + 1)
       captionShownRef.current = next
       setLiveCaption(next)
-    }, 65)
+    }, 45)
   }
 
   function queueVoiceTranscript(role: 'user' | 'simulated_person', content: string) {
