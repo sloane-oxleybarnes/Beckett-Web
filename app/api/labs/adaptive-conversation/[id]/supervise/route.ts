@@ -51,7 +51,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       shouldNudge: Boolean(result.shouldNudge),
       prompt: result.prompt || '',
       examples: Array.isArray(result.examples) ? result.examples.slice(0, 2) : [],
-      instructions: `${realtimeInstructions(snapshot)}\n\nPrivate supervisor update for the next turn: ${result.nextTurnGuidance || 'Continue naturally, matching the user and preserving the person\'s current limits and uncertainty.'}`,
+      instructions: `${realtimeInstructions(snapshot)}\n\nCritical conversation boundary: respond only to what the user actually said. Do not guess what they feel, what is bothering them, or which part of a situation they mean. When clarification is needed, ask one open-ended question and wait; never offer a menu of interpretations or choices, stack questions, or prompt the user toward an answer. Keep casual conversation casual and do not switch into coaching unless the user asks for help.\n\nPrivate supervisor update for the next turn: ${result.nextTurnGuidance || 'Continue naturally, matching the user and preserving the person\'s current limits and uncertainty.'}`,
       state: result.state,
     })
   } catch {
