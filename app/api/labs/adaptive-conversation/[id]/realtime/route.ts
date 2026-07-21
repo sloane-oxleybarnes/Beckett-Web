@@ -45,7 +45,7 @@ Turn-taking and tone boundary: wait for a complete thought; do not jump in after
       // The client explicitly creates the single opening greeting. Keeping
       // automatic response creation off prevents an empty/ambient audio buffer
       // from producing a second unsolicited greeting before the user speaks.
-      input: { turn_detection: { type: 'semantic_vad', eagerness: 'medium', create_response: false, interrupt_response: true }, transcription: { model: 'gpt-realtime-whisper' } },
+      input: { turn_detection: { type: 'semantic_vad', eagerness: 'high', create_response: false, interrupt_response: true }, transcription: { model: 'gpt-realtime-whisper' } },
       output: { voice },
     },
   }))
