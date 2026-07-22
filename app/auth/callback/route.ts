@@ -55,20 +55,23 @@ export async function GET(request: NextRequest) {
         })
       }
 
-      if (integration === 'google' && data.session?.user) {
+      if ((integration === 'google' || integration === 'calendar') && data.session?.user) {
         const now = new Date().toISOString()
+        const isCalendarConnection = integration === 'calendar'
         await supabaseAdmin.from('user_integrations').upsert(
           {
             user_id: data.session.user.id,
-            provider: 'google',
+            provider: isCalendarConnection ? 'google_calendar' : 'google',
             access_token: data.session.provider_token || null,
             external_user_id: data.session.user.email || null,
             external_team_id: null,
             external_team_name: null,
             metadata: {
-              provider: 'google',
+              provider: isCalendarConnection ? 'google_calendar' : 'google',
               email: data.session.user.email || null,
-              scopes: 'gmail.readonly calendar.readonly',
+              scopes: isCalendarConnection
+                ? 'calendar.events.readonly'
+                : 'gmail.readonly',
             },
             connected_at: now,
             updated_at: now,
@@ -79,9 +82,9 @@ export async function GET(request: NextRequest) {
         await trackBetaEvent({
           userId: data.session.user.id,
           email: data.session.user.email,
-          eventName: 'gmail_connected',
+          eventName: isCalendarConnection ? 'calendar_connected' : 'gmail_connected',
           source: 'web_app',
-          metadata: { integration: 'google' },
+          metadata: { integration: isCalendarConnection ? 'calendar' : 'google' },
         })
       }
 
