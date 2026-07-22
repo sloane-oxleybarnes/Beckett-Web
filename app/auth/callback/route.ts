@@ -1,9 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createServerClient } from '@supabase/ssr'
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/server-admin'
 import { trackBetaEvent } from '@/lib/beta-events'
 import { ensureApprovedBetaPlan, hasApprovedBetaAccess } from '@/lib/beta-access'
+
+function createCallbackClient(request: NextRequest, response: NextResponse) {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value
+        },
+        set(name: string, value: string, options: Record<string, unknown>) {
+          response.cookies.set(name, value, options as never)
+        },
+        remove(name: string, options: Record<string, unknown>) {
+          response.cookies.set(name, '', options as never)
+        },
+      },
+    }
+  )
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -29,7 +49,13 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const supabase = createSupabaseServerClient()
+  // OAuth code exchange writes refreshed session cookies. A route handler must
+  // attach those cookies to the response it returns; mutating the request cookie
+  // store alone leaves the following dashboard request unauthenticated.
+  const successResponse = NextResponse.redirect(
+    new URL(isPasswordAction ? '/auth/set-password' : next, origin)
+  )
+  const supabase = createCallbackClient(request, successResponse)
 
   if (code) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
@@ -46,7 +72,11 @@ export async function GET(request: NextRequest) {
         })
         if (!approved) {
           await supabase.auth.signOut()
-          return NextResponse.redirect(new URL('/beta?access=approval-required', origin))
+          successResponse.headers.set(
+            'Location',
+            new URL('/beta?access=approval-required', origin).toString()
+          )
+          return successResponse
         }
         await ensureApprovedBetaPlan({
           userId: data.session.user.id,
@@ -88,9 +118,7 @@ export async function GET(request: NextRequest) {
         })
       }
 
-      return NextResponse.redirect(
-        new URL(isPasswordAction ? '/auth/set-password' : next, origin)
-      )
+      return successResponse
     }
     return NextResponse.redirect(
       new URL(`/auth/login?error=${encodeURIComponent(error.message)}`, origin)
