@@ -4,6 +4,7 @@ import { callAnthropic } from '@/lib/anthropic'
 import { AiUsageLimitError, recordAiUsage } from '@/lib/ai-usage'
 import { trackBetaEvent } from '@/lib/beta-events'
 import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
+import { getSafetyResponse } from '@/lib/safety-resources'
 import * as Sentry from '@sentry/nextjs'
 import {
   WEB_CREDITS_ENABLED,
@@ -79,6 +80,11 @@ export async function POST(req: NextRequest) {
   }
 
   const { action, mode } = body
+  const safetyText = [body.situation, body.goal, body.userMessage, body.context, body.personDescription, body.assistantMessage]
+    .filter((value): value is string => typeof value === 'string')
+    .join('\n')
+  const safety = getSafetyResponse(safetyText)
+  if (safety) return NextResponse.json({ error: safety.message, safety }, { status: 422 })
   const callMeteredAnthropic = async (
     system: string | null,
     messages: { role: 'user' | 'assistant'; content: string }[],
