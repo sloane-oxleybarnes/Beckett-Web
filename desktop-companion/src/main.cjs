@@ -10,6 +10,7 @@ function createWindow() {
     height: 720,
     minWidth: 360,
     minHeight: 560,
+    alwaysOnTop: true,
     title: "Beckett Companion",
     backgroundColor: "#faf9f7",
     webPreferences: {
@@ -19,6 +20,7 @@ function createWindow() {
     },
   });
   windowRef.loadFile(path.join(__dirname, "renderer", "index.html"));
+  windowRef.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   windowRef.on("close", (event) => {
     if (!app.isQuiting) { event.preventDefault(); windowRef.hide(); }
   });
@@ -49,3 +51,7 @@ ipcMain.handle("meeting:start", (_, meeting) => ({
     startedAt: new Date().toISOString(),
   },
 }));
+ipcMain.handle("overlay:set-always-on-top", (_, enabled) => {
+  windowRef?.setAlwaysOnTop(Boolean(enabled), "floating");
+  return Boolean(enabled);
+});

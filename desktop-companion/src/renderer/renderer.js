@@ -22,3 +22,4 @@ $("start-meeting").addEventListener("click", async () => {
 });
 
 $("open-settings").addEventListener("click", () => window.beckettDesktop.openWeb("/dashboard/companion"));
+$("always-on-top").addEventListener("change", (event) => window.beckettDesktop.setAlwaysOnTop(event.target.checked));

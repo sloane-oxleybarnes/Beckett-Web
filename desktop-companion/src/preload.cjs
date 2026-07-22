@@ -4,4 +4,5 @@ contextBridge.exposeInMainWorld("beckettDesktop", {
   readClipboard: () => ipcRenderer.invoke("clipboard:read"),
   openWeb: (pathName) => ipcRenderer.invoke("web:open", pathName),
   startMeeting: (meeting) => ipcRenderer.invoke("meeting:start", meeting),
+  setAlwaysOnTop: (enabled) => ipcRenderer.invoke("overlay:set-always-on-top", enabled),
 });

@@ -14,6 +14,8 @@ button.link { margin-top: 22px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 textarea, input { border: 1px solid #d6d4ce; border-radius: 8px; color: #22302b; font: inherit; font-size: 14px; margin-top: 10px; padding: 10px; width: 100%; }
 label { display: block; color: #22302b; font-size: 13px; font-weight: 650; margin: 14px 0; }
+.overlay-toggle { color: #5b675f; font-size: 13px; font-weight: 400; margin: 14px 0; }
+.overlay-toggle input { height: 16px; margin: 0 7px 0 0; vertical-align: -3px; width: 16px; }
 label.consent { display: flex; font-weight: 400; gap: 8px; }
 label.consent input { height: 16px; margin: 3px 0 0; width: 16px; }
 .status { color: #457060; font-size: 13px; min-height: 20px; }
