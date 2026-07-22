@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { timeOfDayForDate, type WorkdayCheckin } from "@/lib/workday-patterns";
 
@@ -25,12 +25,18 @@ export default function WorkdayCheckinCard() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true); setSaved(false); setError(null);
     try {
-      const response = await fetch("/api/workday/checkins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(checkin) });
+      const response = await fetch("/api/workday/checkins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...checkin, time_of_day: timeOfDayForDate() }) });
       const data = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) throw new Error(data?.error || "Could not save your check-in.");
       setSaved(true);
@@ -45,7 +51,7 @@ export default function WorkdayCheckinCard() {
       {saved && <p className="text-sm font-medium text-primary">Saved</p>}
     </div>
     <form onSubmit={save} className="mt-5 grid gap-4 sm:grid-cols-2">
-      <Select label="Time of day" value={checkin.time_of_day} options={options.time_of_day} onChange={(value) => setCheckin({ ...checkin, time_of_day: value as WorkdayCheckin["time_of_day"] })} />
+      <div className="text-sm font-medium text-ink"><p>Check-in time</p><p className="mt-1 rounded-sm border border-border bg-bg px-3 py-2 text-sm font-normal text-ink-mid">{currentTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p></div>
       <Select label="Workload" value={checkin.workload_level} options={options.workload_level} onChange={(value) => setCheckin({ ...checkin, workload_level: value as WorkdayCheckin["workload_level"] })} />
       <Select label="Break" value={checkin.break_status} options={options.break_status} onChange={(value) => setCheckin({ ...checkin, break_status: value as WorkdayCheckin["break_status"] })} />
       <Select label="What might help?" value={checkin.helpful_strategy} options={options.helpful_strategy} onChange={(value) => setCheckin({ ...checkin, helpful_strategy: value as WorkdayCheckin["helpful_strategy"] })} />

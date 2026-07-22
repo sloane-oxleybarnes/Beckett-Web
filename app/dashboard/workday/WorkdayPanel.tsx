@@ -27,6 +27,12 @@ export default function WorkdayPanel() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [breakIdeasOpen, setBreakIdeasOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,7 +50,7 @@ export default function WorkdayPanel() {
   async function saveCheckin(event: React.FormEvent) {
     event.preventDefault(); setSaving(true); setError(null);
     try {
-      const response = await fetch("/api/workday/checkins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(checkin) });
+      const response = await fetch("/api/workday/checkins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...checkin, time_of_day: timeOfDayForDate() }) });
       const payload = await response.json() as { error?: string };
       if (!response.ok) throw new Error(payload.error || "Could not save your check-in.");
       await load(); setBreakIdeasOpen(checkin.workload_level === "stacked" || checkin.break_status === "would_help");
@@ -63,7 +69,7 @@ export default function WorkdayPanel() {
       <h2 className="mb-1 text-lg text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>A quick check-in</h2>
       <p className="mb-5 text-xs text-ink-mid">This takes about a minute. There is no free-text work history to fill out.</p>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Choice label="Time of day" value={checkin.time_of_day} options={fieldOptions.time_of_day} onChange={(value) => setCheckin({ ...checkin, time_of_day: value as WorkdayCheckin["time_of_day"] })} />
+        <div className="text-sm font-medium text-ink"><p>Check-in time</p><p className="mt-1 rounded-sm border border-border bg-bg px-3 py-2 text-sm font-normal text-ink-mid">{currentTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p></div>
         <Choice label="Workload" value={checkin.workload_level} options={fieldOptions.workload_level} onChange={(value) => setCheckin({ ...checkin, workload_level: value as WorkdayCheckin["workload_level"] })} />
         <Choice label="Break" value={checkin.break_status} options={fieldOptions.break_status} onChange={(value) => setCheckin({ ...checkin, break_status: value as WorkdayCheckin["break_status"] })} />
         <Choice label="What might help?" value={checkin.helpful_strategy} options={fieldOptions.helpful_strategy} onChange={(value) => setCheckin({ ...checkin, helpful_strategy: value as WorkdayCheckin["helpful_strategy"] })} />
