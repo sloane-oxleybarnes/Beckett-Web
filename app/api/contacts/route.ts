@@ -5,6 +5,7 @@ import {
 } from "@/lib/contact-identifiers";
 import { getExtensionUserId } from "@/lib/extension-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { normalizeRelationshipTags } from "@/lib/relationship-tags";
 
 async function getAuthedUserId(req: NextRequest): Promise<string | null> {
   const extUserId = await getExtensionUserId(req)
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
     phone_number?: string | null;
     relationship_type?: string | null;
     relationship_other?: string | null;
+    relationship_tags?: string[];
     notes?: string | null;
     trusted?: boolean;
     identifiers?: ContactIdentifierInput[];
@@ -60,6 +62,7 @@ export async function POST(req: NextRequest) {
       phone_number: body.phone_number?.trim() || null,
       relationship_type: body.relationship_type?.trim() || null,
       relationship_other: body.relationship_other?.trim() || null,
+      relationship_tags: normalizeRelationshipTags(body.relationship_tags),
       notes: body.notes?.trim() || null,
       trusted: body.trusted ?? false,
     })

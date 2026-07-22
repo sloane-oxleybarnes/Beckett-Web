@@ -1,0 +1,6 @@
+import { allSafetyResources } from "@/lib/safety-resources";
+
+export default function SafetyPage() {
+  const resources = allSafetyResources();
+  return <div className="max-w-3xl"><h1 className="mb-2 text-3xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Support boundaries & resources</h1><p className="mb-7 text-sm text-ink-mid">Beckett is a communication coach. It cannot replace urgent, legal, medical, mental-health, or relationship-safety support.</p><div className="space-y-4">{resources.map((group) => <section key={group.topic} className="rounded-card border border-border bg-white p-5"><h2 className="text-lg text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{group.title}</h2><p className="mt-2 text-sm leading-relaxed text-ink-mid">{group.message}</p><div className="mt-4 flex flex-col gap-2">{group.resources.map((resource) => <a key={resource.href} href={resource.href} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary hover:underline">{resource.label} ↗</a>)}</div></section>)}</div><p className="mt-6 text-xs leading-relaxed text-ink-light">Resource availability and applicability vary by location. If there is immediate danger, contact local emergency services.</p></div>;
+}

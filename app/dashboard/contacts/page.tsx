@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { relationshipTagLabel, relationshipTagOptions } from "@/lib/relationship-tags";
 
 type ContactIdentifier = {
   id?: string;
@@ -27,6 +28,7 @@ type Contact = {
   phone_number: string | null;
   relationship_type: string | null;
   relationship_other: string | null;
+  relationship_tags?: string[] | null;
   notes: string | null;
   trusted: boolean;
   created_at: string;
@@ -52,6 +54,7 @@ const emptyForm = () => ({
   identifiers: [] as ContactIdentifier[],
   relationship_type: "",
   relationship_other: "",
+  relationship_tags: [] as string[],
   notes: "",
   trusted: false,
 });
@@ -67,7 +70,8 @@ const relationshipOptions = [
   "Other",
 ];
 
-function relationshipLabel(contact: Pick<Contact, "relationship_type" | "relationship_other">) {
+function relationshipLabel(contact: Pick<Contact, "relationship_type" | "relationship_other" | "relationship_tags">) {
+  if (contact.relationship_tags?.length) return contact.relationship_tags.map(relationshipTagLabel).join(", ");
   if (contact.relationship_type === "Other") return contact.relationship_other || "Other";
   return contact.relationship_type || "";
 }
@@ -124,6 +128,7 @@ export default function ContactsPage() {
   const [mergeTargetId, setMergeTargetId] = useState("");
   const [mergeError, setMergeError] = useState("");
   const [merging, setMerging] = useState(false);
+  const [customRelationshipTag, setCustomRelationshipTag] = useState("");
 
   const loadContacts = useCallback(async () => {
     const res = await fetch("/api/contacts");
@@ -165,6 +170,7 @@ export default function ContactsPage() {
   function openAdd() {
     setForm(emptyForm());
     setEditingId(null);
+    setCustomRelationshipTag("");
     setShowForm(true);
     setSelectedId(null);
   }
@@ -185,10 +191,12 @@ export default function ContactsPage() {
         })),
       relationship_type: c.relationship_type || "",
       relationship_other: c.relationship_other || "",
+      relationship_tags: c.relationship_tags || [],
       notes: c.notes || "",
       trusted: c.trusted,
     });
     setEditingId(c.id);
+    setCustomRelationshipTag("");
     setShowForm(true);
     setSelectedId(null);
   }
@@ -201,6 +209,24 @@ export default function ContactsPage() {
         { platform: "work_email", identifier: "", label: null, confirmed: true },
       ],
     }));
+  }
+
+  function toggleRelationshipTag(tag: string) {
+    setForm((current) => ({
+      ...current,
+      relationship_tags: current.relationship_tags.includes(tag)
+        ? current.relationship_tags.filter((currentTag) => currentTag !== tag)
+        : [...current.relationship_tags, tag],
+    }));
+  }
+
+  function addCustomRelationshipTag() {
+    const tag = customRelationshipTag.trim().toLowerCase();
+    if (!tag || !/^[a-z0-9][a-z0-9 _-]{0,38}$/.test(tag)) return;
+    setForm((current) => current.relationship_tags.includes(tag)
+      ? current
+      : { ...current, relationship_tags: [...current.relationship_tags, tag] });
+    setCustomRelationshipTag("");
   }
 
   function updateIdentifier(index: number, patch: Partial<ContactIdentifier>) {
@@ -293,6 +319,7 @@ export default function ContactsPage() {
         .filter((identifier) => identifier.identifier),
       relationship_type: form.relationship_type || null,
       relationship_other: form.relationship_type === "Other" ? form.relationship_other.trim() || null : null,
+      relationship_tags: form.relationship_tags,
       notes: form.notes.trim() || null,
       trusted: form.trusted,
     };
@@ -451,7 +478,7 @@ export default function ContactsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-ink mb-1">Relationship</label>
+                <label className="block text-sm font-medium text-ink mb-1">Primary relationship</label>
                 <select
                   value={form.relationship_type}
                   onChange={(e) =>
@@ -482,6 +509,22 @@ export default function ContactsPage() {
                 </div>
               )}
             </div>
+            <fieldset className="rounded-sm border border-border bg-bg p-4">
+              <legend className="px-1 text-sm font-medium text-ink">Relationship contexts</legend>
+              <p className="mb-3 text-xs leading-relaxed text-ink-light">
+                Choose as many as fit. One person can be a colleague and a friend, for example. These guide suggestions; they never block your choice of tone.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {relationshipTagOptions.map((tag) => {
+                  const selected = form.relationship_tags.includes(tag);
+                  return <button key={tag} type="button" onClick={() => toggleRelationshipTag(tag)} className={`rounded-pill border px-3 py-1.5 text-xs transition-colors ${selected ? "border-primary bg-primary text-white" : "border-border bg-white text-ink-mid hover:border-primary-mid"}`}>{relationshipTagLabel(tag)}</button>;
+                })}
+              </div>
+              <div className="mt-3 flex gap-2">
+                <input value={customRelationshipTag} onChange={(e) => setCustomRelationshipTag(e.target.value)} maxLength={39} placeholder="Add a custom context" className="min-w-0 flex-1 rounded-sm border border-border bg-white px-3 py-2 text-xs" />
+                <button type="button" onClick={addCustomRelationshipTag} className="rounded-pill border border-border bg-white px-3 py-2 text-xs text-ink-mid hover:border-primary-mid">Add</button>
+              </div>
+            </fieldset>
             <div className="rounded-sm border border-border bg-bg p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>

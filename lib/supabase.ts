@@ -24,6 +24,11 @@ export type Profile = {
   neurodivergent_context_other?: string | null;
   proactive_coaching_preference?: ProactivityPreference;
   pattern_model_enabled?: boolean;
+  desktop_companion_enabled?: boolean;
+  meeting_support_enabled?: boolean;
+  meeting_prompt_style?: "off" | "quiet" | "direct";
+  meeting_retention_preference?: "do_not_save" | "notes_only" | "summary_only";
+  meeting_consent_reminder_enabled?: boolean;
   first_login_complete?: boolean;
   onboarding_completed_at?: string | null;
   adult_us_eligibility_confirmed_at?: string | null;
