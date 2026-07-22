@@ -6,6 +6,7 @@ import {
   type PatternSummary,
   type WorkdayCheckin,
 } from "@/lib/workday-patterns";
+import SupportPlansPanel from "./SupportPlansPanel";
 
 type Response = { checkins: Array<WorkdayCheckin & { id: string; checked_in_at: string }>; summaries: PatternSummary[]; error?: string };
 
@@ -72,6 +73,7 @@ export default function WorkdayPanel() {
     </form>
     {offerBreak && <section className="mb-6 rounded-card border border-amber-200 bg-amber-50 p-5"><h2 className="text-lg text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Your day is stacked. Do you want help finding a break?</h2><p className="mt-1 text-sm text-ink-mid">This is a quiet suggestion here in Beckett—nothing will be scheduled or sent.</p><button type="button" onClick={() => setBreakIdeasOpen(!breakIdeasOpen)} className="mt-3 text-sm font-medium text-primary hover:underline">{breakIdeasOpen ? "Hide ideas" : "Help me find 10 minutes"}</button>{breakIdeasOpen && <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-ink-mid"><li>Protect the first 10-minute gap between two commitments.</li><li>Turn one non-urgent reply into a draft for later.</li><li>Ask for a clearer next priority before taking on another task.</li></ul>}</section>}
     <section className="rounded-card border border-border bg-white p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Patterns you asked Beckett to summarize</h2><p className="mt-1 text-xs text-ink-mid">Each statement is based only on your voluntary check-ins from the last 14 days.</p></div><Link href="/dashboard/settings" className="text-xs font-medium text-primary hover:underline">Pattern settings</Link></div>{loading ? <p className="mt-5 text-sm text-ink-mid">Loading your check-ins…</p> : data?.summaries.length ? <div className="mt-5 space-y-3">{data.summaries.map((summary, index) => <article key={`${summary.category}-${index}`} className="rounded-sm border border-border bg-bg/50 p-4"><p className="text-sm text-ink">{summary.summary}</p><p className="mt-2 text-xs text-ink-light">Based on {summary.evidence.matchingCheckins} of {summary.evidence.totalCheckins} check-ins in the last {summary.evidence.periodDays} days.</p></article>)}</div> : <p className="mt-5 text-sm leading-relaxed text-ink-mid">No pattern summaries yet. Save at least three check-ins and turn on “Allow future pattern summaries” in Settings if you want Beckett to create them.</p>}</section>
+    <SupportPlansPanel />
     <section className="mt-6 rounded-card border border-border bg-white p-6"><h2 className="text-lg text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Workplace supports</h2><p className="mt-1 text-sm leading-relaxed text-ink-mid">Prepare a clear, user-controlled request for a workplace support or accommodation. Beckett does not provide legal advice.</p><Link href="/dashboard/accommodations" className="mt-4 inline-block text-sm font-medium text-primary hover:underline">Open the request builder →</Link></section>
   </div>;
 }
