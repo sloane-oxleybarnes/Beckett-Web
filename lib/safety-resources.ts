@@ -5,6 +5,8 @@ export type SafetyResponse = {
   title: string;
   message: string;
   resources: Array<{ label: string; href: string }>;
+  owner: string;
+  reviewedAt: string;
 };
 
 const TOPIC_PATTERNS: Array<{ topic: SafetyTopic; pattern: RegExp }> = [
@@ -23,6 +25,8 @@ const RESPONSES: Record<SafetyTopic, SafetyResponse> = {
       { label: "988 Suicide & Crisis Lifeline (U.S. and Canada)", href: "https://988lifeline.org/" },
       { label: "Find A Helpline (international)", href: "https://findahelpline.com/" },
     ],
+    owner: "Beckett safety content team",
+    reviewedAt: "2026-07-22",
   },
   relationship_safety: {
     topic: "relationship_safety",
@@ -32,6 +36,8 @@ const RESPONSES: Record<SafetyTopic, SafetyResponse> = {
       { label: "National Domestic Violence Hotline (U.S.)", href: "https://www.thehotline.org/" },
       { label: "NO MORE Global Directory", href: "https://nomoredirectory.org/" },
     ],
+    owner: "Beckett safety content team",
+    reviewedAt: "2026-07-22",
   },
   health: {
     topic: "health",
@@ -41,6 +47,8 @@ const RESPONSES: Record<SafetyTopic, SafetyResponse> = {
       { label: "Find A Helpline", href: "https://findahelpline.com/" },
       { label: "SAMHSA treatment locator (U.S.)", href: "https://findtreatment.gov/" },
     ],
+    owner: "Beckett safety content team",
+    reviewedAt: "2026-07-22",
   },
   legal: {
     topic: "legal",
@@ -50,6 +58,8 @@ const RESPONSES: Record<SafetyTopic, SafetyResponse> = {
       { label: "Legal Services Corporation (U.S.)", href: "https://www.lsc.gov/about-lsc/what-legal-aid/get-legal-help" },
       { label: "LawHelp (U.S.)", href: "https://www.lawhelp.org/" },
     ],
+    owner: "Beckett safety content team",
+    reviewedAt: "2026-07-22",
   },
 };
 
