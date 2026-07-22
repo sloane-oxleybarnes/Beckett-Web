@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
+import Link from "next/link";
 
 type CalendarEvent = {
   id: string;
@@ -187,6 +188,7 @@ export default function CalendarPanel() {
                     ? `${event.attendees.slice(0, 4).map(attendeeLabel).join(", ")}${event.attendees.length > 4 ? ` +${event.attendees.length - 4}` : ""}`
                     : "No other attendees listed"}
                 </p>
+                <Link href={`/dashboard/meeting-prep?title=${encodeURIComponent(event.title)}&attendees=${encodeURIComponent(event.attendees.map(attendeeLabel).join(", "))}`} className="mt-3 inline-block text-xs font-medium text-primary hover:underline">Prepare with Beckett →</Link>
               </article>
             ))}
           </div>
