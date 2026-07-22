@@ -19,13 +19,7 @@ const navItems = [
   { href: "/dashboard/practice", label: "Practice" },
   { href: "/dashboard/skills", label: "Skills" },
   { href: "/dashboard/contacts", label: "Contacts" },
-  { href: "/dashboard/calendar", label: "Calendar" },
   { href: "/dashboard/meetings", label: "Meetings" },
-  { href: "/dashboard/meeting-prep", label: "Meeting prep" },
-  { href: "/dashboard/workday", label: "Workday" },
-  { href: "/dashboard/personal", label: "Personal" },
-  { href: "/dashboard/safety", label: "Support" },
-  { href: "/dashboard/companion", label: "Companion" },
   { href: "/dashboard/about", label: "About Me" },
   { href: "/dashboard/settings", label: "Settings" },
 ];
