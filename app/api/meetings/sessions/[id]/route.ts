@@ -16,6 +16,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     follow_up_draft: cleanText(body.follow_up_draft, 4000),
     decisions: cleanList(body.decisions),
     open_questions: cleanList(body.open_questions),
+    pre_meeting_goals: cleanList(body.pre_meeting_goals),
+    attendee_context: cleanText(body.attendee_context, 4000),
+    communication_reminders: cleanText(body.communication_reminders, 2000),
+    prep_checklist: cleanList(body.prep_checklist),
     updated_at: new Date().toISOString(),
   }).eq("id", params.id).eq("user_id", user.id).select("*").single();
   if (error) return NextResponse.json({ error: "Could not save the meeting debrief." }, { status: 500 });
