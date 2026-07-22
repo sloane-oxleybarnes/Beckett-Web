@@ -1,5 +1,5 @@
-import CompanionPanel from "./CompanionPanel";
+import { redirect } from "next/navigation";
 
 export default function CompanionPage() {
-  return <CompanionPanel />;
+  redirect("/dashboard/settings");
 }

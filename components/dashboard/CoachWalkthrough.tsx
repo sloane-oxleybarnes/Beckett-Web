@@ -66,7 +66,7 @@ const walkthroughSteps: WalkthroughStep[] = [
     eyebrow: "Settings",
     title: "You stay in control.",
     body:
-      "Settings is where account details, connected tools, beta diagnostics, and deletion requests live. Nothing here is locked away from you.",
+      "Settings is where account details, connected tools, coaching preferences, and deletion requests live. Nothing here is locked away from you.",
     target: '[data-tour="nav-settings"]',
   },
 ];

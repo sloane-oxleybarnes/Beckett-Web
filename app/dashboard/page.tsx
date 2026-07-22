@@ -78,7 +78,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               Where I am at today
             </p>
             <h2 className="mt-1 text-xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>
-              Quick check-in
+              Workday check-in
             </h2>
             <p className="mt-1 max-w-xl text-sm leading-relaxed text-ink-mid">
               Beckett uses this as lightweight context for how much support you may need today.

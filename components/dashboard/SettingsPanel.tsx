@@ -16,6 +16,7 @@ import {
   proactivityOptions,
   type ProactivityPreference,
 } from "@/lib/workday-coaching";
+import CompanionControls from "@/app/dashboard/companion/CompanionControls";
 
 function ConnectRow({
   icon,
@@ -242,28 +243,6 @@ type Diagnostics = {
   };
 };
 
-function HealthPill({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-pill px-2.5 py-1 text-xs font-medium ${
-        ok ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
-      }`}
-    >
-      {ok ? "OK" : "!"} {label}
-    </span>
-  );
-}
-
-function formatDiagnosticDate(value?: string | null) {
-  if (!value) return "Not recorded";
-  return new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 export default function SettingsPage() {
   const supabase = createClient();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -275,6 +254,7 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [pwSaved, setPwSaved] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [editingCoachingSettings, setEditingCoachingSettings] = useState(false);
   const [preferences, setPreferences] = useState<string[]>([]);
   const [coachingTone, setCoachingTone] = useState<CoachingTone>("direct_kind");
   const [proactivityPreference, setProactivityPreference] = useState<ProactivityPreference>(
@@ -285,8 +265,6 @@ export default function SettingsPage() {
   const [deletionNotes, setDeletionNotes] = useState("");
   const [deletionStatus, setDeletionStatus] = useState<"idle" | "loading" | "requested" | "error">("idle");
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
-  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
-  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
   const [disconnectingProvider, setDisconnectingProvider] = useState<"google" | "slack" | null>(null);
 
   useEffect(() => {
@@ -312,16 +290,12 @@ export default function SettingsPage() {
   }, [supabase]);
 
   const loadDiagnostics = useCallback(async () => {
-    setDiagnosticsLoading(true);
-    setDiagnosticsError(null);
     try {
       const res = await fetch("/api/extension/diagnostics", { cache: "no-store" });
       if (!res.ok) throw new Error("Could not load diagnostics.");
       setDiagnostics((await res.json()) as Diagnostics);
     } catch (error) {
-      setDiagnosticsError(error instanceof Error ? error.message : "Could not load diagnostics.");
-    } finally {
-      setDiagnosticsLoading(false);
+      console.error("Could not load account connection status.", error);
     }
   }, []);
 
@@ -337,14 +311,13 @@ export default function SettingsPage() {
     if (!confirmed) return;
 
     setDisconnectingProvider(provider);
-    setDiagnosticsError(null);
     try {
       const response = await fetch(`/api/integrations/${provider}`, { method: "DELETE" });
       const result = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) throw new Error(result?.error || `Could not disconnect ${label}.`);
       await loadDiagnostics();
     } catch (error) {
-      setDiagnosticsError(error instanceof Error ? error.message : `Could not disconnect ${label}.`);
+      console.error(`Could not disconnect ${label}.`, error);
     } finally {
       setDisconnectingProvider(null);
     }
@@ -379,6 +352,7 @@ export default function SettingsPage() {
     await supabase.from("profiles").update(update).eq("id", user.id);
     setProfile((current) => current ? { ...current, ...update } : current);
     setProfileSaved(true);
+    setEditingCoachingSettings(false);
     setTimeout(() => setProfileSaved(false), 3000);
   }
 
@@ -405,6 +379,7 @@ export default function SettingsPage() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id);
+    setEditingCoachingSettings(false);
   }
 
   function addCustomPreferences() {
@@ -588,7 +563,41 @@ export default function SettingsPage() {
           Choose how Beckett coaches, explains, and drafts with you. Personal profile details
           live in About Me.
         </p>
-        <form onSubmit={saveCoachingSettings} className="space-y-6">
+        {!editingCoachingSettings ? (
+          <div className="space-y-5">
+            <div>
+              <p className="text-sm font-medium text-ink">What Beckett helps with</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {preferences.length ? preferences.map((preference) => (
+                  <span key={preference} className="rounded-pill bg-primary-light px-3 py-1 text-xs font-medium text-primary">
+                    {preference}
+                  </span>
+                )) : <p className="text-sm text-ink-mid">No specific preferences selected.</p>}
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-ink">Coaching tone</p>
+              <p className="mt-1 text-sm text-ink-mid">
+                {coachingToneOptions.find((option) => option.value === coachingTone)?.label || "Direct and kind"}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-ink">Workday coaching</p>
+              <p className="mt-1 text-sm text-ink-mid">
+                {proactivityOptions.find((option) => option.value === proactivityPreference)?.label || "Only when I ask"}
+                {patternModelEnabled ? " · Pattern summaries enabled" : " · Pattern summaries off"}
+              </p>
+            </div>
+            <CompanionControls readOnly />
+            <button
+              type="button"
+              onClick={() => setEditingCoachingSettings(true)}
+              className="rounded-pill border border-border px-5 py-2 text-sm font-medium text-ink transition-colors hover:border-primary-mid hover:bg-primary-light"
+            >
+              Edit coaching settings
+            </button>
+          </div>
+        ) : <form onSubmit={saveCoachingSettings} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-ink mb-2">What I Want Beckett to Help Me With</label>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -670,6 +679,8 @@ export default function SettingsPage() {
             </label>
           </div>
 
+          <CompanionControls />
+
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="submit"
@@ -684,8 +695,15 @@ export default function SettingsPage() {
             >
               Clear settings
             </button>
+            <button
+              type="button"
+              onClick={() => setEditingCoachingSettings(false)}
+              className="text-sm text-ink-mid hover:text-ink"
+            >
+              Cancel
+            </button>
           </div>
-        </form>
+        </form>}
       </section>
 
       {/* Connected accounts */}
@@ -772,142 +790,16 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Beta diagnostics */}
-      <section className="bg-white rounded-card border border-border p-6 mb-5">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div>
-            <h2
-              className="text-lg text-ink mb-1"
-              style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-            >
-              Beta diagnostics
-            </h2>
-            <p className="text-sm text-ink-mid">
-              Quick health check for account access, integrations, and beta AI usage.
+          <div className="border-t border-border pt-5">
+            <p className="text-sm font-medium text-ink">Beckett for Chrome</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink-mid">
+              Install the extension, then use “Log in with Beckett” in its side panel if it is not connected.
             </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadDiagnostics()}
-            disabled={diagnosticsLoading}
-            className="shrink-0 text-xs border border-border rounded-pill px-4 py-1.5 text-ink hover:bg-bg transition-colors disabled:opacity-50"
-          >
-            {diagnosticsLoading ? "Checking..." : "Refresh"}
-          </button>
-        </div>
-
-        {diagnosticsError && (
-          <div
-            className="rounded-sm border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"
-            role="alert"
-          >
-            {diagnosticsError}
-          </div>
-        )}
-
-        {diagnostics ? (
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <HealthPill ok={diagnostics.beckett.authenticated} label="Beckett login" />
-              <HealthPill ok={diagnostics.extension.tokenIssued} label="Extension token" />
-              <HealthPill ok={diagnostics.integrations.slack.connected} label="Slack" />
-              <HealthPill ok={diagnostics.integrations.google.connected} label="Google" />
-              <HealthPill ok={diagnostics.api.reachable} label="API reachable" />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Account</p>
-                <p className="mt-1 text-sm text-ink">{diagnostics.beckett.email || profile.email}</p>
-                <p className="text-xs text-ink-light capitalize">Plan: {diagnostics.beckett.plan}</p>
-              </div>
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">AI usage today</p>
-                {diagnostics.aiUsage.unlimited ? (
-                  <>
-                    <p className="mt-1 text-sm text-ink">Unlimited tester access</p>
-                    <p className="text-xs text-ink-light">{diagnostics.aiUsage.used} calls logged today</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-1 text-sm text-ink">
-                      {diagnostics.aiUsage.used}/{diagnostics.aiUsage.limit} used
-                    </p>
-                    <p className="text-xs text-ink-light">{diagnostics.aiUsage.remaining} remaining</p>
-                  </>
-                )}
-              </div>
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Slack</p>
-                {diagnostics.integrations.slack.connected ? (
-                  <>
-                    <p className="mt-1 text-sm text-ink">
-                      {diagnostics.integrations.slack.teamName || "Workspace connected"}
-                    </p>
-                    <p className="text-xs text-ink-light">
-                      User: {diagnostics.integrations.slack.userId || "unknown"}
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-1 text-sm text-amber-700">Not connected in web app settings</p>
-                )}
-              </div>
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Last check</p>
-                <p className="mt-1 text-sm text-ink">{formatDiagnosticDate(diagnostics.api.checkedAt)}</p>
-                <p className="text-xs text-ink-light">
-                  Extension sync: {formatDiagnosticDate(diagnostics.extension.lastProfileSyncAt)}
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs text-ink-light">
-              If Slack shows connected here but analysis still fails, reload the Chrome extension and reconnect
-              Slack from the extension popup so the local browser token is refreshed too.
-            </p>
-          </div>
-        ) : !diagnosticsError ? (
-          <div
-            className="rounded-sm border border-border bg-bg/60 p-4 text-sm text-ink-light"
-            role="status"
-            aria-live="polite"
-          >
-            {diagnosticsLoading ? "Checking beta systems..." : "Run a health check to see current status."}
-          </div>
-        ) : null}
-      </section>
-
-      {/* Extension setup */}
-      <section className="bg-white rounded-card border border-border p-6 mb-5">
-        <h2
-          className="text-lg text-ink mb-1"
-          style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-        >
-          Extension setup
-        </h2>
-        <p className="text-sm text-ink-mid mb-4">
-          Beckett for Chrome connects through a secure login flow in the side panel.
-        </p>
-        <p className="mb-4 text-xs leading-relaxed text-ink-mid">
-          The extension reads the page context needed for coaching in Gmail and Slack. Analysis
-          requests go through Beckett&apos;s backend so beta access, limits, and safety rules can apply.
-        </p>
-        <div className="rounded-sm border border-primary/20 bg-primary-light p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-sm font-medium text-ink">Included in beta access</p>
-              <p className="text-xs text-ink-mid mt-1">
-                Install Beckett from the Chrome Web Store, then use “Log in with Beckett” in the side panel if it is not connected.
-              </p>
-            </div>
             <a
               href={CHROME_WEB_STORE_URL}
               target="_blank"
               rel="noreferrer"
-              className="shrink-0 rounded-pill bg-primary px-4 py-2 text-center text-xs font-medium text-white transition-colors hover:bg-primary-dark"
+              className="mt-3 inline-flex rounded-pill bg-primary px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-primary-dark"
             >
               Install extension
             </a>
