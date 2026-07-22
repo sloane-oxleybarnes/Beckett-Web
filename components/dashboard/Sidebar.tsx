@@ -19,6 +19,7 @@ const navItems = [
   { href: "/dashboard/practice", label: "Practice" },
   { href: "/dashboard/skills", label: "Skills" },
   { href: "/dashboard/contacts", label: "Contacts" },
+  { href: "/dashboard/calendar", label: "Calendar" },
   { href: "/dashboard/about", label: "About Me" },
   { href: "/dashboard/settings", label: "Settings" },
 ];
