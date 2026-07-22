@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import Link from "next/link";
 import WorkdayCheckinCard from "@/components/dashboard/WorkdayCheckinCard";
+import WorkdayReminderNudge from "@/components/dashboard/WorkdayReminderNudge";
 import CoachWalkthrough from "@/components/dashboard/CoachWalkthrough";
 import BetaMissionsCard from "@/components/dashboard/BetaMissionsCard";
 
@@ -71,7 +72,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <p className="text-ink-mid text-sm">Here is where things stand today.</p>
       </div>
 
-      <WorkdayCheckinCard />
+      <WorkdayReminderNudge />
+      <div id="workday-checkin"><WorkdayCheckinCard /></div>
 
       {!isBeta ? <section className="mb-6">
         <div data-tour="start-here" className="rounded-card border border-primary/20 bg-primary-light/40 p-6">

@@ -17,6 +17,7 @@ import {
   type ProactivityPreference,
 } from "@/lib/workday-coaching";
 import CompanionControls from "@/app/dashboard/companion/CompanionControls";
+import WorkdayReminders from "@/components/dashboard/WorkdayReminders";
 
 function ConnectRow({
   icon,
@@ -515,6 +516,8 @@ export default function SettingsPage() {
           View safety resources
         </Link>
       </section>
+
+      <WorkdayReminders />
 
       {/* Dashboard tour */}
       <section className="bg-white rounded-card border border-border p-6 mb-5">
