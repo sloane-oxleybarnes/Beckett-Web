@@ -8,7 +8,7 @@ const sections = [
     body: [
       "During beta, Beckett can use Gmail, Google Calendar, Slack, and Chrome extension context only when you connect those tools and ask Beckett for coaching, or when you turn on an analysis setting yourself.",
       "For Gmail, Beckett uses read-only access so it can understand email threads and help draft replies. For Slack, Beckett uses connected workspace context and may search relevant Slack history across authorized channels, DMs, group DMs, and private channels when you ask for coaching.",
-      "For Google Calendar, Beckett uses read-only access to upcoming event titles, timing, and attendees so it can show your day and offer meeting context. Beckett does not create, edit, cancel, or respond to calendar events during beta.",
+      "For Google Calendar, Beckett uses read-only access to list the calendars you choose and to read upcoming event titles, timing, and attendees from those calendars. This lets Beckett show your day and offer meeting context. Beckett does not create, edit, cancel, or respond to calendar events during beta.",
       "Beckett is not meant to read your work communication in the background without your action.",
     ],
   },

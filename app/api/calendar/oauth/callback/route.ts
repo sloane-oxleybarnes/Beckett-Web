@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { encryptGoogleAccessToken } from "@/lib/google-token-security";
-import { getGoogleCalendarOAuthConfig } from "@/lib/google-calendar-oauth";
+import { GOOGLE_CALENDAR_SCOPES, getGoogleCalendarOAuthConfig } from "@/lib/google-calendar-oauth";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { trackBetaEvent } from "@/lib/beta-events";
@@ -76,7 +76,12 @@ export async function GET(request: NextRequest) {
       external_user_id: session.user.email || null,
       external_team_id: null,
       external_team_name: null,
-      metadata: { provider: "google_calendar", scopes: "calendar.events.readonly", token_encryption: "aes-256-gcm:v1" },
+      metadata: {
+        provider: "google_calendar",
+        scopes: GOOGLE_CALENDAR_SCOPES.map((scope) => scope.replace("https://www.googleapis.com/auth/", "")).join(" "),
+        selectedCalendarIds: ["primary"],
+        token_encryption: "aes-256-gcm:v1",
+      },
       connected_at: now,
       updated_at: now,
     },

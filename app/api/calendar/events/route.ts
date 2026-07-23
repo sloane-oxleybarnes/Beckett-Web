@@ -10,6 +10,13 @@ import {
 
 const CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly";
 
+function selectedCalendarIds(metadata: unknown) {
+  const ids = typeof metadata === "object" && metadata && Array.isArray((metadata as { selectedCalendarIds?: unknown }).selectedCalendarIds)
+    ? (metadata as { selectedCalendarIds: unknown[] }).selectedCalendarIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+    : [];
+  return ids.length ? ids.slice(0, 10) : ["primary"];
+}
+
 type GoogleCalendarEvent = {
   id?: string;
   summary?: string;
@@ -33,7 +40,7 @@ export async function GET(request: Request) {
 
   const { data: integration, error: integrationError } = await supabaseAdmin
     .from("user_integrations")
-    .select("id, access_token")
+    .select("id, access_token, metadata")
     .eq("user_id", session.user.id)
     .eq("provider", "google_calendar")
     .maybeSingle();
@@ -61,49 +68,54 @@ export async function GET(request: Request) {
 
   const now = new Date();
   const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const params = new URLSearchParams({
-    timeMin: now.toISOString(),
-    timeMax: weekFromNow.toISOString(),
-    singleEvents: "true",
-    orderBy: "startTime",
-    maxResults: "20",
-    fields: "items(id,summary,start(dateTime),end(dateTime),attendees(self,displayName,email,responseStatus))",
-  });
-
-  let calendarResponse: Response;
+  const calendarIds = selectedCalendarIds(integration.metadata);
   try {
-    calendarResponse = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
-      { headers: { Authorization: `Bearer ${credential.accessToken}` }, cache: "no-store" }
-    );
+    const responses = await Promise.all(calendarIds.map(async (calendarId) => {
+      const params = new URLSearchParams({
+        timeMin: now.toISOString(),
+        timeMax: weekFromNow.toISOString(),
+        singleEvents: "true",
+        orderBy: "startTime",
+        maxResults: "20",
+        fields: "items(id,summary,start(dateTime),end(dateTime),attendees(self,displayName,email,responseStatus))",
+      });
+      const response = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
+        { headers: { Authorization: `Bearer ${credential.accessToken}` }, cache: "no-store" }
+      );
+      return { calendarId, response };
+    }));
+
+    if (responses.some(({ response }) => response.status === 401 || response.status === 403)) {
+      return NextResponse.json({ connected: true, reauthorize: true, events: [] });
+    }
+    if (responses.some(({ response }) => !response.ok)) {
+      return NextResponse.json({ error: "Google Calendar could not load your events." }, { status: 502 });
+    }
+
+    const eventGroups = await Promise.all(responses.map(async ({ calendarId, response }) => ({
+      calendarId,
+      items: ((await response.json()) as { items?: GoogleCalendarEvent[] }).items || [],
+    })));
+    const events = eventGroups.flatMap(({ calendarId, items }) => items
+      .filter((event) => event.id && event.start?.dateTime)
+      .map((event) => ({
+        id: `${calendarId}:${event.id as string}`,
+        title: event.summary?.trim() || "Untitled meeting",
+        start: event.start?.dateTime as string,
+        end: event.end?.dateTime || null,
+        attendees: (event.attendees || [])
+          .filter((attendee) => !attendee.self)
+          .map((attendee) => ({
+            name: attendee.displayName || null,
+            email: attendee.email || null,
+            responseStatus: attendee.responseStatus || null,
+          })),
+      })))
+      .sort((first, second) => new Date(first.start).getTime() - new Date(second.start).getTime());
+
+    return NextResponse.json({ connected: true, scope: CALENDAR_EVENTS_SCOPE, events });
   } catch {
     return NextResponse.json({ error: "Google Calendar could not be reached." }, { status: 502 });
   }
-
-  if (calendarResponse.status === 401 || calendarResponse.status === 403) {
-    return NextResponse.json({ connected: true, reauthorize: true, events: [] });
-  }
-
-  if (!calendarResponse.ok) {
-    return NextResponse.json({ error: "Google Calendar could not load your events." }, { status: 502 });
-  }
-
-  const payload = (await calendarResponse.json()) as { items?: GoogleCalendarEvent[] };
-  const events = (payload.items || [])
-    .filter((event) => event.id && event.start?.dateTime)
-    .map((event) => ({
-      id: event.id as string,
-      title: event.summary?.trim() || "Untitled meeting",
-      start: event.start?.dateTime as string,
-      end: event.end?.dateTime || null,
-      attendees: (event.attendees || [])
-        .filter((attendee) => !attendee.self)
-        .map((attendee) => ({
-          name: attendee.displayName || null,
-          email: attendee.email || null,
-          responseStatus: attendee.responseStatus || null,
-        })),
-    }));
-
-  return NextResponse.json({ connected: true, scope: CALENDAR_EVENTS_SCOPE, events });
 }

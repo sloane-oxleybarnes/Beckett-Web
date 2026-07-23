@@ -21,6 +21,19 @@ type CalendarResponse = {
   events: CalendarEvent[];
 };
 
+type CalendarOption = {
+  id: string;
+  name: string;
+  primary: boolean;
+};
+
+type CalendarSettingsResponse = {
+  connected: boolean;
+  reauthorize?: boolean;
+  calendars: CalendarOption[];
+  selectedCalendarIds: string[];
+};
+
 function formatEventTime(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     weekday: "short",
@@ -40,6 +53,10 @@ export default function CalendarPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [calendarOptions, setCalendarOptions] = useState<CalendarOption[]>([]);
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
+  const [loadingCalendarSettings, setLoadingCalendarSettings] = useState(false);
+  const [savingCalendarSettings, setSavingCalendarSettings] = useState(false);
 
   const loadCalendar = useCallback(async () => {
     setLoading(true);
@@ -47,12 +64,26 @@ export default function CalendarPanel() {
     try {
       const response = await fetch("/api/calendar/events", { cache: "no-store" });
       const data = (await response.json().catch(() => null)) as CalendarResponse & { error?: string } | null;
-      if (!response.ok) throw new Error(data?.error || "Could not load your calendar.");
+      if (!response.ok || !data) throw new Error(data?.error || "Could not load your calendar.");
       setCalendar(data);
+      if (data.connected && !data.reauthorize) {
+        setLoadingCalendarSettings(true);
+        const settingsResponse = await fetch("/api/calendar/calendars", { cache: "no-store" });
+        const settings = (await settingsResponse.json().catch(() => null)) as CalendarSettingsResponse & { error?: string } | null;
+        if (!settingsResponse.ok) throw new Error(settings?.error || "Could not load your calendar settings.");
+        if (!settings?.reauthorize) {
+          setCalendarOptions(settings?.calendars || []);
+          setSelectedCalendarIds(settings?.selectedCalendarIds || []);
+        }
+      } else {
+        setCalendarOptions([]);
+        setSelectedCalendarIds([]);
+      }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Could not load your calendar.");
     } finally {
       setLoading(false);
+      setLoadingCalendarSettings(false);
     }
   }, []);
 
@@ -95,6 +126,35 @@ export default function CalendarPanel() {
     }
   }
 
+  function toggleCalendar(calendarId: string) {
+    setSelectedCalendarIds((current) => current.includes(calendarId)
+      ? current.filter((id) => id !== calendarId)
+      : [...current, calendarId]);
+  }
+
+  async function saveCalendarSettings() {
+    if (!selectedCalendarIds.length) {
+      setError("Choose at least one calendar.");
+      return;
+    }
+    setSavingCalendarSettings(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/calendar/calendars", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedCalendarIds }),
+      });
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(result?.error || "Could not save your calendar choices.");
+      await loadCalendar();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not save your calendar choices.");
+    } finally {
+      setSavingCalendarSettings(false);
+    }
+  }
+
   const needsConnection = !calendar?.connected || calendar.reauthorize;
 
   return (
@@ -118,15 +178,50 @@ export default function CalendarPanel() {
       </div>
 
       {calendar?.connected && !calendar.reauthorize && (
-        <div className="mb-5 flex justify-end">
-          <button
-            type="button"
-            onClick={() => void disconnectCalendar()}
-            disabled={disconnecting}
-            className="text-xs font-medium text-red-700 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {disconnecting ? "Disconnecting…" : "Disconnect Google Calendar"}
-          </button>
+        <div className="mb-5 rounded-card border border-border bg-white p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-medium text-ink">Calendar settings</h2>
+              <p className="mt-1 text-sm text-ink-mid">Choose the calendars Beckett should include in your upcoming-meeting view.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void disconnectCalendar()}
+              disabled={disconnecting}
+              className="text-xs font-medium text-red-700 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {disconnecting ? "Disconnecting…" : "Disconnect Google Calendar"}
+            </button>
+          </div>
+          {loadingCalendarSettings ? (
+            <p className="mt-4 text-sm text-ink-mid">Loading your calendars…</p>
+          ) : calendarOptions.length ? (
+            <>
+              <div className="mt-4 space-y-2">
+                {calendarOptions.map((calendarOption) => (
+                  <label key={calendarOption.id} className="flex cursor-pointer items-center gap-3 rounded-sm border border-border px-3 py-2 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      checked={selectedCalendarIds.includes(calendarOption.id)}
+                      onChange={() => toggleCalendar(calendarOption.id)}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    <span>{calendarOption.name}{calendarOption.primary ? " (primary)" : ""}</span>
+                  </label>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => void saveCalendarSettings()}
+                disabled={savingCalendarSettings || !selectedCalendarIds.length}
+                className="mt-4 rounded-pill bg-primary px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingCalendarSettings ? "Saving…" : "Save calendar choices"}
+              </button>
+            </>
+          ) : (
+            <p className="mt-4 text-sm text-ink-mid">Your Google calendars could not be listed yet. Reconnect once after enabling Calendar access.</p>
+          )}
         </div>
       )}
 

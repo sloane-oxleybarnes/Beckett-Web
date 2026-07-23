@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { GOOGLE_CALENDAR_SCOPE, getGoogleCalendarOAuthConfig } from "@/lib/google-calendar-oauth";
+import { GOOGLE_CALENDAR_SCOPES, getGoogleCalendarOAuthConfig } from "@/lib/google-calendar-oauth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 const COOKIE_PATH = "/api/calendar/oauth";
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
     response_type: "code",
-    scope: GOOGLE_CALENDAR_SCOPE,
+    scope: GOOGLE_CALENDAR_SCOPES.join(" "),
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "true",

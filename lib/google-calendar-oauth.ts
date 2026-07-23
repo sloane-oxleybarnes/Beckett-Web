@@ -1,6 +1,8 @@
 import "server-only";
 
-export const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly";
+export const GOOGLE_CALENDAR_EVENT_SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly";
+export const GOOGLE_CALENDAR_LIST_SCOPE = "https://www.googleapis.com/auth/calendar.calendarlist.readonly";
+export const GOOGLE_CALENDAR_SCOPES = [GOOGLE_CALENDAR_EVENT_SCOPE, GOOGLE_CALENDAR_LIST_SCOPE];
 
 export type GoogleCalendarCredential = {
   version: 1;
