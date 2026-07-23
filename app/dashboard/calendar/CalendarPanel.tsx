@@ -99,10 +99,6 @@ export default function CalendarPanel() {
         <Link href="/dashboard/meetings" className="hover:underline">Meeting notes &amp; support →</Link>
       </div>
 
-      <div className="mb-5 rounded-sm border border-primary/15 bg-primary-light/40 p-4 text-sm leading-relaxed text-ink-mid">
-        Beckett reads selected calendar event titles, timing, and attendees to show your week and offer meeting context. It does not create, edit, cancel, or respond to calendar events, and it does not store your events.
-      </div>
-
       {error && <div className="mb-5 rounded-sm border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
       {loading ? (
@@ -143,6 +139,10 @@ export default function CalendarPanel() {
           </section>
         </>
       )}
+
+      <div className="mt-5 rounded-sm border border-primary/15 bg-primary-light/40 p-4 text-sm leading-relaxed text-ink-mid">
+        Beckett reads selected calendar event titles, timing, and attendees to show your week and offer meeting context. It does not create, edit, cancel, or respond to calendar events, and it does not store your events.
+      </div>
     </div>
   );
 }
