@@ -64,6 +64,10 @@ export default function CalendarPanel() {
 
   async function connectCalendar() {
     setError(null);
+    // Supabase may fall back to the Site URL after an identity-link flow. Keep
+    // this one-time marker so the landing page can route the returned PKCE code
+    // through our server callback and retain the calendar connection intent.
+    window.sessionStorage.setItem("beckett:calendar-linking", "1");
     const { error: authError } = await supabase.auth.linkIdentity({
       provider: "google",
       options: {
@@ -76,7 +80,10 @@ export default function CalendarPanel() {
         },
       },
     });
-    if (authError) setError(authError.message);
+    if (authError) {
+      window.sessionStorage.removeItem("beckett:calendar-linking");
+      setError(authError.message);
+    }
   }
 
   async function disconnectCalendar() {

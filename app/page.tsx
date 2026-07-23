@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { SITE_CONTENT_DEFAULTS, contentValue } from "@/lib/site-content";
 import "./home.css";
 
@@ -16,7 +16,17 @@ export default function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [siteContent, setSiteContent] = useState<Record<string, string>>(SITE_CONTENT_DEFAULTS);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const copy = (key: string) => contentValue(siteContent, key);
+
+  useEffect(() => {
+    const code = searchParams.get("code");
+    const isCalendarLink = window.sessionStorage.getItem("beckett:calendar-linking") === "1";
+    if (!code || !isCalendarLink) return;
+
+    window.sessionStorage.removeItem("beckett:calendar-linking");
+    window.location.replace(`/auth/callback?code=${encodeURIComponent(code)}&integration=calendar&next=${encodeURIComponent("/dashboard/calendar")}`);
+  }, [searchParams]);
 
   useEffect(() => {
     const hash = window.location.hash;
