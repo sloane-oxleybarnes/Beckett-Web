@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 const COOKIE_PATH = "/api/calendar/oauth";
 const MAX_AGE_SECONDS = 10 * 60;
+const SETTINGS_PATH = "/dashboard/settings";
 
 function base64Url(value: Buffer) {
   return value.toString("base64url");
@@ -12,18 +13,19 @@ function base64Url(value: Buffer) {
 
 export async function GET(request: NextRequest) {
   const origin = new URL(request.url).origin;
+  const returnTo = request.nextUrl.searchParams.get("next") === SETTINGS_PATH ? SETTINGS_PATH : "/dashboard/calendar";
   const supabase = createSupabaseServerClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
   if (!session) {
-    return NextResponse.redirect(new URL("/auth/login?next=/dashboard/calendar", origin));
+    return NextResponse.redirect(new URL(`/auth/login?next=${encodeURIComponent(returnTo)}`, origin));
   }
 
   const config = getGoogleCalendarOAuthConfig(origin);
   if (!config) {
-    return NextResponse.redirect(new URL("/dashboard/calendar?calendar=configuration-required", origin));
+    return NextResponse.redirect(new URL(`${returnTo}?calendar=configuration-required`, origin));
   }
 
   const state = base64Url(randomBytes(32));
@@ -48,5 +50,6 @@ export async function GET(request: NextRequest) {
   response.cookies.set("beckett_calendar_state", state, options);
   response.cookies.set("beckett_calendar_verifier", verifier, options);
   response.cookies.set("beckett_calendar_user", session.user.id, options);
+  response.cookies.set("beckett_calendar_next", returnTo, options);
   return response;
 }

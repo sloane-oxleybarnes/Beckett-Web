@@ -7,9 +7,9 @@ import { trackBetaEvent } from "@/lib/beta-events";
 
 const COOKIE_PATH = "/api/calendar/oauth";
 
-function completeRedirect(origin: string, status: string) {
-  const response = NextResponse.redirect(new URL(`/dashboard/calendar?calendar=${encodeURIComponent(status)}`, origin));
-  for (const name of ["beckett_calendar_state", "beckett_calendar_verifier", "beckett_calendar_user"]) {
+function completeRedirect(origin: string, status: string, returnTo = "/dashboard/calendar") {
+  const response = NextResponse.redirect(new URL(`${returnTo}?calendar=${encodeURIComponent(status)}`, origin));
+  for (const name of ["beckett_calendar_state", "beckett_calendar_verifier", "beckett_calendar_user", "beckett_calendar_next"]) {
     response.cookies.set(name, "", { httpOnly: true, sameSite: "lax", secure: true, path: COOKIE_PATH, maxAge: 0 });
   }
   return response;
@@ -17,8 +17,9 @@ function completeRedirect(origin: string, status: string) {
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
+  const returnTo = request.cookies.get("beckett_calendar_next")?.value === "/dashboard/settings" ? "/dashboard/settings" : "/dashboard/calendar";
   const error = searchParams.get("error");
-  if (error) return completeRedirect(origin, error === "access_denied" ? "cancelled" : "authorization-failed");
+  if (error) return completeRedirect(origin, error === "access_denied" ? "cancelled" : "authorization-failed", returnTo);
 
   const code = searchParams.get("code");
   const state = searchParams.get("state");
@@ -26,17 +27,17 @@ export async function GET(request: NextRequest) {
   const verifier = request.cookies.get("beckett_calendar_verifier")?.value;
   const expectedUserId = request.cookies.get("beckett_calendar_user")?.value;
   if (!code || !state || !expectedState || state !== expectedState || !verifier || !expectedUserId) {
-    return completeRedirect(origin, "authorization-failed");
+    return completeRedirect(origin, "authorization-failed", returnTo);
   }
 
   const supabase = createSupabaseServerClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session || session.user.id !== expectedUserId) return completeRedirect(origin, "session-expired");
+  if (!session || session.user.id !== expectedUserId) return completeRedirect(origin, "session-expired", returnTo);
 
   const config = getGoogleCalendarOAuthConfig(origin);
-  if (!config) return completeRedirect(origin, "configuration-required");
+  if (!config) return completeRedirect(origin, "configuration-required", returnTo);
 
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
     }),
     cache: "no-store",
   });
-  if (!tokenResponse.ok) return completeRedirect(origin, "authorization-failed");
+  if (!tokenResponse.ok) return completeRedirect(origin, "authorization-failed", returnTo);
 
   const token = (await tokenResponse.json()) as {
     access_token?: string;
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
     expires_in?: number;
   };
   if (!token.access_token || !token.refresh_token || typeof token.expires_in !== "number") {
-    return completeRedirect(origin, "authorization-failed");
+    return completeRedirect(origin, "authorization-failed", returnTo);
   }
 
   const now = new Date().toISOString();
@@ -87,8 +88,8 @@ export async function GET(request: NextRequest) {
     },
     { onConflict: "user_id,provider" }
   );
-  if (upsertError) return completeRedirect(origin, "connection-failed");
+  if (upsertError) return completeRedirect(origin, "connection-failed", returnTo);
 
   await trackBetaEvent({ userId: session.user.id, email: session.user.email, eventName: "calendar_connected", source: "web_app", metadata: { integration: "calendar" } });
-  return completeRedirect(origin, "connected");
+  return completeRedirect(origin, "connected", returnTo);
 }

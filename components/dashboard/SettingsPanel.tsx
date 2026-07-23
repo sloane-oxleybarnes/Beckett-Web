@@ -28,6 +28,7 @@ function ConnectRow({
   connected,
   detail,
   disconnecting,
+  needsReconnect,
 }: {
   icon: string;
   name: string;
@@ -37,6 +38,7 @@ function ConnectRow({
   connected?: boolean;
   detail?: string;
   disconnecting?: boolean;
+  needsReconnect?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
@@ -49,8 +51,8 @@ function ConnectRow({
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {connected && (
-          <span className="rounded-pill bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
-            Connected
+          <span className={`rounded-pill px-3 py-1 text-xs font-medium ${needsReconnect ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}>
+            {needsReconnect ? "Needs reconnection" : "Connected"}
           </span>
         )}
         <button
@@ -244,6 +246,14 @@ type Diagnostics = {
   };
 };
 
+type CalendarOption = { id: string; name: string; primary: boolean };
+type CalendarConnection = {
+  connected: boolean;
+  reauthorize?: boolean;
+  calendars: CalendarOption[];
+  selectedCalendarIds: string[];
+};
+
 export default function SettingsPage() {
   const supabase = createClient();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -266,7 +276,11 @@ export default function SettingsPage() {
   const [deletionNotes, setDeletionNotes] = useState("");
   const [deletionStatus, setDeletionStatus] = useState<"idle" | "loading" | "requested" | "error">("idle");
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
-  const [disconnectingProvider, setDisconnectingProvider] = useState<"google" | "slack" | null>(null);
+  const [disconnectingProvider, setDisconnectingProvider] = useState<"google" | "slack" | "calendar" | null>(null);
+  const [calendarConnection, setCalendarConnection] = useState<CalendarConnection | null>(null);
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
+  const [calendarSettingsError, setCalendarSettingsError] = useState<string | null>(null);
+  const [savingCalendarSettings, setSavingCalendarSettings] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -304,6 +318,40 @@ export default function SettingsPage() {
     void loadDiagnostics();
   }, [loadDiagnostics]);
 
+  const loadCalendarConnection = useCallback(async () => {
+    try {
+      const response = await fetch("/api/calendar/calendars", { cache: "no-store" });
+      const data = (await response.json().catch(() => null)) as CalendarConnection & { error?: string } | null;
+      if (!response.ok || !data) throw new Error(data?.error || "Could not load Calendar settings.");
+      setCalendarConnection(data);
+      setSelectedCalendarIds(data.selectedCalendarIds || []);
+    } catch (error) {
+      setCalendarSettingsError(error instanceof Error ? error.message : "Could not load Calendar settings.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCalendarConnection();
+  }, [loadCalendarConnection]);
+
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get("calendar");
+    if (!status) return;
+
+    if (status === "connected") {
+      setCalendarSettingsError(null);
+      void loadCalendarConnection();
+    } else if (status === "cancelled") {
+      setCalendarSettingsError("Calendar connection was cancelled.");
+    } else if (status === "configuration-required") {
+      setCalendarSettingsError("Calendar connection is still being configured. Please try again shortly.");
+    } else {
+      setCalendarSettingsError("Calendar connection could not be completed. Please try again.");
+    }
+
+    window.history.replaceState({}, "", "/dashboard/settings#connected-accounts");
+  }, [loadCalendarConnection]);
+
   async function disconnectIntegration(provider: "google" | "slack") {
     const label = provider === "google" ? "Google (Gmail)" : "Slack";
     const confirmed = window.confirm(
@@ -319,6 +367,52 @@ export default function SettingsPage() {
       await loadDiagnostics();
     } catch (error) {
       console.error(`Could not disconnect ${label}.`, error);
+    } finally {
+      setDisconnectingProvider(null);
+    }
+  }
+
+  function toggleCalendar(calendarId: string) {
+    setCalendarSettingsError(null);
+    setSelectedCalendarIds((current) => current.includes(calendarId)
+      ? current.filter((id) => id !== calendarId)
+      : [...current, calendarId]);
+  }
+
+  async function saveCalendarSettings() {
+    if (!selectedCalendarIds.length) {
+      setCalendarSettingsError("Choose at least one calendar.");
+      return;
+    }
+    setSavingCalendarSettings(true);
+    setCalendarSettingsError(null);
+    try {
+      const response = await fetch("/api/calendar/calendars", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedCalendarIds }),
+      });
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(result?.error || "Could not save your calendar choices.");
+      await loadCalendarConnection();
+    } catch (error) {
+      setCalendarSettingsError(error instanceof Error ? error.message : "Could not save your calendar choices.");
+    } finally {
+      setSavingCalendarSettings(false);
+    }
+  }
+
+  async function disconnectCalendar() {
+    if (!window.confirm("Disconnect Google Calendar? Beckett will stop reading upcoming events. Existing Beckett coaching history and contacts will not be deleted.")) return;
+    setDisconnectingProvider("calendar");
+    setCalendarSettingsError(null);
+    try {
+      const response = await fetch("/api/integrations/google_calendar", { method: "DELETE" });
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(result?.error || "Could not disconnect Google Calendar.");
+      await loadCalendarConnection();
+    } catch (error) {
+      setCalendarSettingsError(error instanceof Error ? error.message : "Could not disconnect Google Calendar.");
     } finally {
       setDisconnectingProvider(null);
     }
@@ -701,31 +795,82 @@ export default function SettingsPage() {
           status and usage metadata, not full Gmail or Slack message history by default.
         </p>
         <div className="mb-5 rounded-sm border border-primary/15 bg-primary-light/40 p-3 text-xs leading-relaxed text-ink-mid">
-          Gmail is read-only and Slack is used only for context. Beckett cannot send email, post to
-          Slack, move meetings, or change anything without you taking the final action. Disconnecting
-          stops future access but does not delete your existing Beckett coaching history or contacts.
+          Google connections are read-only and Slack is used only for context. Beckett cannot send email, post to
+          Slack, move meetings, or change anything without you taking the final action. Disconnecting stops future
+          access but does not delete your existing Beckett coaching history or contacts.
         </div>
         <div className="space-y-4">
-          {/* Google / Gmail */}
-          <ConnectRow
-            icon="📧"
-            name="Google (Gmail)"
-            description="Read-only email thread context when you ask Beckett for coaching"
-            connected={diagnostics?.integrations.google.connected}
-            detail={diagnostics?.integrations.google.email || "Google account connected"}
-            onConnect={async () => {
-              await supabase.auth.signInWithOAuth({
-                provider: "google",
-                options: {
-                  scopes: "https://www.googleapis.com/auth/gmail.readonly",
-                  redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/dashboard/settings")}&integration=google`,
-                  queryParams: { access_type: "offline", prompt: "consent" },
-                },
-              });
-            }}
-            onDisconnect={() => void disconnectIntegration("google")}
-            disconnecting={disconnectingProvider === "google"}
-          />
+          <div id="connected-accounts" className="rounded-sm border border-border bg-bg/40 p-4">
+            <div className="mb-4 flex items-center gap-3">
+              <span className="text-lg">🔗</span>
+              <div>
+                <p className="text-sm font-medium text-ink">Google</p>
+                <p className="text-xs text-ink-light">Choose Gmail or Calendar access independently.</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <ConnectRow
+                icon="📧"
+                name="Gmail"
+                description="Read-only email thread context when you ask Beckett for coaching"
+                connected={diagnostics?.integrations.google.connected}
+                detail={diagnostics?.integrations.google.email || "Google account connected"}
+                onConnect={async () => {
+                  await supabase.auth.signInWithOAuth({
+                    provider: "google",
+                    options: {
+                      scopes: "https://www.googleapis.com/auth/gmail.readonly",
+                      redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/dashboard/settings")}&integration=google`,
+                      queryParams: { access_type: "offline", prompt: "consent" },
+                    },
+                  });
+                }}
+                onDisconnect={() => void disconnectIntegration("google")}
+                disconnecting={disconnectingProvider === "google"}
+              />
+              <div className="border-t border-border pt-4">
+                <ConnectRow
+                  icon="📅"
+                  name="Google Calendar"
+                  description="Read-only upcoming-meeting context from the calendars you choose"
+                  connected={calendarConnection?.connected}
+                  needsReconnect={calendarConnection?.reauthorize}
+                  detail={calendarConnection?.reauthorize ? "Reconnect to restore Calendar access" : "Choose one or more calendars for Beckett to include"}
+                  onConnect={() => window.location.assign("/api/calendar/oauth/start?next=/dashboard/settings")}
+                  onDisconnect={() => void disconnectCalendar()}
+                  disconnecting={disconnectingProvider === "calendar"}
+                />
+                {calendarSettingsError && <p className="mt-3 text-xs text-red-700">{calendarSettingsError}</p>}
+                {calendarConnection?.connected && !calendarConnection.reauthorize && calendarConnection.calendars.length > 0 && (
+                  <div className="mt-4 rounded-sm border border-border bg-white p-4">
+                    <p className="text-sm font-medium text-ink">Calendars Beckett can use</p>
+                    <p className="mt-1 text-xs text-ink-mid">Only selected calendars are included in the upcoming-meeting view.</p>
+                    <div className="mt-3 space-y-2">
+                      {calendarConnection.calendars.map((calendar) => (
+                        <label key={calendar.id} className="flex cursor-pointer items-center gap-3 rounded-sm border border-border px-3 py-2 text-sm text-ink">
+                          <input
+                            type="checkbox"
+                            checked={selectedCalendarIds.includes(calendar.id)}
+                            onChange={() => toggleCalendar(calendar.id)}
+                            className="h-4 w-4 accent-primary"
+                          />
+                          <span>{calendar.name}{calendar.primary ? " (primary)" : ""}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void saveCalendarSettings()}
+                      disabled={savingCalendarSettings || !selectedCalendarIds.length}
+                      className="mt-4 rounded-pill bg-primary px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {savingCalendarSettings ? "Saving…" : "Save calendar choices"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
           {/* Slack */}
           <ConnectRow
             icon="💬"
