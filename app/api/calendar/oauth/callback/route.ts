@@ -52,7 +52,18 @@ export async function GET(request: NextRequest) {
     }),
     cache: "no-store",
   });
-  if (!tokenResponse.ok) return completeRedirect(origin, "authorization-failed", returnTo);
+  if (!tokenResponse.ok) {
+    const failure = (await tokenResponse.json().catch(() => null)) as {
+      error?: unknown;
+      error_description?: unknown;
+    } | null;
+    console.error("Google Calendar OAuth token exchange failed", {
+      status: tokenResponse.status,
+      error: typeof failure?.error === "string" ? failure.error : null,
+      description: typeof failure?.error_description === "string" ? failure.error_description : null,
+    });
+    return completeRedirect(origin, "authorization-failed", returnTo);
+  }
 
   const token = (await tokenResponse.json()) as {
     access_token?: string;
@@ -88,7 +99,14 @@ export async function GET(request: NextRequest) {
     },
     { onConflict: "user_id,provider" }
   );
-  if (upsertError) return completeRedirect(origin, "connection-failed", returnTo);
+  if (upsertError) {
+    console.error("Google Calendar connection could not be saved", {
+      code: upsertError.code,
+      message: upsertError.message,
+      details: upsertError.details,
+    });
+    return completeRedirect(origin, "connection-failed", returnTo);
+  }
 
   await trackBetaEvent({ userId: user.id, email: user.email, eventName: "calendar_connected", source: "web_app", metadata: { integration: "calendar" } });
   return completeRedirect(origin, "connected", returnTo);
