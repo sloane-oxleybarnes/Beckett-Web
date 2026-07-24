@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
             metadata: {
               provider: 'google',
               email: data.session.user.email || null,
-              scopes: 'gmail.readonly calendar.readonly',
+              scopes: 'gmail.readonly',
               token_encryption: 'aes-256-gcm:v1',
             },
             connected_at: now,
