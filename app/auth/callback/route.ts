@@ -33,7 +33,11 @@ export async function GET(request: NextRequest) {
   const token_hash = searchParams.get('token_hash')
   const type       = searchParams.get('type') as EmailOtpType | null
   const requestedNext = searchParams.get('next')
-  const isPasswordAction = type === 'recovery' || type === 'invite'
+  // PKCE recovery links return only a code, not type=recovery. The explicit
+  // password-setup destination is therefore also part of the password action.
+  // Do not apply normal beta-login gating before a user can reset their password.
+  const isPasswordAction =
+    type === 'recovery' || type === 'invite' || requestedNext === '/auth/set-password'
   const next =
     requestedNext?.startsWith('/')
       ? requestedNext
