@@ -27,6 +27,19 @@ function formatDay(date: Date) {
   return new Intl.DateTimeFormat(undefined, { weekday: "short", month: "numeric", day: "numeric" }).format(date);
 }
 
+function formatWeekRange(start: Date) {
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const formatter = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+  return `${formatter.format(start)} – ${formatter.format(end)}`;
+}
+
+function weekStartForOffset(offset: number) {
+  const start = startOfWeek(new Date());
+  start.setDate(start.getDate() + offset * 7);
+  return start;
+}
+
 function prepHref(event: CalendarEvent) {
   return `/dashboard/meeting-prep?title=${encodeURIComponent(event.title)}&attendees=${encodeURIComponent(attendeeNames(event).join(", "))}`;
 }
@@ -35,11 +48,12 @@ export default function CalendarPanel() {
   const [calendar, setCalendar] = useState<CalendarResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const weekStart = useMemo(() => weekStartForOffset(weekOffset), [weekOffset]);
 
   const loadCalendar = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const weekStart = startOfWeek(new Date());
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 7);
     try {
@@ -52,7 +66,7 @@ export default function CalendarPanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [weekStart]);
 
   useEffect(() => {
     void loadCalendar();
@@ -78,13 +92,12 @@ export default function CalendarPanel() {
   }, []);
 
   const weekDays = useMemo(() => {
-    const start = startOfWeek(new Date());
     return Array.from({ length: 7 }, (_, index) => {
-      const day = new Date(start);
-      day.setDate(start.getDate() + index);
+      const day = new Date(weekStart);
+      day.setDate(weekStart.getDate() + index);
       return day;
     });
-  }, []);
+  }, [weekStart]);
   const prepCandidates = useMemo(
     () => (calendar?.events || []).filter((event) => hasOtherAttendees(event) && new Date(event.start).getTime() >= Date.now()).slice(0, 3),
     [calendar]
@@ -128,7 +141,17 @@ export default function CalendarPanel() {
           </section>
 
           <section className="rounded-card border border-border bg-white p-5 sm:p-6">
-            <div className="mb-4"><p className="text-xs font-medium uppercase tracking-wide text-ink-light">This week</p><h2 className="mt-1 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Your calendar</h2></div>
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">{weekOffset === 0 ? "This week" : weekOffset === 1 ? "Next week" : formatWeekRange(weekStart)}</p>
+                <h2 className="mt-1 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Your calendar</h2>
+                <p className="mt-1 text-xs text-ink-light">{formatWeekRange(weekStart)}</p>
+              </div>
+              <div className="flex items-center gap-2" aria-label="Calendar week navigation">
+                <button type="button" onClick={() => setWeekOffset((current) => Math.max(0, current - 1))} disabled={weekOffset === 0} className="rounded-pill border border-border px-3 py-1.5 text-sm text-ink transition-colors hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" aria-label="Previous week">←</button>
+                <button type="button" onClick={() => setWeekOffset((current) => current + 1)} className="rounded-pill border border-border px-3 py-1.5 text-sm text-ink transition-colors hover:bg-bg" aria-label="Next week">Next week →</button>
+              </div>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
               {weekDays.map((day) => {
                 const events = (calendar?.events || []).filter((event) => new Date(event.start).toDateString() === day.toDateString());
