@@ -469,6 +469,24 @@ export default function SettingsPage() {
     setEditingCoachingSettings(false);
   }
 
+  async function clearPrivateLearningHistory() {
+    if (!window.confirm("Turn off private pattern learning and permanently clear your check-ins, support-action feedback, and generated pattern summaries? Your saved support plans and Practice sessions will stay.")) return;
+    const { data } = await supabase.auth.getUser();
+    const user = data.user;
+    if (!user) return;
+    const response = await fetch("/api/workday/learning-history", { method: "DELETE" });
+    if (!response.ok) {
+      window.alert("Private learning history could not be cleared. Please try again.");
+      return;
+    }
+    const update = { pattern_model_enabled: false, updated_at: new Date().toISOString() };
+    await supabase.from("profiles").update(update).eq("id", user.id);
+    setPatternModelEnabled(false);
+    setProfile((current) => current ? { ...current, ...update } : current);
+    setProfileSaved(true);
+    setTimeout(() => setProfileSaved(false), 3000);
+  }
+
   function addCustomPreferences() {
     setPreferences((current) => mergeCustomEntries(current, customPreferences));
     setCustomPreferences("");
@@ -654,7 +672,7 @@ export default function SettingsPage() {
               <p className="text-sm font-medium text-ink">Workday coaching</p>
               <p className="mt-1 text-sm text-ink-mid">
                 {proactivityOptions.find((option) => option.value === proactivityPreference)?.label || "Only when I ask"}
-                {patternModelEnabled ? " · Pattern summaries enabled" : " · Pattern summaries off"}
+                {patternModelEnabled ? " · Private pattern learning enabled" : " · Private pattern learning off"}
               </p>
             </div>
             <CompanionControls readOnly />
@@ -739,12 +757,17 @@ export default function SettingsPage() {
                 className="mt-0.5 h-4 w-4 accent-primary"
               />
               <span>
-                <span className="block text-sm font-medium text-ink">Allow pattern summaries</span>
+                <span className="block text-sm font-medium text-ink">Allow private pattern learning</span>
                 <span className="mt-0.5 block text-xs leading-relaxed text-ink-mid">
-                  After at least three check-ins, Beckett creates simple 14-day summaries in Workday. Beckett does not yet save inferred patterns as memory; that future feature will ask for your choice first.
+                  Beckett can create 14-day check-in summaries and, after enough completed Practice sessions, offer an optional related Skill. It only uses your check-ins and completed Practice topics for this. It does not use Gmail, Slack, or Calendar content, and it will always ask before treating a pattern as a preference.
                 </span>
               </span>
             </label>
+            <div className="mt-3 rounded-sm border border-border bg-bg/50 p-3">
+              <p className="text-sm font-medium text-ink">Private learning history</p>
+              <p className="mt-1 text-xs leading-relaxed text-ink-mid">You can turn this off at any time. Clearing it permanently removes check-ins, support-action feedback, and generated pattern summaries. It does not delete saved support plans or Practice sessions.</p>
+              <button type="button" onClick={() => void clearPrivateLearningHistory()} className="mt-3 text-xs font-medium text-red-700 hover:underline">Turn off and clear private learning history</button>
+            </div>
           </div>
 
           <CompanionControls />
