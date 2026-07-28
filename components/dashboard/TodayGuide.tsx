@@ -24,6 +24,12 @@ type Feeling = {
   checkin: Pick<WorkdayCheckin, "workload_level" | "energy_level" | "communication_friction" | "break_status" | "helpful_strategy">;
 };
 
+type SupportChoice = {
+  label: string;
+  detail: string;
+  strategy: Feeling["checkin"]["helpful_strategy"];
+};
+
 const feelings: Feeling[] = [
   { value: "steady", label: "Steady", symbol: "〰", checkin: { workload_level: "steady", energy_level: 3, communication_friction: false, break_status: "not_taken", helpful_strategy: "none_yet" } },
   { value: "low-energy", label: "Low energy", symbol: "▱", checkin: { workload_level: "steady", energy_level: 2, communication_friction: false, break_status: "would_help", helpful_strategy: "short_break" } },
@@ -31,6 +37,27 @@ const feelings: Feeling[] = [
   { value: "focused", label: "Focused", symbol: "◎", checkin: { workload_level: "steady", energy_level: 4, communication_friction: false, break_status: "not_taken", helpful_strategy: "quiet_block" } },
   { value: "overloaded", label: "Overloaded", symbol: "☁", checkin: { workload_level: "stacked", energy_level: 1, communication_friction: true, break_status: "would_help", helpful_strategy: "short_break" } },
 ];
+
+const supportChoices: Record<string, SupportChoice[]> = {
+  "low-energy": [
+    { label: "Take a short walk", detail: "A little movement or fresh air before your next thing.", strategy: "short_break" },
+    { label: "Get food, water, or coffee", detail: "A practical reset for your energy.", strategy: "short_break" },
+    { label: "Take five quiet minutes", detail: "A smaller pause without needing to go anywhere.", strategy: "quiet_block" },
+    { label: "Choose a smaller next task", detail: "Make the next step easier to start.", strategy: "clearer_priority" },
+  ],
+  stressed: [
+    { label: "Plan the next priority", detail: "Choose one thing that matters most right now.", strategy: "clearer_priority" },
+    { label: "Take a short reset", detail: "Make room to breathe before the next commitment.", strategy: "short_break" },
+    { label: "Prepare for what is next", detail: "Write down the outcome or question you want to bring.", strategy: "draft_before_sending" },
+    { label: "Find some quiet", detail: "Protect a brief block without new requests.", strategy: "quiet_block" },
+  ],
+  overloaded: [
+    { label: "Choose one next step", detail: "Reduce the day to one useful thing for now.", strategy: "clearer_priority" },
+    { label: "Ask for more time", detail: "Prepare a clear way to pause or reset an expectation.", strategy: "draft_before_sending" },
+    { label: "Take a short reset", detail: "Step away briefly before deciding what is next.", strategy: "short_break" },
+    { label: "Find some quiet", detail: "Create a little space from competing requests.", strategy: "quiet_block" },
+  ],
+};
 
 function prepHref(event: CalendarEvent) {
   return `/dashboard/meeting-prep?title=${encodeURIComponent(event.title)}&attendees=${encodeURIComponent(attendeeNames(event).join(", "))}`;
@@ -46,6 +73,7 @@ export default function TodayGuide({ name }: { name: string }) {
   const [calendarStatus, setCalendarStatus] = useState<"loading" | "ready" | "error">("loading");
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [selectedFeeling, setSelectedFeeling] = useState<string | null>(null);
+  const [pendingFeeling, setPendingFeeling] = useState<Feeling | null>(null);
   const [checkinStatus, setCheckinStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   const [setupOpen, setSetupOpen] = useState(true);
@@ -84,20 +112,31 @@ export default function TodayGuide({ name }: { name: string }) {
   const suggestion = useMemo(() => getDaySuggestion(calendar?.events || [], new Date()), [calendar]);
   const nextMeetingToPrep = useMemo(() => today.filter((event) => new Date(event.start).getTime() >= Date.now()).find(hasOtherAttendees), [today]);
 
-  async function selectFeeling(feeling: Feeling) {
+  async function saveCheckin(feeling: Feeling, strategy = feeling.checkin.helpful_strategy) {
     setSelectedFeeling(feeling.value);
+    setPendingFeeling(null);
     setCheckinStatus("saving");
     try {
       const response = await fetch("/api/workday/checkins", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...feeling.checkin, time_of_day: timeOfDayForDate() }),
+        body: JSON.stringify({ ...feeling.checkin, helpful_strategy: strategy, time_of_day: timeOfDayForDate() }),
       });
       if (!response.ok) throw new Error();
       setCheckinStatus("saved");
     } catch {
       setCheckinStatus("error");
     }
+  }
+
+  function selectFeeling(feeling: Feeling) {
+    setSelectedFeeling(feeling.value);
+    setCheckinStatus("idle");
+    if (feeling.value === "steady" || feeling.value === "focused") {
+      void saveCheckin(feeling);
+      return;
+    }
+    setPendingFeeling(feeling);
   }
 
   async function copySuggestedHold() {
@@ -132,6 +171,7 @@ export default function TodayGuide({ name }: { name: string }) {
         <div className="mt-5 grid gap-2 sm:grid-cols-5">
           {feelings.map((feeling) => <button key={feeling.value} type="button" onClick={() => void selectFeeling(feeling)} aria-pressed={selectedFeeling === feeling.value} disabled={checkinStatus === "saving"} className={`flex min-h-16 items-center gap-3 rounded-sm border px-3 text-left text-sm font-medium transition-colors disabled:cursor-wait disabled:opacity-60 ${selectedFeeling === feeling.value ? "border-primary bg-primary-light text-ink" : "border-border bg-bg/50 text-ink hover:border-primary/50 hover:bg-primary-light/40"}`}><span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-light text-lg text-primary">{feeling.symbol}</span>{feeling.label}</button>)}
         </div>
+        {pendingFeeling && <div className="mt-5 rounded-sm border border-primary/20 bg-primary-light/35 p-4"><p className="text-sm font-medium text-ink">{pendingFeeling.value === "low-energy" ? "What might help with your energy right now?" : pendingFeeling.value === "stressed" ? "What would make the next part of your day easier?" : "What would help make the day feel lighter right now?"}</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">{calendar?.connected && today.length ? `Beckett is using today’s ${today.length === 1 ? "scheduled commitment" : `${today.length} scheduled commitments`} as context, but you decide what fits.` : "Choose only what sounds useful. Beckett will not assume you completed it."}</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{(supportChoices[pendingFeeling.value] || []).map((choice) => <button key={choice.label} type="button" onClick={() => void saveCheckin(pendingFeeling, choice.strategy)} className="rounded-sm border border-border bg-white p-3 text-left transition-colors hover:border-primary hover:bg-primary-light/30"><span className="block text-sm font-medium text-ink">{choice.label}</span><span className="mt-1 block text-xs text-ink-mid">{choice.detail}</span></button>)}</div><button type="button" onClick={() => void saveCheckin(pendingFeeling, "none_yet")} className="mt-3 text-xs font-medium text-primary hover:underline">Nothing right now — just save my check-in</button></div>}
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
           {checkinStatus === "saving" && <span className="text-ink-mid">Saving your check-in…</span>}
           {checkinStatus === "saved" && <span className="text-primary">Check-in saved at {new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. You can check in again anytime.</span>}

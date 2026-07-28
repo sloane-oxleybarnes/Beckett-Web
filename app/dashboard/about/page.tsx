@@ -7,6 +7,7 @@ import {
   strengthOptions,
   workplaceTriggerOptions,
 } from "@/lib/onboarding";
+import SupportPlansPanel from "../workday/SupportPlansPanel";
 
 type AboutData = {
   communication_style: string;
@@ -555,6 +556,9 @@ export default function AboutPage() {
           {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
         </button>
       </form>
+      <div className="mt-5">
+        <SupportPlansPanel />
+      </div>
     </div>
   );
 }
