@@ -556,7 +556,7 @@ export default function AboutPage() {
           {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
         </button>
       </form>
-      <div className="mt-5">
+      <div id="support-preferences" className="mt-5">
         <SupportPlansPanel />
       </div>
     </div>
