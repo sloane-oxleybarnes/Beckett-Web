@@ -25,7 +25,6 @@ const include = [
   "sidebar/sidebar.html",
   "sidebar/sidebar.js",
   "utils/api.js",
-  "utils/gmail.js",
   "utils/prompts.js",
 ];
 

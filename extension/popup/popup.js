@@ -139,58 +139,9 @@ $('addSafePerson').addEventListener('click', async () => {
 
 // ── Gmail ─────────────────────────────────────────────────────────────────────
 
-async function loadGmail() {
-  const { currentUserEmail } = await chrome.storage.local.get('currentUserEmail');
-  if (currentUserEmail) showGmailConnected(currentUserEmail);
-}
-
-function showGmailConnected(email) {
-  $('gmailConnected').hidden = false;
-  $('connectGmail').hidden = true;
-  $('gmailUserEmail').textContent = email;
-}
-
-$('connectGmail').addEventListener('click', async () => {
-  const btn = $('connectGmail');
-  btn.disabled = true;
-  btn.textContent = 'Connecting…';
-
-  try {
-    const token = await new Promise((resolve, reject) => {
-      chrome.identity.getAuthToken({ interactive: true }, t => {
-        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-        else resolve(t);
-      });
-    });
-    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
-      headers: { Authorization: 'Bearer ' + token },
-    });
-    if (!res.ok) throw new Error(`Gmail error ${res.status}`);
-    const profile = await res.json();
-    await chrome.storage.local.set({ currentUserEmail: profile.emailAddress });
-    showGmailConnected(profile.emailAddress);
-    showGmailStatus('Gmail connected!', 'ok');
-  } catch (e) {
-    showGmailStatus(e.message, 'err');
-    btn.disabled = false;
-    btn.textContent = 'Connect Gmail — enables full thread reading';
-  }
+$('manageGmail').addEventListener('click', () => {
+  chrome.tabs.create({ url: 'https://www.meetbeckett.co/dashboard/settings#connected-accounts' });
 });
-
-$('disconnectGmail').addEventListener('click', async () => {
-  await chrome.storage.local.remove('currentUserEmail');
-  chrome.identity.clearAllCachedAuthTokens(() => {});
-  $('gmailConnected').hidden = true;
-  $('connectGmail').hidden = false;
-});
-
-function showGmailStatus(msg, type) {
-  const el = $('gmailStatus');
-  el.textContent = msg;
-  el.className = `linkedin-status ${type}`;
-  el.hidden = false;
-  setTimeout(() => { el.hidden = true; }, 3000);
-}
 
 // ── Slack ─────────────────────────────────────────────────────────────────────
 
@@ -296,7 +247,6 @@ function escHtml(str) {
 loadBeckettAccount();
 loadPlan();
 loadMode();
-loadGmail();
 loadSlack();
 loadSafePeople();
 loadVoiceCalibration();

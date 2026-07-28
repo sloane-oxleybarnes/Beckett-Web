@@ -646,16 +646,7 @@ export default function SettingsPage() {
             description="Read-only email thread context when you ask Beckett for coaching"
             connected={diagnostics?.integrations.google.connected}
             detail={diagnostics?.integrations.google.email || "Google account connected"}
-            onConnect={async () => {
-              await supabase.auth.signInWithOAuth({
-                provider: "google",
-                options: {
-                  scopes: "https://www.googleapis.com/auth/gmail.readonly",
-                  redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/dashboard/settings")}&integration=google`,
-                  queryParams: { access_type: "offline", prompt: "consent" },
-                },
-              });
-            }}
+            onConnect={() => { window.location.assign("/api/gmail/oauth/start?next=/dashboard/settings"); }}
             onDisconnect={() => void disconnectIntegration("google")}
             disconnecting={disconnectingProvider === "google"}
           />

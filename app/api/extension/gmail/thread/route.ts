@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getExtensionProfile } from "@/lib/extension-auth";
 import { supabaseAdmin } from "@/lib/server-admin";
-import { decryptGoogleAccessToken } from "@/lib/google-token-security";
+import { decryptGoogleAccessToken, encryptGoogleAccessToken } from "@/lib/google-token-security";
+import {
+  getGoogleGmailOAuthConfig,
+  parseGoogleGmailCredential,
+  refreshGoogleGmailCredential,
+} from "@/lib/google-gmail-oauth";
 
 export const runtime = "nodejs";
 
@@ -214,16 +219,27 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const { data: integration } = await supabaseAdmin
     .from("user_integrations")
-    .select("access_token, external_user_id, metadata")
+    .select("id, access_token, external_user_id, metadata")
     .eq("user_id", profile.id)
     .eq("provider", "google")
     .single();
 
-  const accessToken = decryptGoogleAccessToken(integration?.access_token);
-  if (!integration || !accessToken) return jsonError("google_not_connected", 404);
+  let credential = parseGoogleGmailCredential(decryptGoogleAccessToken(integration?.access_token));
+  const oauthConfig = getGoogleGmailOAuthConfig(new URL(req.url).origin);
+  if (!integration || !credential || !oauthConfig) return jsonError("google_not_connected", 404);
+
+  if (credential.expiresAt > 0 && credential.expiresAt <= Date.now() + 60_000) {
+    const refreshed = await refreshGoogleGmailCredential(credential, oauthConfig.clientId, oauthConfig.clientSecret);
+    if (!refreshed) return jsonError("gmail_token_expired", 401);
+    credential = refreshed;
+    await supabaseAdmin
+      .from("user_integrations")
+      .update({ access_token: encryptGoogleAccessToken(JSON.stringify(credential)), updated_at: new Date().toISOString() })
+      .eq("id", integration.id);
+  }
 
   try {
-    const thread = await resolveThread(accessToken, {
+    const thread = await resolveThread(credential.accessToken, {
       threadIds: splitParam(searchParams.get("threadIds")),
       messageIds: splitParam(searchParams.get("messageIds")),
       subject: searchParams.get("subject")?.trim() || "",
