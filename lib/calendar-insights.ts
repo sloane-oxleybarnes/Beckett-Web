@@ -35,6 +35,11 @@ export type DaySuggestion = {
   detail: string;
   kind: "break" | "prep" | "focus" | "open";
   event?: CalendarEvent;
+  suggestedHold?: {
+    title: string;
+    start: string;
+    end: string;
+  };
 };
 
 function durationInMinutes(event: CalendarEvent) {
@@ -105,10 +110,16 @@ export function getDaySuggestion(events: CalendarEvent[], now = new Date()): Day
   if (!hasLunch && upcoming.length && now < lunchWindowEnd) {
     const opening = findLunchOpening(today, now, now);
     if (opening) {
+      const holdEnd = new Date(opening.getTime() + 30 * 60_000);
       return {
         title: "You have room for a lunch break.",
         detail: `There is a 30-minute opening around ${formatEventTime(opening.toISOString())}. Beckett will not change your calendar without your approval.`,
         kind: "break",
+        suggestedHold: {
+          title: "Lunch break",
+          start: opening.toISOString(),
+          end: holdEnd.toISOString(),
+        },
       };
     }
     return {
