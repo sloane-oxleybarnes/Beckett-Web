@@ -498,11 +498,14 @@ export default function HomePage() {
           <Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={118} height={30} />
         </div>
         <div className="f-copy">© 2026 Beckett. For brains that work differently.</div>
-        <div className="f-links">
-          <a href="/privacy">Privacy</a>
-          <a href="/terms">Terms</a>
-          <a href="mailto:hello@meetbeckett.co">Support</a>
-        </div>
+        <nav aria-label="Footer navigation" className="f-links">
+          <a href="/features">Features</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/beta">Beta</a>
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms of Service</a>
+          <a href="mailto:hello@meetbeckett.co">Contact</a>
+        </nav>
       </footer>
 
     </div>
