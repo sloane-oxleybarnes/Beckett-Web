@@ -11,6 +11,10 @@ import {
   hasOtherAttendees,
   type CalendarEvent,
 } from "@/lib/calendar-insights";
+import {
+  formatCalendarActionIntent,
+  type CalendarActionIntent,
+} from "@/lib/calendar-action-intents";
 
 type Calendar = { connected: boolean; reauthorize?: boolean; events: CalendarEvent[] };
 type Feeling = {
@@ -39,6 +43,7 @@ function practiceHref(event: CalendarEvent) {
 
 export default function TodayGuide({ name }: { name: string }) {
   const [calendar, setCalendar] = useState<Calendar | null>(null);
+  const [calendarStatus, setCalendarStatus] = useState<"loading" | "ready" | "error">("loading");
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [selectedFeeling, setSelectedFeeling] = useState<string | null>(null);
   const [checkinStatus, setCheckinStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -46,13 +51,19 @@ export default function TodayGuide({ name }: { name: string }) {
   const [setupOpen, setSetupOpen] = useState(true);
   const [holdPlanVisible, setHoldPlanVisible] = useState(false);
   const [holdCopied, setHoldCopied] = useState(false);
+  const [calendarActionIntent, setCalendarActionIntent] = useState<CalendarActionIntent | null>(null);
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/calendar/events", { cache: "no-store" });
-    const data = (await response.json().catch(() => null)) as Calendar | null;
-    if (response.ok && data) {
+    setCalendarStatus("loading");
+    try {
+      const response = await fetch("/api/calendar/events", { cache: "no-store" });
+      const data = (await response.json().catch(() => null)) as Calendar | null;
+      if (!response.ok || !data) throw new Error("Calendar could not load.");
       setCalendar(data);
       setUpdatedAt(new Date());
+      setCalendarStatus("ready");
+    } catch {
+      setCalendarStatus("error");
     }
   }, []);
 
@@ -101,6 +112,17 @@ export default function TodayGuide({ name }: { name: string }) {
     }
   }
 
+  function stageSuggestedHold() {
+    if (!suggestion.suggestedHold) return;
+    setCalendarActionIntent({
+      kind: "create_hold",
+      title: suggestion.suggestedHold.title,
+      start: suggestion.suggestedHold.start,
+      end: suggestion.suggestedHold.end,
+      source: "home_schedule_suggestion",
+    });
+  }
+
   return (
     <section className="mb-6 space-y-5">
       <div className="rounded-card border border-border bg-white p-5 sm:p-6">
@@ -115,20 +137,21 @@ export default function TodayGuide({ name }: { name: string }) {
           {checkinStatus === "saved" && <span className="text-primary">Check-in saved at {new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. You can check in again anytime.</span>}
           {checkinStatus === "error" && <span className="text-red-700">Your check-in did not save. Please try again.</span>}
           <Link href="/dashboard/workday" className="font-medium text-primary hover:underline">View patterns &amp; support plans →</Link>
+          <Link href="/dashboard/settings#workday-reminders" className="font-medium text-primary hover:underline">Set up reminders to check in →</Link>
         </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <div className="rounded-card border border-border bg-white p-5 sm:p-6">
           <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-medium uppercase tracking-wide text-ink-light">Your day</p><h3 className="mt-1 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>What&apos;s ahead</h3></div><button type="button" onClick={() => void load()} className="text-xs font-medium text-primary hover:underline">Refresh</button></div>
-          {calendar?.connected && !calendar.reauthorize ? (
+          {calendarStatus === "loading" ? <p className="mt-5 rounded-sm border border-border bg-bg/60 p-4 text-sm text-ink-mid">Loading the calendars you selected…</p> : calendarStatus === "error" ? <div className="mt-5 rounded-sm border border-red-200 bg-red-50 p-4 text-sm leading-relaxed text-red-800">Beckett could not refresh your calendar right now. Your connection has not changed. <button type="button" onClick={() => void load()} className="font-medium underline">Try again</button></div> : calendar?.connected && !calendar.reauthorize ? (
             today.length ? <div className="mt-5 space-y-3">{today.slice(0, 5).map((event) => <article key={event.id} className="rounded-sm border border-border bg-bg/60 p-4"><p className="text-xs font-medium text-primary">{formatEventTime(event.start)}</p><p className="mt-1 text-sm font-medium text-ink">{event.title}</p>{hasOtherAttendees(event) && <Link href={prepHref(event)} className="mt-2 inline-block text-xs font-medium text-primary hover:underline">Prep for this meeting →</Link>}</article>)}</div> : <p className="mt-5 rounded-sm border border-border bg-bg/60 p-4 text-sm text-ink-mid">Your calendar is clear today. What would help you make the day feel good?</p>
           ) : <div className="mt-5 rounded-sm border border-primary/20 bg-primary-light/40 p-4 text-sm leading-relaxed text-ink-mid">Connect Google Calendar to see your day here and prepare for upcoming meetings. <Link href="/dashboard/settings#connected-accounts" className="font-medium text-primary hover:underline">Connect calendar →</Link></div>}
           {updatedAt && <p className="mt-4 text-xs text-ink-light">Updated {formatEventTime(updatedAt.toISOString())}</p>}
         </div>
 
         <div className="space-y-5">
-          {!suggestionDismissed && <div className="rounded-card border border-primary/20 bg-primary-light/40 p-5 sm:p-6"><p className="text-xs font-medium uppercase tracking-wide text-primary">A schedule-based suggestion</p><h3 className="mt-2 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{calendar?.connected ? suggestion.title : "Start with what would help today."}</h3><p className="mt-2 text-sm leading-relaxed text-ink-mid">{calendar?.connected ? suggestion.detail : "Connect your calendar when you want Beckett to tailor this to your actual schedule."}</p>{holdPlanVisible && suggestion.suggestedHold && <div className="mt-4 rounded-sm border border-primary/20 bg-white/80 p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Proposed calendar hold</p><p className="mt-1 text-sm font-medium text-ink">{suggestion.suggestedHold.title} · {formatEventTime(suggestion.suggestedHold.start)}–{formatEventTime(suggestion.suggestedHold.end)}</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">This is only a suggestion. Beckett has not added anything to your calendar.</p><button type="button" onClick={() => void copySuggestedHold()} className="mt-3 text-xs font-medium text-primary hover:underline">{holdCopied ? "Copied" : "Copy hold details"}</button></div>}<div className="mt-5 flex flex-wrap gap-3">{suggestion.kind === "prep" && suggestion.event ? <Link href={prepHref(suggestion.event)} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">Prepare now</Link> : suggestion.suggestedHold ? <button type="button" onClick={() => setHoldPlanVisible((visible) => !visible)} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">{holdPlanVisible ? "Hide proposed hold" : "Review proposed hold"}</button> : <Link href={suggestion.kind === "focus" || suggestion.kind === "open" ? "/dashboard/skills" : "/dashboard/workday"} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">{suggestion.kind === "focus" || suggestion.kind === "open" ? "Choose a focus" : "Plan a reset"}</Link>}<button type="button" onClick={() => setSuggestionDismissed(true)} className="rounded-pill border border-primary/30 bg-white px-5 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary-light">Not today</button></div></div>}
+          {!suggestionDismissed && <div className="rounded-card border border-primary/20 bg-primary-light/40 p-5 sm:p-6"><p className="text-xs font-medium uppercase tracking-wide text-primary">A schedule-based suggestion</p><h3 className="mt-2 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{calendarStatus === "loading" ? "Checking what is ahead…" : calendar?.connected ? suggestion.title : "Start with what would help today."}</h3><p className="mt-2 text-sm leading-relaxed text-ink-mid">{calendarStatus === "loading" ? "Beckett is refreshing the calendars you selected." : calendar?.connected ? suggestion.detail : "Connect your calendar when you want Beckett to tailor this to your actual schedule."}</p>{holdPlanVisible && suggestion.suggestedHold && <div className="mt-4 rounded-sm border border-primary/20 bg-white/80 p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Proposed calendar hold</p><p className="mt-1 text-sm font-medium text-ink">{suggestion.suggestedHold.title} · {formatEventTime(suggestion.suggestedHold.start)}–{formatEventTime(suggestion.suggestedHold.end)}</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">This is only a suggestion. Beckett has not added anything to your calendar.</p><div className="mt-3 flex flex-wrap gap-x-4 gap-y-2"><button type="button" onClick={() => void copySuggestedHold()} className="text-xs font-medium text-primary hover:underline">{holdCopied ? "Copied" : "Copy hold details"}</button><button type="button" onClick={stageSuggestedHold} className="text-xs font-medium text-primary hover:underline">{calendarActionIntent ? "Reviewed for a future calendar action" : "Review for a future calendar action"}</button></div></div>}{calendarActionIntent && <p className="mt-3 text-xs leading-relaxed text-ink-mid">Beckett has staged “{formatCalendarActionIntent(calendarActionIntent)}” only in this page. Calendar edits are not enabled, and nothing has been sent to Google.</p>}<div className="mt-5 flex flex-wrap gap-3">{suggestion.kind === "prep" && suggestion.event ? <Link href={prepHref(suggestion.event)} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">Prepare now</Link> : suggestion.suggestedHold ? <button type="button" onClick={() => setHoldPlanVisible((visible) => !visible)} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">{holdPlanVisible ? "Hide proposed hold" : "Review proposed hold"}</button> : <Link href={suggestion.kind === "focus" || suggestion.kind === "open" ? "/dashboard/skills" : "/dashboard/workday"} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">{suggestion.kind === "focus" || suggestion.kind === "open" ? "Choose a focus" : "Plan a reset"}</Link>}<button type="button" onClick={() => setSuggestionDismissed(true)} className="rounded-pill border border-primary/30 bg-white px-5 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary-light">Not today</button></div></div>}
 
           <div className="rounded-card border border-border bg-white"><button type="button" onClick={() => setSetupOpen((open) => !open)} aria-expanded={setupOpen} className="flex w-full items-center justify-between p-5 text-left"><span><span className="block text-xs font-medium uppercase tracking-wide text-ink-light">Set up your day</span><span className="mt-1 block text-xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{calendar?.connected ? "Choose support that fits what is ahead." : "A little preparation can lower the pressure."}</span></span><span aria-hidden="true" className="text-xl text-primary">{setupOpen ? "−" : "+"}</span></button>{setupOpen && <div className="grid border-t border-border sm:grid-cols-4">{nextMeetingToPrep ? <><Link href={prepHref(nextMeetingToPrep)} className="border-b border-border p-4 text-sm font-medium text-ink transition-colors hover:bg-primary-light/40 sm:border-b-0 sm:border-r"><span className="block text-primary">Prepare for {nextMeetingToPrep.title}</span><span className="mt-1 block text-xs font-normal text-ink-mid">Meeting with {attendeeNames(nextMeetingToPrep).slice(0, 2).join(", ")}.</span></Link><Link href={practiceHref(nextMeetingToPrep)} className="border-b border-border p-4 text-sm font-medium text-ink transition-colors hover:bg-primary-light/40 sm:border-b-0 sm:border-r"><span className="block text-primary">Practice this conversation</span><span className="mt-1 block text-xs font-normal text-ink-mid">Rehearse a clear contribution or ask before you walk in.</span></Link></> : <Link href="/dashboard/skills" className="border-b border-border p-4 text-sm font-medium text-ink transition-colors hover:bg-primary-light/40 sm:border-b-0 sm:border-r"><span className="block text-primary">Choose a focus</span><span className="mt-1 block text-xs font-normal text-ink-mid">Use your available time for one useful skill.</span></Link>}<Link href="/dashboard/workday" className="border-b border-border p-4 text-sm font-medium text-ink transition-colors hover:bg-primary-light/40 sm:border-b-0 sm:border-r"><span className="block text-primary">{suggestion.kind === "break" ? "Plan a reset" : "Check in with yourself"}</span><span className="mt-1 block text-xs font-normal text-ink-mid">{suggestion.kind === "break" ? "Make room around the busiest part of your day." : "Choose support for how you are feeling now."}</span></Link><Link href="/dashboard/calendar" className="p-4 text-sm font-medium text-ink transition-colors hover:bg-primary-light/40"><span className="block text-primary">View your week</span><span className="mt-1 block text-xs font-normal text-ink-mid">See the meetings and open space Beckett is using.</span></Link></div>}</div>
         </div>
