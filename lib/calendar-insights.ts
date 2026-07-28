@@ -33,7 +33,7 @@ export function attendeeNames(event: Pick<CalendarEvent, "attendees">) {
 export type DaySuggestion = {
   title: string;
   detail: string;
-  kind: "break" | "prep" | "focus" | "open";
+  kind: "break" | "prep" | "prep_available" | "focus" | "open";
   event?: CalendarEvent;
   suggestedHold?: {
     title: string;
@@ -68,7 +68,7 @@ function findLunchOpening(events: CalendarEvent[], day: Date, now: Date) {
   return lunchEnd.getTime() - openingStart.getTime() >= 30 * 60_000 ? openingStart : null;
 }
 
-export function getDaySuggestion(events: CalendarEvent[], now = new Date()): DaySuggestion {
+export function getDaySuggestion(events: CalendarEvent[], now = new Date(), options?: { recommendPrep?: boolean }): DaySuggestion {
   const today = eventsOnDay(events, now).sort((left, right) => new Date(left.start).getTime() - new Date(right.start).getTime());
   const upcoming = today.filter((event) => new Date(event.start).getTime() >= now.getTime());
   const nextMeeting = upcoming.find(hasOtherAttendees);
@@ -97,6 +97,14 @@ export function getDaySuggestion(events: CalendarEvent[], now = new Date()): Day
   }
 
   if (soonMeeting) {
+    if (options?.recommendPrep === false) {
+      return {
+        title: `${soonMeeting.title} is coming up.`,
+        detail: `You can open private meeting prep for your conversation with ${attendeeNames(soonMeeting).slice(0, 2).join(" and ") || "another person"} whenever it would be useful.`,
+        kind: "prep_available",
+        event: soonMeeting,
+      };
+    }
     return {
       title: `Prepare for ${soonMeeting.title}.`,
       detail: `You are meeting with ${attendeeNames(soonMeeting).slice(0, 2).join(" and ") || "another person"} soon. A few minutes on your outcome could reduce pressure.`,
@@ -139,6 +147,14 @@ export function getDaySuggestion(events: CalendarEvent[], now = new Date()): Day
   }
 
   if (nextMeeting) {
+    if (options?.recommendPrep === false) {
+      return {
+        title: `${nextMeeting.title} is next on your calendar.`,
+        detail: "Meeting prep is available when you want it. Beckett will start making proactive prep suggestions only after you save relevant context or preferences.",
+        kind: "prep_available",
+        event: nextMeeting,
+      };
+    }
     return {
       title: `Prepare for ${nextMeeting.title}.`,
       detail: `You are meeting with ${attendeeNames(nextMeeting).slice(0, 2).join(" and ") || "another person"}. A few minutes on your outcome could reduce pressure.`,

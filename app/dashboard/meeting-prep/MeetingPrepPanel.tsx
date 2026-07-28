@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useSearchParams } from "next/navigation";
+import { hasMeaningfulMeetingContext, type MeetingPrepContact } from "@/lib/meeting-prep-recommendations";
 
 const split = (value: string) => value.split("\n").map((item) => item.trim()).filter(Boolean);
-type Contact = { name: string; email?: string | null; relationship_tags?: string[] | null; notes?: string | null };
 type PromptKey = "outcome" | "concern" | "role";
 
 const roleOptions = [
@@ -25,14 +25,14 @@ export default function MeetingPrepPanel() {
   const [concern, setConcern] = useState("");
   const [role, setRole] = useState("contribute");
   const [openPrompt, setOpenPrompt] = useState<PromptKey>("outcome");
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contacts, setContacts] = useState<MeetingPrepContact[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
       const response = await fetch("/api/contacts");
-      const data = await response.json().catch(() => null) as { contacts?: Contact[] } | null;
+      const data = await response.json().catch(() => null) as { contacts?: MeetingPrepContact[] } | null;
       if (response.ok) setContacts(data?.contacts || []);
     })();
   }, []);
@@ -41,15 +41,16 @@ export default function MeetingPrepPanel() {
     () => contacts.filter((contact) => attendees.toLowerCase().includes(contact.name.toLowerCase()) || Boolean(contact.email && attendees.toLowerCase().includes(contact.email.toLowerCase()))),
     [attendees, contacts]
   );
+  const contactsWithContext = useMemo(() => matchedContacts.filter(hasMeaningfulMeetingContext), [matchedContacts]);
 
   const beforeSuggestions = useMemo(() => {
     const suggestions = ["Review the agenda and choose one sentence you want to leave with."];
     if (role === "ask") suggestions.unshift("Write the specific ask, plus the smallest useful next step if the answer is not clear today.");
     if (role === "lead") suggestions.unshift("Open with the outcome and the decision or discussion you need from the group.");
     if (concern.trim()) suggestions.push("Name one grounding or clarity move you can use if the conversation gets harder than expected.");
-    if (matchedContacts.length) suggestions.push(`Review the user-saved context you selected for ${matchedContacts.map((contact) => contact.name).join(", ")}; treat it as a reminder, not a prediction.`);
+    if (contactsWithContext.length) suggestions.push(`Review the user-saved context you selected for ${contactsWithContext.map((contact) => contact.name).join(", ")}; treat it as a reminder, not a prediction.`);
     return suggestions.slice(0, 3);
-  }, [concern, matchedContacts, role]);
+  }, [concern, contactsWithContext, role]);
 
   const duringSuggestions = useMemo(() => {
     const suggestions = ["Pause before agreeing to a new deadline or request.", "Ask: “What would a good next step look like from your perspective?”"];
@@ -64,7 +65,7 @@ export default function MeetingPrepPanel() {
   }
 
   function addSavedContext() {
-    const context = matchedContacts
+    const context = contactsWithContext
       .map((contact) => `${contact.name}${contact.relationship_tags?.length ? ` — ${contact.relationship_tags.join(", ")}` : ""}${contact.notes ? `: ${contact.notes}` : ""}`)
       .join("\n");
     if (context) setAttendees((current) => current.includes(context) ? current : `${current}${current ? "\n\n" : ""}User-saved context:\n${context}`);
@@ -135,7 +136,7 @@ export default function MeetingPrepPanel() {
 
       <section className="grid gap-4 md:grid-cols-2">
         <CoachCard title="What Beckett knows" eyebrow="User-controlled context">
-          {matchedContacts.length ? <><p className="text-sm leading-relaxed text-ink-mid">You have saved context for {matchedContacts.map((contact) => contact.name).join(", ")}. Beckett will only use it in this prep after you add it below.</p><button type="button" onClick={addSavedContext} className="mt-3 text-sm font-medium text-primary hover:underline">Use this saved context in my prep →</button></> : <p className="text-sm leading-relaxed text-ink-mid">Attendees from your calendar are included here. Add a contact in Beckett if you want to save user-controlled relationship context for a future meeting.</p>}
+          {contactsWithContext.length ? <><p className="text-sm leading-relaxed text-ink-mid">You have saved context for {contactsWithContext.map((contact) => contact.name).join(", ")}. Beckett will only use it in this prep after you choose to include it.</p><div className="mt-3 flex flex-wrap gap-2">{contactsWithContext.map((contact) => <span key={contact.email || contact.name} className="rounded-pill bg-primary-light px-3 py-1 text-xs text-ink">{contact.name}{contact.relationship_tags?.length ? ` · ${contact.relationship_tags.join(", ")}` : " · saved notes"}</span>)}</div><button type="button" onClick={addSavedContext} className="mt-3 text-sm font-medium text-primary hover:underline">Use this saved context in my prep →</button></> : <p className="text-sm leading-relaxed text-ink-mid">Attendees from your calendar are included here. Add a contact with a relationship note or tag if you want Beckett to make proactive prep suggestions for a future meeting.</p>}
           <Area label="Attendees and context you want to include" value={attendees} onChange={setAttendees} placeholder="Names, roles, and any context you want Beckett to consider." rows={4} compact />
         </CoachCard>
         <CoachCard title="Your plan for before" eyebrow="A few useful moves">
