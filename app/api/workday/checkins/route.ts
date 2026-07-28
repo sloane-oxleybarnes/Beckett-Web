@@ -28,7 +28,7 @@ export async function GET() {
   const [{ data: checkins, error: checkinsError }, { data: summaries, error: summariesError }, { data: pendingAction, error: pendingActionError }] = await Promise.all([
     supabaseAdmin.from("workday_checkins").select("*").eq("user_id", user.id).gte("checked_in_at", periodStart()).order("checked_in_at", { ascending: false }),
     supabaseAdmin.from("workday_pattern_summaries").select("*").eq("user_id", user.id).eq("active", true).neq("status", "dismissed").order("generated_at", { ascending: false }),
-    supabaseAdmin.from("workday_support_actions").select("*").eq("user_id", user.id).is("outcome", null).lt("created_at", new Date(Date.now() - 20 * 60 * 1000).toISOString()).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    supabaseAdmin.from("workday_support_actions").select("*").eq("user_id", user.id).is("outcome", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   if (checkinsError || summariesError || pendingActionError) {
     return NextResponse.json({ error: "Workday coaching is not set up yet. Please try again shortly." }, { status: 503 });
