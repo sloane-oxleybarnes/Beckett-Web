@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Beckett",
-  "version": "3.0.10",
+  "version": "3.0.11",
   "description": "Workplace communication coaching for Gmail and Slack.",
   "permissions": [
     "storage",
