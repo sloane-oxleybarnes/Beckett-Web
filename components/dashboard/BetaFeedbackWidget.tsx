@@ -51,7 +51,7 @@ export default function BetaFeedbackWidget() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3">
+    <div className="fixed bottom-4 right-4 z-40 hidden flex-col items-end gap-3 md:flex">
       <CreditTracker />
       {open && (
         <div className="w-[min(calc(100vw-2rem),360px)] rounded-card border border-border bg-white p-4 shadow-xl">
