@@ -35,7 +35,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     Boolean(profile?.first_login_complete && !profile?.dashboard_walkthrough_completed_at);
 
   return (
-    <div className="w-full max-w-6xl">
+    <div className="w-full max-w-6xl" data-home-version="adaptive-planning-v1">
       <CoachWalkthrough shouldShow={showWalkthrough} forceShow={tourParam === "1"} isBeta={isBeta} />
       {/* Header */}
       <div className="mb-8">
