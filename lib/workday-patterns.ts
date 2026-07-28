@@ -9,6 +9,15 @@ export const helpfulStrategyValues = [
   "draft_before_sending",
   "none_yet",
 ] as const;
+export const supportActionValues = [
+  "short_walk",
+  "food_or_water",
+  "quiet_minutes",
+  "smaller_next_step",
+  "plan_priority",
+  "prepare_next",
+  "ask_for_time",
+] as const;
 
 export type WorkdayCheckin = {
   id?: string;
@@ -23,8 +32,9 @@ export type WorkdayCheckin = {
 
 export type PatternSummary = {
   category: "load" | "friction" | "break" | "strategy";
+  pattern_key: string;
   summary: string;
-  evidence: { matchingCheckins: number; totalCheckins: number; periodDays: number };
+  evidence: { matchingCheckins: number; totalCheckins: number; periodDays: number; timeOfDay?: WorkdayCheckin["time_of_day"] };
 };
 
 export function timeOfDayForDate(date = new Date()): WorkdayCheckin["time_of_day"] {
@@ -53,6 +63,7 @@ export function makePatternSummaries(checkins: WorkdayCheckin[]): PatternSummary
   const stacked = checkins.filter((checkin) => checkin.workload_level === "stacked").length;
   if (stacked >= 3) summaries.push({
     category: "load",
+    pattern_key: "stacked-workload",
     summary: `You reported a stacked workload in ${stacked} of your last ${totalCheckins} check-ins.`,
     evidence: evidence(stacked),
   });
@@ -60,14 +71,16 @@ export function makePatternSummaries(checkins: WorkdayCheckin[]): PatternSummary
   const friction = checkins.filter((checkin) => checkin.communication_friction).length;
   if (friction >= 3) summaries.push({
     category: "friction",
+    pattern_key: "communication-friction",
     summary: `You marked communication friction in ${friction} of your last ${totalCheckins} check-ins.`,
     evidence: evidence(friction),
   });
 
-  const breakNeed = checkins.filter((checkin) => checkin.break_status !== "taken").length;
+  const breakNeed = checkins.filter((checkin) => checkin.break_status === "would_help").length;
   if (breakNeed >= 3) summaries.push({
     category: "break",
-    summary: `A break was still needed in ${breakNeed} of your last ${totalCheckins} check-ins.`,
+    pattern_key: "break-would-help",
+    summary: `You said a break would help in ${breakNeed} of your last ${totalCheckins} check-ins.`,
     evidence: evidence(breakNeed),
   });
 
@@ -76,10 +89,23 @@ export function makePatternSummaries(checkins: WorkdayCheckin[]): PatternSummary
     if (used >= 3) {
       summaries.push({
         category: "strategy",
+        pattern_key: `strategy-${strategy}`,
         summary: `You chose ${labels[strategy]} in ${used} of your last ${totalCheckins} check-ins.`,
         evidence: evidence(used),
       });
       break;
+    }
+  }
+
+  for (const timeOfDay of timeOfDayValues) {
+    const lowerCapacity = checkins.filter((checkin) => checkin.time_of_day === timeOfDay && (checkin.energy_level <= 2 || checkin.workload_level === "stacked")).length;
+    if (lowerCapacity >= 3) {
+      summaries.push({
+        category: "load",
+        pattern_key: `lower-capacity-${timeOfDay}`,
+        summary: `In the ${timeOfDay}, you marked lower energy or a stacked workload in ${lowerCapacity} check-ins.`,
+        evidence: { ...evidence(lowerCapacity), timeOfDay },
+      });
     }
   }
 
