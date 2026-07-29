@@ -10,6 +10,7 @@ import {
   type CoachingTone,
 } from "@/lib/onboarding";
 import { CHROME_WEB_STORE_URL } from "@/lib/app-links";
+import SharedContextCard from "@/components/dashboard/SharedContextCard";
 import {
   DEFAULT_PROACTIVITY_PREFERENCE,
   proactivityOptions,
@@ -627,6 +628,8 @@ export default function SettingsPage() {
       </section>
 
       <WorkdayReminders />
+
+      <SharedContextCard />
 
       {/* Change password */}
       <section className="bg-white rounded-card border border-border p-6 mb-5">

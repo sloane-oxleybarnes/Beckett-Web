@@ -4,6 +4,7 @@ import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
 import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSafetyResponse } from "@/lib/safety-resources";
+import { fetchSharedWebContext } from "@/lib/shared-web-context";
 
 type Action = "decode" | "draft";
 
@@ -17,11 +18,10 @@ export async function POST(request: NextRequest) {
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   if (!action || !text || text.length > 5000) return NextResponse.json({ error: "Choose Decode or Draft and add up to 5,000 characters." }, { status: 400 });
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("safety_resource_region")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, sharedContext] = await Promise.all([
+    supabase.from("profiles").select("safety_resource_region").eq("id", user.id).maybeSingle(),
+    fetchSharedWebContext(supabase, user.id),
+  ]);
   const safety = getSafetyResponse(text, profile?.safety_resource_region);
   if (safety) return NextResponse.json({ safety, response: null });
 
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   const task = action === "decode"
     ? "Explain the most plausible meanings and tone based only on the supplied text. State uncertainty clearly, name what cannot be known, then offer practical next steps."
     : "Write three ready-to-send options that preserve the user’s intent. Label them Direct, Warm, and Balanced. Do not claim to send anything.";
-  const system = `You are Beckett, a personalized communication coach for neurodivergent adults. ${task}\n\n${beckettBoundaryPrompt()}\n\nDo not diagnose people or infer hidden intent as fact. Be practical, respectful, and under 350 words.`;
+  const system = `You are Beckett, a personalized communication coach for neurodivergent adults. ${task}\n\n${beckettBoundaryPrompt()}\n\n${sharedContext.promptContext}\n\nDo not diagnose people or infer hidden intent as fact. Be practical, respectful, and under 350 words.`;
   const prompt = `Communication settings: directness ${directness}; warmth ${warmth}; formality ${formality}; length ${length}.\n\nUser-provided text or situation:\n${text}`;
 
   try {

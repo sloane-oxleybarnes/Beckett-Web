@@ -4,6 +4,7 @@ import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
 import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSafetyResponse } from "@/lib/safety-resources";
+import { fetchSharedWebContext } from "@/lib/shared-web-context";
 
 const pillars = ["boundaries", "friendship", "family_roommates", "dating"] as const;
 const intents = ["decode", "draft"] as const;
@@ -24,11 +25,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Choose a support area and add up to 4,000 characters of context." }, { status: 400 });
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("safety_resource_region")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, sharedContext] = await Promise.all([
+    supabase.from("profiles").select("safety_resource_region").eq("id", user.id).maybeSingle(),
+    fetchSharedWebContext(supabase, user.id),
+  ]);
   const safety = getSafetyResponse(text, profile?.safety_resource_region);
   if (safety) return NextResponse.json({ safety, response: null });
 
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   const task = body.intent === "decode"
     ? "Explain likely meanings and tone using only what is visible, then offer two low-pressure ways the user could respond."
     : "Draft two concise, ready-to-send options that preserve the user's intent: one direct and one warmer.";
-  const system = `You are Beckett, a personalized communication coach for neurodivergent adults. This is personal communication support in the area of ${pillarName[body.pillar]}.\n\n${beckettBoundaryPrompt()}\n\nUse uncertainty when evidence is limited. Do not diagnose, provide therapy, legal guidance, crisis intervention, medical guidance, manipulation, or advice for coercive/unsafe relationships. Keep your response practical, kind, and under 300 words.`;
+  const system = `You are Beckett, a personalized communication coach for neurodivergent adults. This is personal communication support in the area of ${pillarName[body.pillar]}.\n\n${beckettBoundaryPrompt()}\n\n${sharedContext.promptContext}\n\nUse uncertainty when evidence is limited. Do not diagnose, provide therapy, legal guidance, crisis intervention, medical guidance, manipulation, or advice for coercive/unsafe relationships. Keep your response practical, kind, and under 300 words.`;
   const prompt = `Task: ${task}\nPreferred tone: ${tone}.\n\nUser-provided context:\n${text}`;
 
   try {
