@@ -113,6 +113,7 @@ function SummarySection({
   values,
   editing,
   onToggle,
+  summary,
   children,
 }: {
   title: string;
@@ -120,6 +121,7 @@ function SummarySection({
   values: string[];
   editing: boolean;
   onToggle: () => void;
+  summary?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -137,7 +139,7 @@ function SummarySection({
           {editing ? "Done" : "Edit"}
         </button>
       </div>
-      {editing ? <div>{children}</div> : <SummaryChips values={values} />}
+      {editing ? <div>{children}</div> : summary || <SummaryChips values={values} />}
     </div>
   );
 }
@@ -201,34 +203,6 @@ function CustomEntryControls({
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function TextAreaCard({
-  title,
-  description,
-  value,
-  onChange,
-  placeholder,
-}: {
-  title: string;
-  description: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-}) {
-  return (
-    <div className="bg-white border border-border rounded-card p-5">
-      <label className="block text-sm font-medium text-ink mb-1">{title}</label>
-      <p className="text-xs text-ink-light mb-3">{description}</p>
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        rows={3}
-        className="w-full border border-border rounded-sm px-3 py-2.5 text-sm text-ink bg-white focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-      />
     </div>
   );
 }
@@ -384,68 +358,39 @@ export default function AboutPage() {
         and feedback.
       </p>
 
-      <form onSubmit={save} className="space-y-5">
-        <div className="bg-white border border-border rounded-card p-5">
-          <div className="mb-4">
-            <h2 className="text-sm font-medium text-ink mb-1">Communication toolkit</h2>
-            <p className="text-xs text-ink-light">
-              Phrases and questions you created in Beckett courses. Delete anything you do not want to keep.
-            </p>
+      <form onSubmit={save}>
+        <section className="rounded-card border border-border bg-white p-5 sm:p-6">
+          <div className="mb-5 border-b border-border pb-5">
+            <p className="text-xs font-medium uppercase tracking-wide text-primary">Communication</p>
+            <h2 className="mt-1 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>How Beckett can meet you where you are</h2>
+            <p className="mt-2 text-sm leading-relaxed text-ink-mid">Add only the communication context you want Beckett to use for practice, feedback, and support.</p>
           </div>
-          {toolkitItems.length === 0 ? (
-            <p className="text-sm text-ink-light">Nothing saved yet. Course phrases will appear here after you build them.</p>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {toolkitFilters.map((filter) => (
-                  <button
-                    key={filter.id}
-                    type="button"
-                    onClick={() => {
-                      setToolkitFilter(filter.id);
-                      setShowAllToolkit(false);
-                    }}
-                    className={`rounded-pill border px-3 py-1.5 text-xs transition-colors ${
-                      toolkitFilter === filter.id
-                        ? "border-primary bg-primary-light text-primary"
-                        : "border-border bg-bg text-ink-mid hover:border-primary"
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
+
+          <div className="space-y-4">
+            <div className="rounded-card border border-border bg-bg/40 p-4">
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-ink">Your phrases &amp; scripts</h3>
+                <p className="mt-1 text-xs leading-relaxed text-ink-light">Words, questions, and scripts you choose to save from Beckett courses.</p>
               </div>
-              {visibleToolkitItems.map((item) => (
-                <div key={item.id} className="rounded-card border border-border bg-bg p-4">
-                  <div className="mb-2 flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-medium text-primary">{toolkitCourseTitles[item.course_id] || item.course_id.replace(/-/g, " ")}</p>
-                      <p className="text-[11px] uppercase tracking-wide text-ink-light">{item.label}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => deleteToolkitItem(item.id)}
-                      disabled={deletingToolkitId === item.id}
-                      className="text-xs text-ink-light hover:text-red-600 disabled:opacity-50"
-                    >
-                      {deletingToolkitId === item.id ? "Deleting..." : "Delete"}
-                    </button>
+              {toolkitItems.length === 0 ? (
+                <p className="text-sm text-ink-light">Nothing saved yet. Phrases and scripts you save in Skills will appear here.</p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    {toolkitFilters.map((filter) => (
+                      <button key={filter.id} type="button" onClick={() => { setToolkitFilter(filter.id); setShowAllToolkit(false); }} className={`rounded-pill border px-3 py-1.5 text-xs transition-colors ${toolkitFilter === filter.id ? "border-primary bg-primary-light text-primary" : "border-border bg-bg text-ink-mid hover:border-primary"}`}>{filter.label}</button>
+                    ))}
                   </div>
-                  <p className="text-sm leading-relaxed text-ink">{item.content}</p>
+                  {visibleToolkitItems.map((item) => (
+                    <div key={item.id} className="rounded-card border border-border bg-white p-4">
+                      <div className="mb-2 flex items-start justify-between gap-3"><div><p className="text-xs font-medium text-primary">{toolkitCourseTitles[item.course_id] || item.course_id.replace(/-/g, " ")}</p><p className="text-[11px] uppercase tracking-wide text-ink-light">{item.label}</p></div><button type="button" onClick={() => deleteToolkitItem(item.id)} disabled={deletingToolkitId === item.id} className="text-xs text-ink-light hover:text-red-600 disabled:opacity-50">{deletingToolkitId === item.id ? "Deleting..." : "Delete"}</button></div>
+                      <p className="text-sm leading-relaxed text-ink">{item.content}</p>
+                    </div>
+                  ))}
+                  {filteredToolkitItems.length > 4 && <button type="button" onClick={() => setShowAllToolkit((current) => !current)} className="rounded-pill border border-primary px-4 py-2 text-xs font-medium text-primary hover:bg-primary-light">{showAllToolkit ? "Show recent" : `View all ${filteredToolkitItems.length}`}</button>}
                 </div>
-              ))}
-              {filteredToolkitItems.length > 4 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllToolkit((current) => !current)}
-                  className="rounded-pill border border-primary px-4 py-2 text-xs font-medium text-primary hover:bg-primary-light"
-                >
-                  {showAllToolkit ? "Show recent" : `View all ${filteredToolkitItems.length}`}
-                </button>
               )}
             </div>
-          )}
-        </div>
 
         <SummarySection
           title="Communication strengths"
@@ -501,13 +446,16 @@ export default function AboutPage() {
           />
         </SummarySection>
 
-        <TextAreaCard
+        <SummarySection
           title="How I communicate"
           description="How do you naturally communicate? Direct or indirect? Verbose or brief? Comfortable with conflict or avoidant?"
-          value={data.communication_style}
-          onChange={(value) => setData({ ...data, communication_style: value })}
-          placeholder="e.g. I tend to be indirect and avoid conflict. I over-explain when nervous. I need time to process before responding."
-        />
+          values={data.communication_style ? [data.communication_style] : []}
+          editing={editingSections.has("communication-style")}
+          onToggle={() => toggleSection("communication-style")}
+          summary={data.communication_style ? <p className="text-sm leading-relaxed text-ink-mid">{data.communication_style}</p> : <p className="text-sm text-ink-light">Add a little context about how you naturally communicate.</p>}
+        >
+          <textarea value={data.communication_style} onChange={(event) => setData({ ...data, communication_style: event.target.value })} placeholder="e.g. I tend to be indirect and avoid conflict. I over-explain when nervous. I need time to process before responding." rows={4} className="w-full resize-none rounded-sm border border-border bg-white px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary" />
+        </SummarySection>
 
         <SummarySection
           title="Neurodivergent context"
@@ -549,13 +497,13 @@ export default function AboutPage() {
           />
         </SummarySection>
 
-        <button
-          type="submit"
-          disabled={saving}
-          className="bg-primary text-white text-sm rounded-pill px-6 py-2.5 hover:bg-primary-dark transition-colors disabled:opacity-50"
-        >
-          {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
-        </button>
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-border pt-5">
+            <button type="submit" disabled={saving} className="rounded-pill bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-dark disabled:opacity-50">{saving ? "Saving…" : saved ? "Saved ✓" : "Save communication profile"}</button>
+            <p className="text-xs text-ink-light">Changes stay private to your Beckett experience.</p>
+          </div>
+        </section>
       </form>
       <div id="support-preferences" className="mt-5">
         <SupportPlansPanel />
