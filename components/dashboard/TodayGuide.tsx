@@ -104,7 +104,10 @@ export default function TodayGuide({ name }: { name: string }) {
   const [meetingPrepLearningEnabled, setMeetingPrepLearningEnabled] = useState(false);
   const [contacts, setContacts] = useState<MeetingPrepContact[]>([]);
   const [learningRecommendation, setLearningRecommendation] = useState<EarnedLearningRecommendation | null>(null);
-  const [learningRecommendationDismissed, setLearningRecommendationDismissed] = useState(false);
+  const [learningWhyOpen, setLearningWhyOpen] = useState(false);
+  const [learningFeedbackStatus, setLearningFeedbackStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [learningFeedbackError, setLearningFeedbackError] = useState<string | null>(null);
+  const [learningPaused, setLearningPaused] = useState(false);
   const [localHour, setLocalHour] = useState<number | null>(null);
 
   useEffect(() => {
@@ -155,10 +158,11 @@ export default function TodayGuide({ name }: { name: string }) {
   useEffect(() => {
     fetch("/api/learning/preferences", { cache: "no-store" })
       .then((response) => response.ok ? response.json() : null)
-      .then((data: { preferences?: { home_suggestions_enabled?: boolean; pattern_model_enabled?: boolean; meeting_prep_learning_enabled?: boolean } } | null) => {
+      .then((data: { preferences?: { home_suggestions_enabled?: boolean; pattern_model_enabled?: boolean; skill_recommendations_enabled?: boolean; meeting_prep_learning_enabled?: boolean } } | null) => {
         const enabled = data?.preferences?.home_suggestions_enabled !== false;
         setHomeSuggestionsEnabled(enabled);
         setMeetingPrepLearningEnabled(Boolean(data?.preferences?.pattern_model_enabled && data?.preferences?.meeting_prep_learning_enabled));
+        setLearningPaused(data?.preferences?.skill_recommendations_enabled === false);
         if (!enabled) setSuggestionDismissed(true);
       })
       .catch(() => setHomeSuggestionsEnabled(true));
@@ -190,23 +194,6 @@ export default function TodayGuide({ name }: { name: string }) {
       no_lunch_opening: today.length >= 2 && lunchEvents.length >= 2,
     };
   }, [calendar, today]);
-  const hasMeaningfulOpening = useMemo(() => {
-    if (!calendarContext.connected) return false;
-    if (!today.length) return true;
-    const endOfDay = new Date();
-    endOfDay.setHours(18, 0, 0, 0);
-    const cursor = new Date();
-    const timed = today.filter((event) => event.end && new Date(event.end).getTime() > cursor.getTime()).sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-    for (const event of timed) {
-      if (new Date(event.start).getTime() - cursor.getTime() >= 60 * 60_000) return true;
-      if (new Date(event.end as string).getTime() > cursor.getTime()) cursor.setTime(new Date(event.end as string).getTime());
-    }
-    return endOfDay.getTime() - cursor.getTime() >= 60 * 60_000;
-  }, [calendarContext.connected, today]);
-  useEffect(() => {
-    if (!hasMeaningfulOpening) setLearningRecommendation(null);
-  }, [hasMeaningfulOpening]);
-
   useEffect(() => {
     fetch(`/api/workday/day-plan?date=${workdayPlanDate()}`, { cache: "no-store" })
       .then((response) => response.ok ? response.json() : null)
@@ -307,6 +294,44 @@ export default function TodayGuide({ name }: { name: string }) {
     }
   }
 
+  async function recordLearningFeedback(action: "save" | "dismiss") {
+    if (!learningRecommendation) return;
+    setLearningFeedbackStatus("saving");
+    setLearningFeedbackError(null);
+    try {
+      const response = await fetch("/api/learning/recommendation/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!response.ok) throw new Error();
+      setLearningRecommendation(null);
+      setLearningFeedbackStatus("saved");
+    } catch {
+      setLearningFeedbackStatus("error");
+      setLearningFeedbackError("Could not save that choice. Please try again.");
+    }
+  }
+
+  async function pauseLearningRecommendations() {
+    setLearningFeedbackStatus("saving");
+    setLearningFeedbackError(null);
+    try {
+      const response = await fetch("/api/learning/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skill_recommendations_enabled: false }),
+      });
+      if (!response.ok) throw new Error();
+      setLearningPaused(true);
+      setLearningRecommendation(null);
+      setLearningFeedbackStatus("saved");
+    } catch {
+      setLearningFeedbackStatus("error");
+      setLearningFeedbackError("Could not pause recommendations. Please try again.");
+    }
+  }
+
   function openPlanner() {
     setOpenDayPlanner(true);
   }
@@ -368,7 +393,7 @@ export default function TodayGuide({ name }: { name: string }) {
           {!suggestionDismissed && <div className="rounded-card border border-primary/20 bg-primary-light/40 p-5 sm:p-6"><p className="text-xs font-medium uppercase tracking-wide text-primary">{suggestion.kind === "prep_available" ? "A meeting on your calendar" : "A schedule-based suggestion"}</p><h3 className="mt-2 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{calendarStatus === "loading" ? "Checking what is ahead…" : calendar?.connected ? suggestion.title : "Start with what would help today."}</h3><p className="mt-2 text-sm leading-relaxed text-ink-mid">{calendarStatus === "loading" ? "Beckett is refreshing the calendars you selected." : calendar?.connected ? suggestion.detail : "Connect your calendar when you want Beckett to tailor this to your actual schedule."}</p>{openDayPlanner && <div className="mt-4 rounded-sm border border-primary/20 bg-white/80 p-4"><p className="text-sm font-medium text-ink">What would make today feel worthwhile?</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{["Make progress on work", "Take care of myself", "Get organized", "Prepare for something ahead", "I’m not sure yet"].map((choice) => <button key={choice} type="button" onClick={() => chooseOpenDayFocus(choice)} aria-pressed={openDayChoice === choice && !customOpenDayFocus} className={`rounded-sm border px-3 py-2 text-left text-sm transition-colors ${openDayChoice === choice && !customOpenDayFocus ? "border-primary bg-primary-light" : "border-border bg-white hover:border-primary"}`}>{choice}</button>)}</div><label className="mt-3 block text-xs font-medium text-ink">Or write your own focus<input value={customOpenDayFocus} onChange={(event) => { setCustomOpenDayFocus(event.target.value); setOpenDayPlanStatus("idle"); }} placeholder="One thing that would make today feel better" className="mt-1 block w-full rounded-sm border border-border px-3 py-2 text-sm font-normal" /></label><label className="mt-3 block text-xs font-medium text-ink">One next step (optional)<input value={openDayNextStep} onChange={(event) => { setOpenDayNextStep(event.target.value); setOpenDayPlanStatus("idle"); }} maxLength={300} placeholder="For example: open the project brief for 10 minutes" className="mt-1 block w-full rounded-sm border border-border px-3 py-2 text-sm font-normal" /></label><div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" disabled={openDayPlanStatus === "saving" || !(customOpenDayFocus.trim() || openDayChoice)} onClick={() => void saveOpenDayPlan()} className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:opacity-60">{openDayPlanStatus === "saving" ? "Saving…" : "Save today’s focus"}</button>{openDayPlanStatus === "error" && <span className="text-xs text-red-700">Could not save your focus. Please try again.</span>}{openDayPlanStatus === "saved" && <span className="text-xs text-primary">Saved for today.</span>}</div></div>}{holdPlanVisible && suggestion.suggestedHold && <div className="mt-4 rounded-sm border border-primary/20 bg-white/80 p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Proposed calendar hold</p><p className="mt-1 text-sm font-medium text-ink">{suggestion.suggestedHold.title} · {formatEventTime(suggestion.suggestedHold.start)}–{formatEventTime(suggestion.suggestedHold.end)}</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">This is only a suggestion. Beckett has not added anything to your calendar.</p><div className="mt-3 flex flex-wrap gap-x-4 gap-y-2"><button type="button" onClick={() => void copySuggestedHold()} className="text-xs font-medium text-primary hover:underline">{holdCopied ? "Copied" : "Copy hold details"}</button><button type="button" disabled className="text-xs font-medium text-ink-light">Add to calendar — coming later</button></div><p className="mt-2 text-xs leading-relaxed text-ink-light">A future calendar write connection would require separate authorization and your final confirmation for this exact change.</p></div>}<div className="mt-5 flex flex-wrap gap-3">{(suggestion.kind === "prep" || suggestion.kind === "prep_available") && suggestion.event ? <Link href={prepHref(suggestion.event)} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">{suggestion.kind === "prep" ? "Prepare now" : "Open meeting prep"}</Link> : suggestion.kind === "open" ? <button type="button" onClick={() => setOpenDayPlanner((value) => !value)} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">{openDayPlanner ? "Close day planner" : "Plan your open day"}</button> : suggestion.suggestedHold ? <button type="button" onClick={() => setHoldPlanVisible((visible) => !visible)} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">{holdPlanVisible ? "Hide proposed hold" : "Review proposed hold"}</button> : <Link href={suggestion.kind === "focus" ? "/dashboard/skills" : "/dashboard/workday"} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-light">{suggestion.kind === "focus" ? "Choose a useful skill" : "Plan a reset"}</Link>}<button type="button" onClick={() => setSuggestionDismissed(true)} className="rounded-pill border border-primary/30 bg-white px-5 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary-light">Not today</button></div></div>}
 
           <div className="rounded-card border border-border bg-white"><button type="button" onClick={() => setSetupOpen((open) => !open)} aria-expanded={setupOpen} className="flex w-full items-center justify-between p-5 text-left"><span><span className="block text-xs font-medium uppercase tracking-wide text-ink-light">Set up your day</span><span className="mt-1 block text-xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{calendar?.connected ? "Choose support that fits what is ahead." : "Choose what would help today."}</span></span><span aria-hidden="true" className="text-xl text-primary">{setupOpen ? "−" : "+"}</span></button>{setupOpen && <div className="grid border-t border-border sm:grid-cols-3">{nextMeetingToPrep ? <><Link href={prepHref(nextMeetingToPrep)} className="border-b border-border p-4 text-sm font-medium text-ink transition-colors hover:bg-primary-light/40 sm:border-b-0 sm:border-r"><span className="block text-primary">Prepare for {nextMeetingToPrep.title}</span><span className="mt-1 block text-xs font-normal text-ink-mid">Meeting with {attendeeNames(nextMeetingToPrep).slice(0, 2).join(", ")}.</span></Link><Link href={practiceHref(nextMeetingToPrep)} className="border-b border-border p-4 text-sm font-medium text-ink transition-colors hover:bg-primary-light/40 sm:border-b-0 sm:border-r"><span className="block text-primary">Practice this conversation</span><span className="mt-1 block text-xs font-normal text-ink-mid">Rehearse a clear contribution or ask before you walk in.</span></Link></> : <button type="button" onClick={() => setOpenDayPlanner(true)} className="border-b border-border p-4 text-left text-sm font-medium text-ink transition-colors hover:bg-primary-light/40 sm:border-b-0 sm:border-r"><span className="block text-primary">Plan your open day</span><span className="mt-1 block text-xs font-normal text-ink-mid">Choose progress, self-care, organization, preparation, or your own focus.</span></button>}<Link href="/dashboard/about#support-preferences" className="border-b border-border p-4 text-sm font-medium text-ink transition-colors hover:bg-primary-light/40 sm:border-b-0 sm:border-r"><span className="block text-primary">My support preferences</span><span className="mt-1 block text-xs font-normal text-ink-mid">Review the support you want Beckett to offer.</span></Link><Link href="/dashboard/calendar" className="p-4 text-sm font-medium text-ink transition-colors hover:bg-primary-light/40"><span className="block text-primary">View your week</span><span className="mt-1 block text-xs font-normal text-ink-mid">See the meetings and open space Beckett is using.</span></Link></div>}</div>
-          {learningRecommendation && !learningRecommendationDismissed && <div className="rounded-card border border-primary/20 bg-white p-5"><p className="text-xs font-medium uppercase tracking-wide text-primary">A connection you can choose to make</p><h3 className="mt-1 text-xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{learningRecommendation.title}</h3><p className="mt-2 text-sm leading-relaxed text-ink-mid">{learningRecommendation.reason}</p><p className="mt-2 text-xs leading-relaxed text-ink-light">This is based only on your completed Practice topics from the last three weeks, because you turned on pattern learning. It does not use email, calendar, or Slack content.</p><div className="mt-4 flex flex-wrap gap-3"><Link href={learningRecommendation.href} className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">Explore this skill</Link><button type="button" onClick={() => setLearningRecommendationDismissed(true)} className="rounded-pill border border-primary/30 px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light">Not now</button></div></div>}
+          {learningRecommendation && !learningPaused && <div className="rounded-card border border-primary/20 bg-white p-5"><p className="text-xs font-medium uppercase tracking-wide text-primary">A next step you can choose</p><h3 className="mt-1 text-xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{learningRecommendation.title}</h3><p className="mt-2 text-sm leading-relaxed text-ink-mid">{learningRecommendation.reason}</p><button type="button" onClick={() => setLearningWhyOpen((open) => !open)} aria-expanded={learningWhyOpen} className="mt-3 text-xs font-medium text-primary hover:underline">{learningWhyOpen ? "Hide why Beckett suggested this" : "Why am I seeing this?"}</button>{learningWhyOpen && <div className="mt-2 rounded-sm border border-border bg-bg/60 p-3"><p className="text-xs leading-relaxed text-ink-mid">{learningRecommendation.why}</p><p className="mt-2 text-xs leading-relaxed text-ink-light">This uses only completed Practice, skills you completed, and a related preference or pattern you explicitly chose to save. It never uses Gmail, Calendar, or Slack content.</p></div>}<div className="mt-4 flex flex-wrap gap-3"><Link href={learningRecommendation.href} className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">{learningRecommendation.actionLabel}</Link>{learningRecommendation.secondaryHref && learningRecommendation.secondaryLabel && <Link href={learningRecommendation.secondaryHref} className="rounded-pill border border-primary/30 px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light">{learningRecommendation.secondaryLabel}</Link>}<button type="button" disabled={learningFeedbackStatus === "saving"} onClick={() => void recordLearningFeedback("save")} className="text-xs font-medium text-primary hover:underline disabled:opacity-60">Save for later</button><button type="button" disabled={learningFeedbackStatus === "saving"} onClick={() => void recordLearningFeedback("dismiss")} className="text-xs font-medium text-ink-mid hover:underline disabled:opacity-60">Not relevant</button><button type="button" disabled={learningFeedbackStatus === "saving"} onClick={() => void pauseLearningRecommendations()} className="text-xs font-medium text-ink-light hover:underline disabled:opacity-60">Pause recommendations</button></div>{learningFeedbackError && <p className="mt-3 text-xs text-red-700">{learningFeedbackError}</p>}</div>}
         </div>
       </div>
     </section>
