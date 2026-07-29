@@ -107,6 +107,11 @@ export default function TodayGuide({ name }: { name: string }) {
   const [contacts, setContacts] = useState<MeetingPrepContact[]>([]);
   const [learningRecommendation, setLearningRecommendation] = useState<EarnedLearningRecommendation | null>(null);
   const [learningRecommendationDismissed, setLearningRecommendationDismissed] = useState(false);
+  const [localHour, setLocalHour] = useState<number | null>(null);
+
+  useEffect(() => {
+    setLocalHour(new Date().getHours());
+  }, []);
 
   const load = useCallback(async () => {
     setCalendarStatus("loading");
@@ -303,11 +308,19 @@ export default function TodayGuide({ name }: { name: string }) {
     window.requestAnimationFrame(() => dayPlannerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
   }, [openDayPlanner]);
 
+  const greeting = localHour === null
+    ? "Hello"
+    : localHour < 12
+      ? "Good morning"
+      : localHour < 18
+        ? "Good afternoon"
+        : "Good evening";
+
   return (
     <section className="mb-6 space-y-5">
       <div className="rounded-card border border-border bg-white p-5 sm:p-6">
         <p className="text-xs font-medium uppercase tracking-wide text-primary">Today with Beckett</p>
-        <h2 className="mt-2 text-3xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, {name}.</h2>
+        <h2 className="mt-2 text-3xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{greeting}, {name}.</h2>
         <p className="mt-1 text-sm text-ink-mid">How are you feeling right now?</p>
         <div className="mt-5 grid gap-2 sm:grid-cols-5">
           {feelings.map((feeling) => <button key={feeling.value} type="button" onClick={() => void selectFeeling(feeling)} aria-pressed={selectedFeeling === feeling.value} disabled={checkinStatus === "saving"} className={`flex min-h-16 items-center gap-3 rounded-sm border px-3 text-left text-sm font-medium transition-colors disabled:cursor-wait disabled:opacity-60 ${selectedFeeling === feeling.value ? "border-primary bg-primary-light text-ink" : "border-border bg-bg/50 text-ink hover:border-primary/50 hover:bg-primary-light/40"}`}><span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-light text-lg text-primary">{feeling.symbol}</span>{feeling.label}</button>)}
