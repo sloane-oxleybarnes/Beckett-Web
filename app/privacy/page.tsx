@@ -15,7 +15,7 @@ const sections = [
   {
     title: "What Beckett collects and stores",
     body: [
-      "Beckett stores account details, beta access status, onboarding answers, connection status, usage counts, timestamps, contacts you choose to add, and coaching settings.",
+      "Beckett stores account details, beta access status, onboarding answers, connection status, usage counts, timestamps, contacts you choose to add, coaching settings, and voluntary workday choices such as check-ins, reminder preferences, and a same-day focus when you save one.",
       "This can include personal information such as your name and email address, authentication and connection information, user-provided communication preferences, and workplace communication context you choose to send for coaching.",
       "Beckett does not store full Gmail or Slack message history by default, including raw Slack search results used for a coaching response. For product analytics and CRM, Beckett uses counts, timestamps, connection status, and safe event names, not raw message content.",
       "Beckett does not store Google Calendar events. We retain a Google connection credential only while you keep that connection active, and remove it when you disconnect the service or delete your account.",
@@ -148,7 +148,7 @@ export default function PrivacyPage() {
           how it uses and shares data, what feedback can include, and where the coaching
           boundaries are.
         </p>
-        <p className="mt-4 text-sm text-ink-light">Last updated: July 23, 2026</p>
+        <p className="mt-4 text-sm text-ink-light">Last updated: July 29, 2026</p>
       </section>
 
       <section className="mx-auto grid w-full max-w-4xl gap-5 px-5 pb-12">

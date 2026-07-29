@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { timeOfDayForDate, type CalendarContext, type WorkdayCheckin } from "@/lib/workday-patterns";
+import { workdayPlanDate } from "@/lib/workday-planning";
 import {
   attendeeNames,
   eventsOnDay,
@@ -13,10 +14,6 @@ import {
 } from "@/lib/calendar-insights";
 import { hasEarnedMeetingPrepSignal, type MeetingPrepContact } from "@/lib/meeting-prep-recommendations";
 import type { EarnedLearningRecommendation } from "@/lib/earned-learning-recommendations";
-import {
-  formatCalendarActionIntent,
-  type CalendarActionIntent,
-} from "@/lib/calendar-action-intents";
 
 type Calendar = { connected: boolean; reauthorize?: boolean; events: CalendarEvent[] };
 type Feeling = {
@@ -92,11 +89,12 @@ export default function TodayGuide({ name }: { name: string }) {
   const [setupOpen, setSetupOpen] = useState(true);
   const [holdPlanVisible, setHoldPlanVisible] = useState(false);
   const [holdCopied, setHoldCopied] = useState(false);
-  const [calendarActionIntent, setCalendarActionIntent] = useState<CalendarActionIntent | null>(null);
   const [openDayPlanner, setOpenDayPlanner] = useState(false);
   const [openDayChoice, setOpenDayChoice] = useState<string | null>(null);
   const [customOpenDayFocus, setCustomOpenDayFocus] = useState("");
+  const [openDayNextStep, setOpenDayNextStep] = useState("");
   const [savedOpenDayPlan, setSavedOpenDayPlan] = useState<OpenDayPlan | null>(null);
+  const [openDayPlanStatus, setOpenDayPlanStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const dayPlannerRef = useRef<HTMLDivElement | null>(null);
   const [pendingSupportAction, setPendingSupportAction] = useState<PendingSupportAction | null>(null);
   const [pendingOutcome, setPendingOutcome] = useState<"helped" | "a_little" | "not_helpful" | "skipped" | null>(null);
@@ -210,18 +208,17 @@ export default function TodayGuide({ name }: { name: string }) {
   }, [hasMeaningfulOpening]);
 
   useEffect(() => {
-    const key = `beckett:today-intention:${new Date().toISOString().slice(0, 10)}`;
-    try {
-      const savedPlan = window.sessionStorage.getItem(key);
-      if (!savedPlan) return;
-      const parsed = JSON.parse(savedPlan) as OpenDayPlan;
-      if (parsed.focus) {
-        setSavedOpenDayPlan({ focus: parsed.focus, nextStep: parsed.nextStep || "" });
-        setOpenDayChoice(parsed.focus);
-      }
-    } catch {
-      // An unavailable or malformed session entry should never block Home.
-    }
+    fetch(`/api/workday/day-plan?date=${workdayPlanDate()}`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: { plan?: { focus?: string; next_step?: string } | null } | null) => {
+        const plan = data?.plan;
+        if (!plan?.focus) return;
+        setSavedOpenDayPlan({ focus: plan.focus, nextStep: plan.next_step || "" });
+        setOpenDayChoice(plan.focus);
+        setCustomOpenDayFocus(plan.focus);
+        setOpenDayNextStep(plan.next_step || "");
+      })
+      .catch(() => undefined);
   }, []);
 
   async function saveCheckin(feeling: Feeling, strategy = feeling.checkin.helpful_strategy, action?: SupportChoice["action"]) {
@@ -281,22 +278,33 @@ export default function TodayGuide({ name }: { name: string }) {
     }
   }
 
-  function stageSuggestedHold() {
-    if (!suggestion.suggestedHold) return;
-    setCalendarActionIntent({
-      kind: "create_hold",
-      title: suggestion.suggestedHold.title,
-      start: suggestion.suggestedHold.start,
-      end: suggestion.suggestedHold.end,
-      source: "home_schedule_suggestion",
-    });
-  }
-
   function chooseOpenDayFocus(choice: string) {
     setOpenDayChoice(choice);
-    const nextPlan = { focus: choice, nextStep: "" };
-    setSavedOpenDayPlan(nextPlan);
-    window.sessionStorage.setItem(`beckett:today-intention:${new Date().toISOString().slice(0, 10)}`, JSON.stringify(nextPlan));
+    setCustomOpenDayFocus("");
+    setOpenDayPlanStatus("idle");
+  }
+
+  async function saveOpenDayPlan() {
+    const focus = customOpenDayFocus.trim() || openDayChoice || "";
+    if (!focus) return;
+    setOpenDayPlanStatus("saving");
+    try {
+      const response = await fetch("/api/workday/day-plan", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ focus, next_step: openDayNextStep.trim(), plan_date: workdayPlanDate() }),
+      });
+      const data = await response.json().catch(() => null) as { plan?: { focus: string; next_step?: string }; error?: string } | null;
+      if (!response.ok || !data?.plan) throw new Error(data?.error || "Could not save today's focus.");
+      setSavedOpenDayPlan({ focus: data.plan.focus, nextStep: data.plan.next_step || "" });
+      setOpenDayChoice(data.plan.focus);
+      setCustomOpenDayFocus(data.plan.focus);
+      setOpenDayNextStep(data.plan.next_step || "");
+      setOpenDayPlanStatus("saved");
+      setOpenDayPlanner(false);
+    } catch {
+      setOpenDayPlanStatus("error");
+    }
   }
 
   function openPlanner() {
@@ -318,7 +326,7 @@ export default function TodayGuide({ name }: { name: string }) {
 
   return (
     <section className="mb-6 space-y-5">
-      <div className="rounded-card border border-border bg-white p-5 sm:p-6">
+      <div id="today-checkin" className="rounded-card border border-border bg-white p-5 sm:p-6">
         <p className="text-xs font-medium uppercase tracking-wide text-primary">Today with Beckett</p>
         <h2 className="mt-2 text-3xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{greeting}, {name}.</h2>
         <p className="mt-1 text-sm text-ink-mid">How are you feeling right now?</p>
@@ -353,11 +361,11 @@ export default function TodayGuide({ name }: { name: string }) {
             <div className="rounded-card border border-primary/20 bg-white p-5">
               <p className="text-xs font-medium uppercase tracking-wide text-primary">Today&apos;s focus</p>
               <p className="mt-1 text-lg text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{savedOpenDayPlan.focus}</p>
-              <p className="mt-2 text-sm leading-relaxed text-ink-mid">Keep this as your north star for today. Beckett has not added anything to your calendar.</p>
+              {savedOpenDayPlan.nextStep ? <p className="mt-2 text-sm leading-relaxed text-ink-mid"><span className="font-medium text-ink">Next step:</span> {savedOpenDayPlan.nextStep}</p> : <p className="mt-2 text-sm leading-relaxed text-ink-mid">Keep this as your north star for today. Beckett has not added anything to your calendar.</p>}
               <button type="button" onClick={openPlanner} className="mt-3 text-xs font-medium text-primary hover:underline">Change focus →</button>
             </div>
           )}
-          {!suggestionDismissed && <div className="rounded-card border border-primary/20 bg-primary-light/40 p-5 sm:p-6"><p className="text-xs font-medium uppercase tracking-wide text-primary">{suggestion.kind === "prep_available" ? "A meeting on your calendar" : "A schedule-based suggestion"}</p><h3 className="mt-2 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{calendarStatus === "loading" ? "Checking what is ahead…" : calendar?.connected ? suggestion.title : "Start with what would help today."}</h3><p className="mt-2 text-sm leading-relaxed text-ink-mid">{calendarStatus === "loading" ? "Beckett is refreshing the calendars you selected." : calendar?.connected ? suggestion.detail : "Connect your calendar when you want Beckett to tailor this to your actual schedule."}</p>{openDayPlanner && <div className="mt-4 rounded-sm border border-primary/20 bg-white/80 p-4"><p className="text-sm font-medium text-ink">What would make today feel worthwhile?</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{["Make progress on work", "Take care of myself", "Get organized", "Prepare for something ahead", "I’m not sure yet"].map((choice) => <button key={choice} type="button" onClick={() => chooseOpenDayFocus(choice)} aria-pressed={openDayChoice === choice} className={`rounded-sm border px-3 py-2 text-left text-sm transition-colors ${openDayChoice === choice ? "border-primary bg-primary-light" : "border-border bg-white hover:border-primary"}`}>{choice}</button>)}</div><label className="mt-3 block text-xs font-medium text-ink">Or write your own focus<input value={customOpenDayFocus} onChange={(event) => setCustomOpenDayFocus(event.target.value)} onBlur={() => customOpenDayFocus.trim() && chooseOpenDayFocus(customOpenDayFocus.trim())} placeholder="One thing that would make today feel better" className="mt-1 block w-full rounded-sm border border-border px-3 py-2 text-sm font-normal" /></label>{openDayChoice && <p className="mt-3 text-xs text-ink-mid">Beckett will keep “{openDayChoice}” in view for this visit. Nothing is added to your calendar.</p>}</div>}{holdPlanVisible && suggestion.suggestedHold && <div className="mt-4 rounded-sm border border-primary/20 bg-white/80 p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Proposed calendar hold</p><p className="mt-1 text-sm font-medium text-ink">{suggestion.suggestedHold.title} · {formatEventTime(suggestion.suggestedHold.start)}–{formatEventTime(suggestion.suggestedHold.end)}</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">This is only a suggestion. Beckett has not added anything to your calendar.</p><div className="mt-3 flex flex-wrap gap-x-4 gap-y-2"><button type="button" onClick={() => void copySuggestedHold()} className="text-xs font-medium text-primary hover:underline">{holdCopied ? "Copied" : "Copy hold details"}</button><button type="button" onClick={stageSuggestedHold} className="text-xs font-medium text-primary hover:underline">{calendarActionIntent ? "Approval flow reviewed" : "See the approval flow"}</button></div></div>}{calendarActionIntent && <p className="mt-3 text-xs leading-relaxed text-ink-mid">Beckett has staged “{formatCalendarActionIntent(calendarActionIntent)}” only in this page. Nothing is saved or sent. Calendar edits are not enabled today; a future write connection would require a separate authorization and your final confirmation for this exact change.</p>}<div className="mt-5 flex flex-wrap gap-3">{(suggestion.kind === "prep" || suggestion.kind === "prep_available") && suggestion.event ? <Link href={prepHref(suggestion.event)} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">{suggestion.kind === "prep" ? "Prepare now" : "Open meeting prep"}</Link> : suggestion.kind === "open" ? <button type="button" onClick={() => setOpenDayPlanner((value) => !value)} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">{openDayPlanner ? "Close day planner" : "Plan your open day"}</button> : suggestion.suggestedHold ? <button type="button" onClick={() => setHoldPlanVisible((visible) => !visible)} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">{holdPlanVisible ? "Hide proposed hold" : "Review proposed hold"}</button> : <Link href={suggestion.kind === "focus" ? "/dashboard/skills" : "/dashboard/workday"} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-light">{suggestion.kind === "focus" ? "Choose a useful skill" : "Plan a reset"}</Link>}<button type="button" onClick={() => setSuggestionDismissed(true)} className="rounded-pill border border-primary/30 bg-white px-5 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary-light">Not today</button></div></div>}
+          {!suggestionDismissed && <div className="rounded-card border border-primary/20 bg-primary-light/40 p-5 sm:p-6"><p className="text-xs font-medium uppercase tracking-wide text-primary">{suggestion.kind === "prep_available" ? "A meeting on your calendar" : "A schedule-based suggestion"}</p><h3 className="mt-2 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{calendarStatus === "loading" ? "Checking what is ahead…" : calendar?.connected ? suggestion.title : "Start with what would help today."}</h3><p className="mt-2 text-sm leading-relaxed text-ink-mid">{calendarStatus === "loading" ? "Beckett is refreshing the calendars you selected." : calendar?.connected ? suggestion.detail : "Connect your calendar when you want Beckett to tailor this to your actual schedule."}</p>{openDayPlanner && <div className="mt-4 rounded-sm border border-primary/20 bg-white/80 p-4"><p className="text-sm font-medium text-ink">What would make today feel worthwhile?</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{["Make progress on work", "Take care of myself", "Get organized", "Prepare for something ahead", "I’m not sure yet"].map((choice) => <button key={choice} type="button" onClick={() => chooseOpenDayFocus(choice)} aria-pressed={openDayChoice === choice && !customOpenDayFocus} className={`rounded-sm border px-3 py-2 text-left text-sm transition-colors ${openDayChoice === choice && !customOpenDayFocus ? "border-primary bg-primary-light" : "border-border bg-white hover:border-primary"}`}>{choice}</button>)}</div><label className="mt-3 block text-xs font-medium text-ink">Or write your own focus<input value={customOpenDayFocus} onChange={(event) => { setCustomOpenDayFocus(event.target.value); setOpenDayPlanStatus("idle"); }} placeholder="One thing that would make today feel better" className="mt-1 block w-full rounded-sm border border-border px-3 py-2 text-sm font-normal" /></label><label className="mt-3 block text-xs font-medium text-ink">One next step (optional)<input value={openDayNextStep} onChange={(event) => { setOpenDayNextStep(event.target.value); setOpenDayPlanStatus("idle"); }} maxLength={300} placeholder="For example: open the project brief for 10 minutes" className="mt-1 block w-full rounded-sm border border-border px-3 py-2 text-sm font-normal" /></label><div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" disabled={openDayPlanStatus === "saving" || !(customOpenDayFocus.trim() || openDayChoice)} onClick={() => void saveOpenDayPlan()} className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:opacity-60">{openDayPlanStatus === "saving" ? "Saving…" : "Save today’s focus"}</button>{openDayPlanStatus === "error" && <span className="text-xs text-red-700">Could not save your focus. Please try again.</span>}{openDayPlanStatus === "saved" && <span className="text-xs text-primary">Saved for today.</span>}</div></div>}{holdPlanVisible && suggestion.suggestedHold && <div className="mt-4 rounded-sm border border-primary/20 bg-white/80 p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Proposed calendar hold</p><p className="mt-1 text-sm font-medium text-ink">{suggestion.suggestedHold.title} · {formatEventTime(suggestion.suggestedHold.start)}–{formatEventTime(suggestion.suggestedHold.end)}</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">This is only a suggestion. Beckett has not added anything to your calendar.</p><div className="mt-3 flex flex-wrap gap-x-4 gap-y-2"><button type="button" onClick={() => void copySuggestedHold()} className="text-xs font-medium text-primary hover:underline">{holdCopied ? "Copied" : "Copy hold details"}</button><button type="button" disabled className="text-xs font-medium text-ink-light">Add to calendar — coming later</button></div><p className="mt-2 text-xs leading-relaxed text-ink-light">A future calendar write connection would require separate authorization and your final confirmation for this exact change.</p></div>}<div className="mt-5 flex flex-wrap gap-3">{(suggestion.kind === "prep" || suggestion.kind === "prep_available") && suggestion.event ? <Link href={prepHref(suggestion.event)} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">{suggestion.kind === "prep" ? "Prepare now" : "Open meeting prep"}</Link> : suggestion.kind === "open" ? <button type="button" onClick={() => setOpenDayPlanner((value) => !value)} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">{openDayPlanner ? "Close day planner" : "Plan your open day"}</button> : suggestion.suggestedHold ? <button type="button" onClick={() => setHoldPlanVisible((visible) => !visible)} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">{holdPlanVisible ? "Hide proposed hold" : "Review proposed hold"}</button> : <Link href={suggestion.kind === "focus" ? "/dashboard/skills" : "/dashboard/workday"} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-light">{suggestion.kind === "focus" ? "Choose a useful skill" : "Plan a reset"}</Link>}<button type="button" onClick={() => setSuggestionDismissed(true)} className="rounded-pill border border-primary/30 bg-white px-5 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary-light">Not today</button></div></div>}
 
           <div className="rounded-card border border-border bg-white"><button type="button" onClick={() => setSetupOpen((open) => !open)} aria-expanded={setupOpen} className="flex w-full items-center justify-between p-5 text-left"><span><span className="block text-xs font-medium uppercase tracking-wide text-ink-light">Set up your day</span><span className="mt-1 block text-xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{calendar?.connected ? "Choose support that fits what is ahead." : "Choose what would help today."}</span></span><span aria-hidden="true" className="text-xl text-primary">{setupOpen ? "−" : "+"}</span></button>{setupOpen && <div className="grid border-t border-border sm:grid-cols-3">{nextMeetingToPrep ? <><Link href={prepHref(nextMeetingToPrep)} className="border-b border-border p-4 text-sm font-medium text-ink transition-colors hover:bg-primary-light/40 sm:border-b-0 sm:border-r"><span className="block text-primary">Prepare for {nextMeetingToPrep.title}</span><span className="mt-1 block text-xs font-normal text-ink-mid">Meeting with {attendeeNames(nextMeetingToPrep).slice(0, 2).join(", ")}.</span></Link><Link href={practiceHref(nextMeetingToPrep)} className="border-b border-border p-4 text-sm font-medium text-ink transition-colors hover:bg-primary-light/40 sm:border-b-0 sm:border-r"><span className="block text-primary">Practice this conversation</span><span className="mt-1 block text-xs font-normal text-ink-mid">Rehearse a clear contribution or ask before you walk in.</span></Link></> : <button type="button" onClick={() => setOpenDayPlanner(true)} className="border-b border-border p-4 text-left text-sm font-medium text-ink transition-colors hover:bg-primary-light/40 sm:border-b-0 sm:border-r"><span className="block text-primary">Plan your open day</span><span className="mt-1 block text-xs font-normal text-ink-mid">Choose progress, self-care, organization, preparation, or your own focus.</span></button>}<Link href="/dashboard/about#support-preferences" className="border-b border-border p-4 text-sm font-medium text-ink transition-colors hover:bg-primary-light/40 sm:border-b-0 sm:border-r"><span className="block text-primary">My support preferences</span><span className="mt-1 block text-xs font-normal text-ink-mid">Review the support you want Beckett to offer.</span></Link><Link href="/dashboard/calendar" className="p-4 text-sm font-medium text-ink transition-colors hover:bg-primary-light/40"><span className="block text-primary">View your week</span><span className="mt-1 block text-xs font-normal text-ink-mid">See the meetings and open space Beckett is using.</span></Link></div>}</div>
           {learningRecommendation && !learningRecommendationDismissed && <div className="rounded-card border border-primary/20 bg-white p-5"><p className="text-xs font-medium uppercase tracking-wide text-primary">A connection you can choose to make</p><h3 className="mt-1 text-xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{learningRecommendation.title}</h3><p className="mt-2 text-sm leading-relaxed text-ink-mid">{learningRecommendation.reason}</p><p className="mt-2 text-xs leading-relaxed text-ink-light">This is based only on your completed Practice topics from the last three weeks, because you turned on pattern learning. It does not use email, calendar, or Slack content.</p><div className="mt-4 flex flex-wrap gap-3"><Link href={learningRecommendation.href} className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">Explore this skill</Link><button type="button" onClick={() => setLearningRecommendationDismissed(true)} className="rounded-pill border border-primary/30 px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light">Not now</button></div></div>}
