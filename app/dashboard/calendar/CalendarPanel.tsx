@@ -108,10 +108,6 @@ export default function CalendarPanel() {
     <div className="max-w-6xl">
       <h1 className="mb-2 text-3xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Calendar &amp; meetings</h1>
       <p className="mb-6 text-sm text-ink-mid">See this week at a glance and prepare for the conversations that are actually on your calendar.</p>
-      <div className="mb-5 flex flex-wrap gap-4 text-sm font-medium text-primary">
-        <Link href="/dashboard/meetings" className="hover:underline">Meeting notes &amp; support →</Link>
-      </div>
-
       {error && <div className="mb-5 rounded-sm border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
       {loading ? (
