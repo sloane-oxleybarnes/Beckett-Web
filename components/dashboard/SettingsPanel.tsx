@@ -40,15 +40,15 @@ function ConnectRow({
   needsReconnect?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex items-start gap-3">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="flex min-w-0 items-start gap-3">
         <span className="text-lg mt-0.5">{icon}</span>
-        <div>
+        <div className="min-w-0">
           <p className="text-sm text-ink font-medium">{name}</p>
           <p className="text-xs text-ink-light">{connected && detail ? detail : description}</p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap">
         {connected && (
           <span className={`rounded-pill px-3 py-1 text-xs font-medium ${needsReconnect ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}>
             {needsReconnect ? "Needs reconnection" : "Connected"}
