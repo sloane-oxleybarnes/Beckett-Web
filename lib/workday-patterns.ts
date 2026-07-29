@@ -28,6 +28,21 @@ export type WorkdayCheckin = {
   break_status: (typeof breakStatusValues)[number];
   helpful_strategy: (typeof helpfulStrategyValues)[number];
   checked_in_at?: string;
+  calendar_context?: CalendarContext;
+};
+
+export type CalendarContext = {
+  connected: boolean;
+  event_count: number;
+  meeting_count: number;
+  meeting_heavy: boolean;
+  no_lunch_opening: boolean;
+};
+
+export type SupportActionRecord = {
+  action_type: (typeof supportActionValues)[number];
+  outcome: "helped" | "a_little" | "not_helpful" | "skipped" | null;
+  remember_for_learning?: boolean;
 };
 
 export type PatternSummary = {
@@ -45,68 +60,61 @@ export function timeOfDayForDate(date = new Date()): WorkdayCheckin["time_of_day
   return "evening";
 }
 
-const labels: Record<WorkdayCheckin["helpful_strategy"], string> = {
-  quiet_block: "a quieter block of time",
-  written_next_steps: "written next steps",
-  clearer_priority: "a clearer priority",
-  short_break: "a short break",
-  draft_before_sending: "drafting before sending",
-  none_yet: "no strategy yet",
+const actionLabels: Record<SupportActionRecord["action_type"], string> = {
+  short_walk: "a short walk",
+  food_or_water: "food, water, or coffee",
+  quiet_minutes: "five quiet minutes",
+  smaller_next_step: "a smaller next step",
+  plan_priority: "choosing one priority",
+  prepare_next: "preparing for what was next",
+  ask_for_time: "asking for more time",
 };
 
-export function makePatternSummaries(checkins: WorkdayCheckin[]): PatternSummary[] {
+export function makePatternSummaries(checkins: WorkdayCheckin[], actions: SupportActionRecord[] = []): PatternSummary[] {
   if (checkins.length < 3) return [];
   const totalCheckins = checkins.length;
   const evidence = (matchingCheckins: number) => ({ matchingCheckins, totalCheckins, periodDays: 14 });
   const summaries: PatternSummary[] = [];
 
-  const stacked = checkins.filter((checkin) => checkin.workload_level === "stacked").length;
-  if (stacked >= 3) summaries.push({
+  const meetingHeavyAfternoon = checkins.filter((checkin) =>
+    checkin.time_of_day === "afternoon" &&
+    (checkin.energy_level <= 2 || checkin.workload_level === "stacked") &&
+    checkin.calendar_context?.meeting_heavy
+  ).length;
+  if (meetingHeavyAfternoon >= 3) summaries.push({
     category: "load",
-    pattern_key: "stacked-workload",
-    summary: `You reported a stacked workload in ${stacked} of your last ${totalCheckins} check-ins.`,
-    evidence: evidence(stacked),
+    pattern_key: "afternoon-meeting-heavy-reset",
+    summary: `You have selected low energy or overload in the afternoon after meeting-heavy days ${meetingHeavyAfternoon} times recently. Would you like Beckett to offer a reset before that stretch?`,
+    evidence: { ...evidence(meetingHeavyAfternoon), timeOfDay: "afternoon" },
   });
 
-  const friction = checkins.filter((checkin) => checkin.communication_friction).length;
-  if (friction >= 3) summaries.push({
-    category: "friction",
-    pattern_key: "communication-friction",
-    summary: `You marked communication friction in ${friction} of your last ${totalCheckins} check-ins.`,
-    evidence: evidence(friction),
-  });
-
-  const breakNeed = checkins.filter((checkin) => checkin.break_status === "would_help").length;
-  if (breakNeed >= 3) summaries.push({
+  const noLunchLaterLowEnergy = checkins.filter((checkin) =>
+    (checkin.time_of_day === "afternoon" || checkin.time_of_day === "evening") &&
+    checkin.energy_level <= 2 &&
+    checkin.calendar_context?.no_lunch_opening
+  ).length;
+  if (noLunchLaterLowEnergy >= 3) summaries.push({
     category: "break",
-    pattern_key: "break-would-help",
-    summary: `You said a break would help in ${breakNeed} of your last ${totalCheckins} check-ins.`,
-    evidence: evidence(breakNeed),
+    pattern_key: "lunch-opening-and-later-energy",
+    summary: `On days without a lunch-sized opening, you have selected low energy later in the day ${noLunchLaterLowEnergy} times. Would you like Beckett to look for a lunch-sized opening?`,
+    evidence: evidence(noLunchLaterLowEnergy),
   });
 
-  for (const strategy of helpfulStrategyValues.filter((value) => value !== "none_yet")) {
-    const used = checkins.filter((checkin) => checkin.helpful_strategy === strategy).length;
-    if (used >= 3) {
-      summaries.push({
-        category: "strategy",
-        pattern_key: `strategy-${strategy}`,
-        summary: `You chose ${labels[strategy]} in ${used} of your last ${totalCheckins} check-ins.`,
-        evidence: evidence(used),
-      });
-      break;
-    }
-  }
-
-  for (const timeOfDay of timeOfDayValues) {
-    const lowerCapacity = checkins.filter((checkin) => checkin.time_of_day === timeOfDay && (checkin.energy_level <= 2 || checkin.workload_level === "stacked")).length;
-    if (lowerCapacity >= 3) {
-      summaries.push({
-        category: "load",
-        pattern_key: `lower-capacity-${timeOfDay}`,
-        summary: `In the ${timeOfDay}, you marked lower energy or a stacked workload in ${lowerCapacity} check-ins.`,
-        evidence: { ...evidence(lowerCapacity), timeOfDay },
-      });
-    }
+  const rememberedHelpfulActions = actions.filter((action) =>
+    action.remember_for_learning &&
+    (action.outcome === "helped" || action.outcome === "a_little")
+  );
+  const actionCounts = new Map<SupportActionRecord["action_type"], number>();
+  rememberedHelpfulActions.forEach((action) => actionCounts.set(action.action_type, (actionCounts.get(action.action_type) || 0) + 1));
+  const repeatedAction = Array.from(actionCounts.entries()).find(([, count]) => count >= 2);
+  if (repeatedAction) {
+    const [action, count] = repeatedAction;
+    summaries.push({
+      category: "strategy",
+      pattern_key: `remembered-support-${action}`,
+      summary: `You chose to remember that ${actionLabels[action]} helped at least a little ${count} times. Would you like Beckett to keep offering it when a similar check-in comes up?`,
+      evidence: evidence(count),
+    });
   }
 
   return summaries;

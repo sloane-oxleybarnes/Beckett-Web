@@ -1,5 +1,5 @@
-import WorkdayPanel from "./WorkdayPanel";
+import { redirect } from "next/navigation";
 
 export default function WorkdayPage() {
-  return <WorkdayPanel />;
+  redirect("/dashboard/about#what-beckett-is-learning");
 }

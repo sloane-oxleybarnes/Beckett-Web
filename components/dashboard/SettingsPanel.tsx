@@ -262,6 +262,9 @@ export default function SettingsPage() {
     DEFAULT_PROACTIVITY_PREFERENCE
   );
   const [patternModelEnabled, setPatternModelEnabled] = useState(false);
+  const [homeSuggestionsEnabled, setHomeSuggestionsEnabled] = useState(true);
+  const [skillRecommendationsEnabled, setSkillRecommendationsEnabled] = useState(false);
+  const [meetingPrepLearningEnabled, setMeetingPrepLearningEnabled] = useState(false);
   const [customPreferences, setCustomPreferences] = useState("");
   const [deletionNotes, setDeletionNotes] = useState("");
   const [deletionStatus, setDeletionStatus] = useState<"idle" | "loading" | "requested" | "error">("idle");
@@ -291,6 +294,9 @@ export default function SettingsPage() {
             profileData?.proactive_coaching_preference || DEFAULT_PROACTIVITY_PREFERENCE
           );
           setPatternModelEnabled(profileData?.pattern_model_enabled || false);
+          setHomeSuggestionsEnabled(profileData?.home_suggestions_enabled !== false);
+          setSkillRecommendationsEnabled(profileData?.skill_recommendations_enabled || false);
+          setMeetingPrepLearningEnabled(profileData?.meeting_prep_learning_enabled || false);
         });
     });
   }, [supabase]);
@@ -433,6 +439,9 @@ export default function SettingsPage() {
       coaching_tone: coachingTone,
       proactive_coaching_preference: proactivityPreference,
       pattern_model_enabled: patternModelEnabled,
+      home_suggestions_enabled: homeSuggestionsEnabled,
+      skill_recommendations_enabled: skillRecommendationsEnabled,
+      meeting_prep_learning_enabled: meetingPrepLearningEnabled,
       updated_at: new Date().toISOString(),
     };
 
@@ -451,6 +460,9 @@ export default function SettingsPage() {
     setCoachingTone("direct_kind");
     setProactivityPreference(DEFAULT_PROACTIVITY_PREFERENCE);
     setPatternModelEnabled(false);
+    setHomeSuggestionsEnabled(true);
+    setSkillRecommendationsEnabled(false);
+    setMeetingPrepLearningEnabled(false);
     setCustomPreferences("");
 
     const { data } = await supabase.auth.getUser();
@@ -463,6 +475,9 @@ export default function SettingsPage() {
         coaching_tone: "direct_kind",
         proactive_coaching_preference: DEFAULT_PROACTIVITY_PREFERENCE,
         pattern_model_enabled: false,
+        home_suggestions_enabled: true,
+        skill_recommendations_enabled: false,
+        meeting_prep_learning_enabled: false,
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id);
@@ -479,9 +494,11 @@ export default function SettingsPage() {
       window.alert("Private learning history could not be cleared. Please try again.");
       return;
     }
-    const update = { pattern_model_enabled: false, updated_at: new Date().toISOString() };
+    const update = { pattern_model_enabled: false, skill_recommendations_enabled: false, meeting_prep_learning_enabled: false, updated_at: new Date().toISOString() };
     await supabase.from("profiles").update(update).eq("id", user.id);
     setPatternModelEnabled(false);
+    setSkillRecommendationsEnabled(false);
+    setMeetingPrepLearningEnabled(false);
     setProfile((current) => current ? { ...current, ...update } : current);
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 3000);
@@ -763,6 +780,20 @@ export default function SettingsPage() {
                 </span>
               </span>
             </label>
+            <div className="mt-3 space-y-3">
+              <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-border bg-bg/50 p-3">
+                <input type="checkbox" checked={homeSuggestionsEnabled} onChange={(event) => setHomeSuggestionsEnabled(event.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
+                <span><span className="block text-sm font-medium text-ink">Show schedule-based suggestions on Home</span><span className="mt-0.5 block text-xs text-ink-mid">You can keep the calendar and check-in available without seeing a suggested next step.</span></span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-border bg-bg/50 p-3">
+                <input type="checkbox" checked={skillRecommendationsEnabled} disabled={!patternModelEnabled} onChange={(event) => setSkillRecommendationsEnabled(event.target.checked)} className="mt-0.5 h-4 w-4 accent-primary disabled:opacity-50" />
+                <span><span className="block text-sm font-medium text-ink">Use approved learning for Skills recommendations</span><span className="mt-0.5 block text-xs text-ink-mid">After enough user-led Practice and a real opening in your calendar, Beckett may offer a related Skill. You can turn this off at any time.</span></span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-border bg-bg/50 p-3">
+                <input type="checkbox" checked={meetingPrepLearningEnabled} disabled={!patternModelEnabled} onChange={(event) => setMeetingPrepLearningEnabled(event.target.checked)} className="mt-0.5 h-4 w-4 accent-primary disabled:opacity-50" />
+                <span><span className="block text-sm font-medium text-ink">Use approved context for meeting-prep suggestions</span><span className="mt-0.5 block text-xs text-ink-mid">Beckett may suggest prep only when another attendee is involved and you have saved relevant context that you chose to use.</span></span>
+              </label>
+            </div>
             <div className="mt-3 rounded-sm border border-border bg-bg/50 p-3">
               <p className="text-sm font-medium text-ink">Private learning history</p>
               <p className="mt-1 text-xs leading-relaxed text-ink-mid">You can turn this off at any time. Clearing it permanently removes check-ins, support-action feedback, and generated pattern summaries. It does not delete saved support plans or Practice sessions.</p>

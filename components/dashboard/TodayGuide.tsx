@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { timeOfDayForDate, type WorkdayCheckin } from "@/lib/workday-patterns";
+import { timeOfDayForDate, type CalendarContext, type WorkdayCheckin } from "@/lib/workday-patterns";
 import {
   attendeeNames,
   eventsOnDay,
@@ -92,7 +92,11 @@ export default function TodayGuide({ name }: { name: string }) {
   const [openDayChoice, setOpenDayChoice] = useState<string | null>(null);
   const [customOpenDayFocus, setCustomOpenDayFocus] = useState("");
   const [pendingSupportAction, setPendingSupportAction] = useState<PendingSupportAction | null>(null);
+  const [pendingOutcome, setPendingOutcome] = useState<"helped" | "a_little" | "not_helpful" | "skipped" | null>(null);
   const [supportFollowUpStatus, setSupportFollowUpStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [customSupport, setCustomSupport] = useState("");
+  const [, setHomeSuggestionsEnabled] = useState(true);
+  const [meetingPrepLearningEnabled, setMeetingPrepLearningEnabled] = useState(false);
   const [contacts, setContacts] = useState<MeetingPrepContact[]>([]);
   const [learningRecommendation, setLearningRecommendation] = useState<EarnedLearningRecommendation | null>(null);
   const [learningRecommendationDismissed, setLearningRecommendationDismissed] = useState(false);
@@ -139,6 +143,18 @@ export default function TodayGuide({ name }: { name: string }) {
   }, []);
 
   useEffect(() => {
+    fetch("/api/learning/preferences", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: { preferences?: { home_suggestions_enabled?: boolean; pattern_model_enabled?: boolean; meeting_prep_learning_enabled?: boolean } } | null) => {
+        const enabled = data?.preferences?.home_suggestions_enabled !== false;
+        setHomeSuggestionsEnabled(enabled);
+        setMeetingPrepLearningEnabled(Boolean(data?.preferences?.pattern_model_enabled && data?.preferences?.meeting_prep_learning_enabled));
+        if (!enabled) setSuggestionDismissed(true);
+      })
+      .catch(() => setHomeSuggestionsEnabled(true));
+  }, []);
+
+  useEffect(() => {
     fetch("/api/contacts", { cache: "no-store" })
       .then((response) => response.ok ? response.json() : null)
       .then((data: { contacts?: MeetingPrepContact[] } | null) => setContacts(data?.contacts || []))
@@ -148,10 +164,38 @@ export default function TodayGuide({ name }: { name: string }) {
   const today = useMemo(() => eventsOnDay(calendar?.events || [], new Date()), [calendar]);
   const suggestion = useMemo(() => {
     const base = getDaySuggestion(calendar?.events || [], new Date());
-    const canRecommendPrep = base.event ? hasEarnedMeetingPrepSignal(base.event, contacts) : false;
+    const canRecommendPrep = Boolean(meetingPrepLearningEnabled && base.event && hasEarnedMeetingPrepSignal(base.event, contacts));
     return getDaySuggestion(calendar?.events || [], new Date(), { recommendPrep: canRecommendPrep });
-  }, [calendar, contacts]);
+  }, [calendar, contacts, meetingPrepLearningEnabled]);
   const nextMeetingToPrep = useMemo(() => today.filter((event) => new Date(event.start).getTime() >= Date.now()).find(hasOtherAttendees), [today]);
+  const calendarContext = useMemo<CalendarContext>(() => {
+    const timed = today.filter((event) => event.end).sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+    const backToBack = timed.some((event, index) => index > 0 && new Date(event.start).getTime() - new Date(timed[index - 1].end as string).getTime() <= 15 * 60_000);
+    const lunchEvents = timed.filter((event) => new Date(event.start).getHours() < 15 && new Date(event.end as string).getHours() >= 11);
+    return {
+      connected: Boolean(calendar?.connected && !calendar.reauthorize),
+      event_count: today.length,
+      meeting_count: today.filter(hasOtherAttendees).length,
+      meeting_heavy: today.filter(hasOtherAttendees).length >= 3 || backToBack,
+      no_lunch_opening: today.length >= 2 && lunchEvents.length >= 2,
+    };
+  }, [calendar, today]);
+  const hasMeaningfulOpening = useMemo(() => {
+    if (!calendarContext.connected) return false;
+    if (!today.length) return true;
+    const endOfDay = new Date();
+    endOfDay.setHours(18, 0, 0, 0);
+    const cursor = new Date();
+    const timed = today.filter((event) => event.end && new Date(event.end).getTime() > cursor.getTime()).sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+    for (const event of timed) {
+      if (new Date(event.start).getTime() - cursor.getTime() >= 60 * 60_000) return true;
+      if (new Date(event.end as string).getTime() > cursor.getTime()) cursor.setTime(new Date(event.end as string).getTime());
+    }
+    return endOfDay.getTime() - cursor.getTime() >= 60 * 60_000;
+  }, [calendarContext.connected, today]);
+  useEffect(() => {
+    if (!hasMeaningfulOpening) setLearningRecommendation(null);
+  }, [hasMeaningfulOpening]);
 
   async function saveCheckin(feeling: Feeling, strategy = feeling.checkin.helpful_strategy, action?: SupportChoice["action"]) {
     setSelectedFeeling(feeling.value);
@@ -161,7 +205,7 @@ export default function TodayGuide({ name }: { name: string }) {
       const response = await fetch("/api/workday/checkins", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...feeling.checkin, helpful_strategy: strategy, time_of_day: timeOfDayForDate(), ...(action ? { support_action: action } : {}) }),
+        body: JSON.stringify({ ...feeling.checkin, helpful_strategy: strategy, time_of_day: timeOfDayForDate(), calendar_context: calendarContext, ...(action ? { support_action: action } : {}) }),
       });
       if (!response.ok) throw new Error();
       setCheckinStatus("saved");
@@ -170,17 +214,18 @@ export default function TodayGuide({ name }: { name: string }) {
     }
   }
 
-  async function saveSupportOutcome(outcome: "helped" | "a_little" | "not_helpful" | "skipped") {
+  async function saveSupportOutcome(outcome: "helped" | "a_little" | "not_helpful" | "skipped", rememberForLearning = false) {
     if (!pendingSupportAction) return;
     setSupportFollowUpStatus("saving");
     try {
       const response = await fetch(`/api/workday/support-actions/${pendingSupportAction.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outcome }),
+        body: JSON.stringify({ outcome, remember_for_learning: rememberForLearning }),
       });
       if (!response.ok) throw new Error();
       setPendingSupportAction(null);
+      setPendingOutcome(null);
       setSupportFollowUpStatus("saved");
     } catch {
       setSupportFollowUpStatus("error");
@@ -234,8 +279,8 @@ export default function TodayGuide({ name }: { name: string }) {
         <div className="mt-5 grid gap-2 sm:grid-cols-5">
           {feelings.map((feeling) => <button key={feeling.value} type="button" onClick={() => void selectFeeling(feeling)} aria-pressed={selectedFeeling === feeling.value} disabled={checkinStatus === "saving"} className={`flex min-h-16 items-center gap-3 rounded-sm border px-3 text-left text-sm font-medium transition-colors disabled:cursor-wait disabled:opacity-60 ${selectedFeeling === feeling.value ? "border-primary bg-primary-light text-ink" : "border-border bg-bg/50 text-ink hover:border-primary/50 hover:bg-primary-light/40"}`}><span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-light text-lg text-primary">{feeling.symbol}</span>{feeling.label}</button>)}
         </div>
-        {pendingFeeling && <div className="mt-5 rounded-sm border border-primary/20 bg-primary-light/35 p-4"><p className="text-sm font-medium text-ink">{pendingFeeling.value === "low-energy" ? "What might help with your energy right now?" : pendingFeeling.value === "stressed" ? "What would make the next part of your day easier?" : "What would help make the day feel lighter right now?"}</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">{calendar?.connected && today.length ? `Beckett is using today’s ${today.length === 1 ? "scheduled commitment" : `${today.length} scheduled commitments`} as context, but you decide what fits.` : "Choose only what sounds useful. Beckett will not assume you completed it."}</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{(supportChoices[pendingFeeling.value] || []).map((choice) => <button key={choice.label} type="button" onClick={() => void saveCheckin(pendingFeeling, choice.strategy, choice.action)} className="rounded-sm border border-border bg-white p-3 text-left transition-colors hover:border-primary hover:bg-primary-light/30"><span className="block text-sm font-medium text-ink">{choice.label}</span><span className="mt-1 block text-xs text-ink-mid">{choice.detail}</span></button>)}</div><button type="button" onClick={() => void saveCheckin(pendingFeeling, "none_yet")} className="mt-3 text-xs font-medium text-primary hover:underline">Nothing right now — just save my check-in</button></div>}
-        {pendingSupportAction && <div className="mt-5 rounded-sm border border-primary/20 bg-white p-4"><p className="text-sm font-medium text-ink">Did that last reset help at all?</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">Your answer helps Beckett learn what to offer you. You can skip it if you do not want to say.</p><div className="mt-3 flex flex-wrap gap-2">{([ ["helped", "Yes, it helped"], ["a_little", "A little"], ["not_helpful", "Not really"], ["skipped", "Skip" ] ] as const).map(([outcome, label]) => <button key={outcome} type="button" disabled={supportFollowUpStatus === "saving"} onClick={() => void saveSupportOutcome(outcome)} className="rounded-pill border border-primary/30 bg-white px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-light disabled:opacity-60">{label}</button>)}</div></div>}
+        {pendingFeeling && <div className="mt-5 rounded-sm border border-primary/20 bg-primary-light/35 p-4"><p className="text-sm font-medium text-ink">{pendingFeeling.value === "low-energy" && calendarContext.meeting_heavy ? "You have had a meeting-heavy day. What might help before your next thing?" : pendingFeeling.value === "low-energy" ? "What might help with your energy right now?" : pendingFeeling.value === "stressed" ? "What would make the next part of your day easier?" : "What would help make the day feel lighter right now?"}</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">{calendarContext.connected ? "Beckett is using only the shape of today’s schedule as context. You decide what fits." : "Choose only what sounds useful. Beckett will not assume you completed it."}</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{(supportChoices[pendingFeeling.value] || []).map((choice) => <button key={choice.label} type="button" onClick={() => void saveCheckin(pendingFeeling, choice.strategy, choice.action)} className="rounded-sm border border-border bg-white p-3 text-left transition-colors hover:border-primary hover:bg-primary-light/30"><span className="block text-sm font-medium text-ink">{choice.label}</span><span className="mt-1 block text-xs text-ink-mid">{choice.detail}</span></button>)}</div><label className="mt-3 block text-xs font-medium text-ink">Something else<input value={customSupport} onChange={(event) => setCustomSupport(event.target.value)} placeholder="Name your own next step (this is not stored)" className="mt-1 block w-full rounded-sm border border-border bg-white px-3 py-2 text-sm font-normal" /></label><div className="mt-3 flex flex-wrap gap-3"><button type="button" onClick={() => void saveCheckin(pendingFeeling, "none_yet")} className="text-xs font-medium text-primary hover:underline">{customSupport.trim() ? "Save my check-in" : "Not now — just save my check-in"}</button><button type="button" onClick={() => setPendingFeeling(null)} className="text-xs font-medium text-ink-mid hover:underline">Go back</button></div></div>}
+        {pendingSupportAction && <div className="mt-5 rounded-sm border border-primary/20 bg-white p-4"><p className="text-sm font-medium text-ink">Did that last reset help at all?</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">Your answer helps Beckett learn what to offer you. You can skip it if you do not want to say.</p>{!pendingOutcome ? <div className="mt-3 flex flex-wrap gap-2">{([ ["helped", "Yes, noticeably"], ["a_little", "A little"], ["not_helpful", "Not really"], ["skipped", "Skip" ] ] as const).map(([outcome, label]) => <button key={outcome} type="button" disabled={supportFollowUpStatus === "saving"} onClick={() => outcome === "skipped" ? void saveSupportOutcome(outcome) : setPendingOutcome(outcome)} className="rounded-pill border border-primary/30 bg-white px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-light disabled:opacity-60">{label}</button>)}</div> : <div className="mt-3 rounded-sm border border-border bg-bg/50 p-3"><p className="text-xs font-medium text-ink">Would you like Beckett to remember this as a private preference?</p><p className="mt-1 text-xs text-ink-mid">It will still ask before offering it again.</p><div className="mt-2 flex gap-3"><button type="button" onClick={() => void saveSupportOutcome(pendingOutcome, true)} className="text-xs font-medium text-primary hover:underline">Remember this</button><button type="button" onClick={() => void saveSupportOutcome(pendingOutcome, false)} className="text-xs font-medium text-ink-mid hover:underline">No thanks</button></div></div>}</div>}
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
           {checkinStatus === "saving" && <span className="text-ink-mid">Saving your check-in…</span>}
           {checkinStatus === "saved" && <span className="text-primary">Check-in saved at {new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. You can check in again anytime.</span>}

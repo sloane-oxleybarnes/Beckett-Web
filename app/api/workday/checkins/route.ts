@@ -6,6 +6,7 @@ import {
   helpfulStrategyValues,
   makePatternSummaries,
   supportActionValues,
+  type SupportActionRecord,
   timeOfDayValues,
   workloadValues,
   type WorkdayCheckin,
@@ -40,10 +41,18 @@ export async function POST(request: NextRequest) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const body = await request.json().catch(() => null) as (WorkdayCheckin & { support_action?: string }) | null;
+  const calendarContext = body?.calendar_context;
+  const hasValidCalendarContext = !calendarContext || (
+    typeof calendarContext.connected === "boolean" &&
+    Number.isInteger(calendarContext.event_count) && calendarContext.event_count >= 0 && calendarContext.event_count <= 30 &&
+    Number.isInteger(calendarContext.meeting_count) && calendarContext.meeting_count >= 0 && calendarContext.meeting_count <= 30 &&
+    typeof calendarContext.meeting_heavy === "boolean" &&
+    typeof calendarContext.no_lunch_opening === "boolean"
+  );
   if (!body || !contains(timeOfDayValues, body.time_of_day) || !contains(workloadValues, body.workload_level) ||
     !Number.isInteger(body.energy_level) || body.energy_level < 1 || body.energy_level > 5 ||
     typeof body.communication_friction !== "boolean" || !contains(breakStatusValues, body.break_status) ||
-    !contains(helpfulStrategyValues, body.helpful_strategy) || (body.support_action !== undefined && !contains(supportActionValues, body.support_action))) {
+    !contains(helpfulStrategyValues, body.helpful_strategy) || (body.support_action !== undefined && !contains(supportActionValues, body.support_action)) || !hasValidCalendarContext) {
     return NextResponse.json({ error: "Please complete each structured check-in field." }, { status: 400 });
   }
 
@@ -55,6 +64,7 @@ export async function POST(request: NextRequest) {
     communication_friction: body.communication_friction,
     break_status: body.break_status,
     helpful_strategy: body.helpful_strategy,
+    calendar_context: calendarContext || {},
   }).select("*").single();
   if (insertError) return NextResponse.json({ error: "Could not save your check-in." }, { status: 500 });
 
@@ -70,8 +80,11 @@ export async function POST(request: NextRequest) {
   const { data: profile } = await supabaseAdmin.from("profiles").select("pattern_model_enabled").eq("id", user.id).maybeSingle();
   let summaries: ReturnType<typeof makePatternSummaries> = [];
   if (profile?.pattern_model_enabled) {
-    const { data: recent } = await supabaseAdmin.from("workday_checkins").select("*").eq("user_id", user.id).gte("checked_in_at", periodStart());
-    summaries = makePatternSummaries((recent || []) as WorkdayCheckin[]);
+    const [{ data: recent }, { data: actions }] = await Promise.all([
+      supabaseAdmin.from("workday_checkins").select("*").eq("user_id", user.id).gte("checked_in_at", periodStart()),
+      supabaseAdmin.from("workday_support_actions").select("action_type, outcome, remember_for_learning").eq("user_id", user.id).gte("created_at", periodStart()),
+    ]);
+    summaries = makePatternSummaries((recent || []) as WorkdayCheckin[], (actions || []) as SupportActionRecord[]);
     const { data: existing } = await supabaseAdmin.from("workday_pattern_summaries").select("pattern_key, status, acknowledged_at").eq("user_id", user.id);
     await supabaseAdmin.from("workday_pattern_summaries").update({ active: false }).eq("user_id", user.id).eq("status", "proposed");
     if (summaries.length) {

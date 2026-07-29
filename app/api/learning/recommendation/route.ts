@@ -11,13 +11,13 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
   const [{ data: profile }, { data: sessions }, { data: completions }, { data: progress }] = await Promise.all([
-    supabaseAdmin.from("profiles").select("pattern_model_enabled").eq("id", user.id).maybeSingle(),
+    supabaseAdmin.from("profiles").select("pattern_model_enabled, skill_recommendations_enabled").eq("id", user.id).maybeSingle(),
     supabaseAdmin.from("practice_sessions").select("situation, goal, completed_at").eq("user_id", user.id).eq("status", "completed").gte("completed_at", periodStart()).order("completed_at", { ascending: false }).limit(12),
     supabaseAdmin.from("course_completions").select("course_id").eq("user_id", user.id),
     supabaseAdmin.from("course_progress").select("course_id").eq("user_id", user.id),
   ]);
 
-  if (!profile?.pattern_model_enabled) {
+  if (!profile?.pattern_model_enabled || !profile.skill_recommendations_enabled) {
     return NextResponse.json({ recommendation: null, reason: "learning_disabled" });
   }
 

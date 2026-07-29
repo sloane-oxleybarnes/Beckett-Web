@@ -51,6 +51,7 @@ export default function CalendarPanel() {
   const [error, setError] = useState<string | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [contacts, setContacts] = useState<MeetingPrepContact[]>([]);
+  const [meetingPrepLearningEnabled, setMeetingPrepLearningEnabled] = useState(false);
   const weekStart = useMemo(() => weekStartForOffset(weekOffset), [weekOffset]);
 
   const loadCalendar = useCallback(async () => {
@@ -91,6 +92,13 @@ export default function CalendarPanel() {
   }, []);
 
   useEffect(() => {
+    fetch("/api/learning/preferences", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: { preferences?: { pattern_model_enabled?: boolean; meeting_prep_learning_enabled?: boolean } } | null) => setMeetingPrepLearningEnabled(Boolean(data?.preferences?.pattern_model_enabled && data?.preferences?.meeting_prep_learning_enabled)))
+      .catch(() => setMeetingPrepLearningEnabled(false));
+  }, []);
+
+  useEffect(() => {
     const status = new URLSearchParams(window.location.search).get("calendar");
     if (!status) return;
     if (status === "connected") setError(null);
@@ -112,8 +120,8 @@ export default function CalendarPanel() {
     [calendar]
   );
   const recommendedPrepCandidates = useMemo(
-    () => prepCandidates.filter((event) => hasEarnedMeetingPrepSignal(event, contacts)),
-    [contacts, prepCandidates]
+    () => meetingPrepLearningEnabled ? prepCandidates.filter((event) => hasEarnedMeetingPrepSignal(event, contacts)) : [],
+    [contacts, meetingPrepLearningEnabled, prepCandidates]
   );
   const needsConnection = !calendar?.connected || calendar.reauthorize;
 

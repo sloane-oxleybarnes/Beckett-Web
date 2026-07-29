@@ -8,6 +8,7 @@ import {
   workplaceTriggerOptions,
 } from "@/lib/onboarding";
 import SupportPlansPanel from "../workday/SupportPlansPanel";
+import LearningCenter from "@/components/dashboard/LearningCenter";
 
 type AboutData = {
   communication_style: string;
@@ -558,6 +559,9 @@ export default function AboutPage() {
       </form>
       <div id="support-preferences" className="mt-5">
         <SupportPlansPanel />
+      </div>
+      <div className="mt-5">
+        <LearningCenter />
       </div>
     </div>
   );
