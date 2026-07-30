@@ -4,6 +4,7 @@ export type MeetingPrepContact = {
   name: string;
   email?: string | null;
   relationship_tags?: string[] | null;
+  primary_relationship_tag?: string | null;
   notes?: string | null;
   trusted?: boolean | null;
 };

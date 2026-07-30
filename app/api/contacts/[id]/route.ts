@@ -6,7 +6,7 @@ import {
 } from "@/lib/contact-identifiers";
 import { getExtensionUserId } from "@/lib/extension-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { normalizeRelationshipTags } from "@/lib/relationship-tags";
+import { normalizeRelationshipTag, normalizeRelationshipTags } from "@/lib/relationship-tags";
 
 async function getAuthedUserId(req: NextRequest): Promise<string | null> {
   const extUserId = await getExtensionUserId(req)
@@ -31,6 +31,7 @@ export async function PUT(
     relationship_type?: string | null
     relationship_other?: string | null
     relationship_tags?: string[]
+    primary_relationship_tag?: string | null
     notes?: string | null
     trusted?: boolean
     identifiers?: ContactIdentifierInput[]
@@ -41,7 +42,7 @@ export async function PUT(
   // Ensure the contact belongs to this user
   const { data: existing } = await supabase
     .from('contacts')
-    .select('id, email, slack_handle, phone_number')
+    .select('id, email, slack_handle, phone_number, relationship_tags, primary_relationship_tag')
     .eq('id', params.id)
     .eq('user_id', userId)
     .single()
@@ -55,7 +56,18 @@ export async function PUT(
   if (body.phone_number !== undefined) updates.phone_number = body.phone_number?.trim() || null
   if (body.relationship_type !== undefined) updates.relationship_type = body.relationship_type?.trim() || null
   if (body.relationship_other !== undefined) updates.relationship_other = body.relationship_other?.trim() || null
-  if (body.relationship_tags !== undefined) updates.relationship_tags = normalizeRelationshipTags(body.relationship_tags)
+  const relationshipTags = body.relationship_tags !== undefined
+    ? normalizeRelationshipTags(body.relationship_tags)
+    : normalizeRelationshipTags(existing.relationship_tags)
+  if (body.relationship_tags !== undefined) updates.relationship_tags = relationshipTags
+  if (body.relationship_tags !== undefined || body.primary_relationship_tag !== undefined) {
+    const requestedPrimary = body.primary_relationship_tag === undefined
+      ? normalizeRelationshipTag(existing.primary_relationship_tag)
+      : normalizeRelationshipTag(body.primary_relationship_tag)
+    updates.primary_relationship_tag = requestedPrimary && relationshipTags.includes(requestedPrimary)
+      ? requestedPrimary
+      : relationshipTags[0] || null
+  }
   if (body.notes !== undefined) updates.notes = body.notes?.trim() || null
   if (body.trusted !== undefined) updates.trusted = body.trusted
 

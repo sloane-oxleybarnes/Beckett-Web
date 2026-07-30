@@ -11,6 +11,7 @@
     "test:shared-context": "node --test tests/shared-web-context.test.mjs",
     "test:workday-planning": "node --test tests/workday-planning.test.mjs",
     "test:learning-recommendations": "node --test tests/earned-learning-recommendations.test.mjs",
+    "test:relationship-tags": "node --test tests/relationship-tags.test.mjs",
     "test:slack": "node --test tests/slack-guest-routing.test.mjs tests/slack-api-retry.test.mjs tests/slack-command-copy.test.mjs tests/slack-prep-copy.test.mjs tests/slack-guided-intent.test.mjs",
     "demo:plan": "node scripts/demo-seed.js --plan",
     "demo:seed:gmail": "node scripts/demo-seed.js --gmail",
