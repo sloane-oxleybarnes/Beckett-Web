@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { triggerLoopsEvent } from "@/lib/loops";
 import { sendBetaInviteEmail } from "@/lib/beta-emails";
+import { verifyAdminSession } from "@/lib/admin-session";
 
 function buildPasswordSetupLink(origin: string, tokenHash: string, type: "invite" | "recovery") {
   const url = new URL("/auth/callback", origin);
@@ -15,7 +16,7 @@ function buildPasswordSetupLink(origin: string, tokenHash: string, type: "invite
 
 export async function POST(req: NextRequest) {
   const cookieStore = cookies();
-  if (cookieStore.get("admin_auth")?.value !== process.env.ADMIN_PASSWORD) {
+  if (!verifyAdminSession(cookieStore.get("admin_auth")?.value)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
