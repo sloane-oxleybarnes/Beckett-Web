@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { verifyAdminSession } from '@/lib/admin-session'
 
 export async function DELETE(request: NextRequest) {
   const cookieStore = cookies()
