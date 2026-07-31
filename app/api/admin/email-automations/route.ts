@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { sendBetaInviteReminderEmail, sendSetupNudgeEmail } from "@/lib/beta-emails";
 import { trackBetaEvent } from "@/lib/beta-events";
+import { verifyAdminSession } from "@/lib/admin-session";
 
 type AutomationResult = {
   inviteReminders: number;
@@ -16,7 +17,7 @@ function isAuthorized(req: NextRequest) {
   if (cronSecret && authorization === `Bearer ${cronSecret}`) return true;
 
   const cookieStore = cookies();
-  return cookieStore.get("admin_auth")?.value === process.env.ADMIN_PASSWORD;
+  return verifyAdminSession(cookieStore.get("admin_auth")?.value);
 }
 
 function daysAgo(days: number) {
