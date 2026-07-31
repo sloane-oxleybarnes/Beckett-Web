@@ -37,7 +37,7 @@ async function fetchSlackUserInfo(accessToken: string, slackUserId: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();

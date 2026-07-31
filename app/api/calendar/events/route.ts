@@ -7,6 +7,7 @@ import {
   parseGoogleCalendarCredential,
   refreshGoogleCalendarCredential,
 } from "@/lib/google-calendar-oauth";
+import { enforceRateLimit, hashRateLimitKey, rateLimitResponse } from "@/lib/security-rate-limit";
 
 const CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly";
 
@@ -31,12 +32,14 @@ type GoogleCalendarEvent = {
 };
 
 export async function GET(request: Request) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const limit = enforceRateLimit(`calendar-events:${hashRateLimitKey(user.id)}`, 30, 10 * 60 * 1000);
+  if (!limit.allowed) return NextResponse.json({ error: "Too many calendar requests. Try again shortly." }, { status: 429, headers: rateLimitResponse(limit) });
 
   const { data: integration, error: integrationError } = await supabaseAdmin
     .from("user_integrations")
@@ -89,7 +92,7 @@ export async function GET(request: Request) {
         singleEvents: "true",
         orderBy: "startTime",
         maxResults: "50",
-        fields: "items(id,summary,start(dateTime),end(dateTime),attendees(self,displayName,email,responseStatus))",
+        fields: "items(id,summary,start(dateTime),end(dateTime),attendees(self,displayName,responseStatus))",
       });
       const response = await fetch(
         `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
@@ -120,7 +123,6 @@ export async function GET(request: Request) {
           .filter((attendee) => !attendee.self)
           .map((attendee) => ({
             name: attendee.displayName || null,
-            email: attendee.email || null,
             responseStatus: attendee.responseStatus || null,
           })),
       })))

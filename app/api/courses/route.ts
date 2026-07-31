@@ -7,6 +7,7 @@ import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
 import { getSafetyResponse } from '@/lib/safety-resources'
 import * as Sentry from '@sentry/nextjs'
 import { WEB_CREDITS_ENABLED } from '@/lib/web-credits'
+import { enforceRateLimit, hashRateLimitKey, rateLimitResponse, readJsonWithLimit } from '@/lib/security-rate-limit'
 
 function extractJsonObject(text: string) {
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
@@ -16,15 +17,18 @@ function extractJsonObject(text: string) {
 export async function POST(req: NextRequest) {
   const diagnostic: { action?: string; courseId?: string | null; userId?: string } = {}
   try {
-  const supabase = createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  diagnostic.userId = session.user.id
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  diagnostic.userId = user.id
+
+  const limit = enforceRateLimit(`courses:${hashRateLimitKey(user.id)}`, 30, 10 * 60 * 1000)
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many course requests. Try again shortly.' }, { status: 429, headers: rateLimitResponse(limit) })
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('plan, safety_resource_region')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
   const plan = profile?.plan || 'free'
@@ -32,7 +36,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Courses require Beta or Pro access.' }, { status: 403 })
   }
 
-  const body = await req.json() as {
+  const body = await readJsonWithLimit<{
     action: 'turn' | 'check_ghost' | 'ghost_analysis' | 'mini_convo' | 'draft_feedback' | 'debrief'
     system?: string
     messages?: { role: string; content: string }[]
@@ -47,7 +51,13 @@ export async function POST(req: NextRequest) {
     conversationHistory?: string
     practiceKind?: 'dating' | 'workplace'
     courseId?: string
-  }
+  }>(req, 100_000)
+  if (!body) return NextResponse.json({ error: 'Invalid or oversized request.' }, { status: 400 })
+  if (body.messages && (!Array.isArray(body.messages) || body.messages.length > 50 || body.messages.some((message) =>
+    !message || !['user', 'assistant'].includes(message.role) || typeof message.content !== 'string' || message.content.length > 4_000
+  ))) return NextResponse.json({ error: 'Conversation history is too large or malformed.' }, { status: 400 })
+  const textFields = [body.system, body.userMessage, body.draftContext, body.wrongAnswer, body.correctAnswer, body.scenario, body.explanation, body.matchName, body.matchDescription, body.conversationHistory]
+  if (textFields.some((value) => typeof value === 'string' && value.length > 20_000)) return NextResponse.json({ error: 'Course input is too large.' }, { status: 400 })
 
   const { action } = body
   diagnostic.action = action
@@ -63,15 +73,15 @@ export async function POST(req: NextRequest) {
     maxTokens: number
   ) => {
     if (!WEB_CREDITS_ENABLED) {
-      await recordAiUsage(session.user.id, {
+        await recordAiUsage(user.id, {
         source: 'course',
         action: `course_${action}`,
       })
     }
     const result = await callAnthropic(system, messages, maxTokens)
     await trackBetaEvent({
-      userId: session.user.id,
-      email: session.user.email,
+      userId: user.id,
+      email: user.email,
       eventName: 'analysis_completed',
       source: 'course',
       metadata: { action: `course_${action}` },

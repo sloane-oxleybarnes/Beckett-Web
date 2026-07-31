@@ -5,15 +5,19 @@ import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSafetyResponse } from "@/lib/safety-resources";
 import { fetchSharedWebContext } from "@/lib/shared-web-context";
+import { enforceRateLimit, hashRateLimitKey, rateLimitResponse, readJsonWithLimit } from "@/lib/security-rate-limit";
 
 type Action = "decode" | "draft";
 
 export async function POST(request: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const body = await request.json().catch(() => null) as { action?: unknown; text?: unknown; warmth?: unknown; directness?: unknown; formality?: unknown; length?: unknown } | null;
+  const limit = enforceRateLimit(`coach:${hashRateLimitKey(user.id)}`, 20, 10 * 60 * 1000);
+  if (!limit.allowed) return NextResponse.json({ error: "Too many coaching requests. Try again shortly." }, { status: 429, headers: rateLimitResponse(limit) });
+
+  const body = await readJsonWithLimit<{ action?: unknown; text?: unknown; warmth?: unknown; directness?: unknown; formality?: unknown; length?: unknown }>(request, 12_000);
   const action = body?.action === "decode" || body?.action === "draft" ? body.action as Action : null;
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   if (!action || !text || text.length > 5000) return NextResponse.json({ error: "Choose Decode or Draft and add up to 5,000 characters." }, { status: 400 });

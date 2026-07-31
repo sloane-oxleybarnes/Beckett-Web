@@ -1,11 +1,11 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getSafetyResourceCatalogForReview, SAFETY_RESOURCE_OWNER, SAFETY_RESOURCE_REVIEW_CADENCE_DAYS } from "@/lib/safety-resources";
+import { isAdminRequest } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (cookies().get("admin_auth")?.value !== process.env.ADMIN_PASSWORD) {
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

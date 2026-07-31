@@ -10,7 +10,7 @@ import { normalizeRelationshipTag, normalizeRelationshipTags } from "@/lib/relat
 async function getAuthedUserId(req: NextRequest): Promise<string | null> {
   const extUserId = await getExtensionUserId(req)
   if (extUserId) return extUserId
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { data: { session } } = await supabase.auth.getSession()
   return session?.user.id ?? null
 }
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const userId = await getAuthedUserId(req);
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("contacts")
     .select("*, contact_identifiers(*), contact_insights(*), contact_relationship_summaries(*)")
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     ? requestedPrimaryTag
     : relationshipTags[0] || null;
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: contact, error } = await supabase
     .from("contacts")
     .insert({

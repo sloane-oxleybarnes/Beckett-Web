@@ -6,7 +6,7 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 async function authedProfile() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   return { supabase, user };
 }

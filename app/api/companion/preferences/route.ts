@@ -7,7 +7,7 @@ const includes = <T extends readonly string[]>(values: T, value: unknown): value
   typeof value === "string" && values.includes(value);
 
 async function authedProfile() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   return { supabase, user };
 }

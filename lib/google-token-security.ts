@@ -50,3 +50,18 @@ export function decryptGoogleAccessToken(value: string | null | undefined) {
     return null;
   }
 }
+
+/** Returns every Google credential that should be revoked for a stored integration. */
+export function decryptGoogleCredentialTokens(value: string | null | undefined) {
+  const decrypted = decryptGoogleAccessToken(value);
+  if (!decrypted) return [];
+  try {
+    const credential = JSON.parse(decrypted) as { accessToken?: unknown; refreshToken?: unknown };
+    const tokens = [credential.accessToken, credential.refreshToken]
+      .filter((token): token is string => typeof token === "string" && token.length > 0);
+    if (tokens.length > 0) return [...new Set(tokens)];
+  } catch {
+    // Gmail stores a single access token rather than a JSON calendar credential.
+  }
+  return [decrypted];
+}

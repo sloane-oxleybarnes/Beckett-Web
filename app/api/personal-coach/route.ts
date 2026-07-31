@@ -5,6 +5,7 @@ import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSafetyResponse } from "@/lib/safety-resources";
 import { fetchSharedWebContext } from "@/lib/shared-web-context";
+import { enforceRateLimit, hashRateLimitKey, rateLimitResponse, readJsonWithLimit } from "@/lib/security-rate-limit";
 
 const pillars = ["boundaries", "friendship", "family_roommates", "dating"] as const;
 const intents = ["decode", "draft"] as const;
@@ -15,11 +16,14 @@ function isOneOf<T extends readonly string[]>(values: T, value: unknown): value 
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const body = await request.json().catch(() => null) as { text?: unknown; pillar?: unknown; intent?: unknown; tone?: unknown } | null;
+  const limit = enforceRateLimit(`personal-coach:${hashRateLimitKey(user.id)}`, 20, 10 * 60 * 1000);
+  if (!limit.allowed) return NextResponse.json({ error: "Too many coaching requests. Try again shortly." }, { status: 429, headers: rateLimitResponse(limit) });
+
+  const body = await readJsonWithLimit<{ text?: unknown; pillar?: unknown; intent?: unknown; tone?: unknown }>(request, 10_000);
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   if (!text || text.length > 4000 || !isOneOf(pillars, body?.pillar) || !isOneOf(intents, body?.intent)) {
     return NextResponse.json({ error: "Choose a support area and add up to 4,000 characters of context." }, { status: 400 });

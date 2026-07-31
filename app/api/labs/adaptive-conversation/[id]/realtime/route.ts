@@ -4,7 +4,8 @@ import { getAdaptiveAuth } from '@/lib/adaptive-auth'
 import { realtimeInstructions } from '@/lib/openai-adaptive'
 import type { AdaptiveSnapshot } from '@/lib/adaptive-conversation'
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { supabase, session, response } = await getAdaptiveAuth()
   if (response || !session) return response
   const sdp = await req.text()
@@ -12,7 +13,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { data: row, error } = await supabase
     .from('adaptive_conversation_sessions')
     .select('setup_snapshot')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', session.user.id)
     .single()
   if (error || !row) return NextResponse.json({ error: 'Session not found.' }, { status: 404 })

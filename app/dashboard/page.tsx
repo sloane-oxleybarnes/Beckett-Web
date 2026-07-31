@@ -7,13 +7,14 @@ import BetaMissionsCard from "@/components/dashboard/BetaMissionsCard";
 import TodayGuide from "@/components/dashboard/TodayGuide";
 
 type DashboardPageProps = {
-  searchParams?: {
+  searchParams?: Promise<{
     tour?: string | string[];
-  };
+  }>;
 };
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  const supabase = createSupabaseServerClient();
+  const resolvedSearchParams = await searchParams;
+  const supabase = await createSupabaseServerClient();
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect("/auth/login");
 
@@ -28,7 +29,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     session.user.email?.split("@")[0] ||
     "there";
 
-  const tourParam = Array.isArray(searchParams?.tour) ? searchParams?.tour[0] : searchParams?.tour;
+  const tourParam = Array.isArray(resolvedSearchParams?.tour) ? resolvedSearchParams?.tour[0] : resolvedSearchParams?.tour;
   const isBeta = profile?.plan === "beta";
   const showWalkthrough =
     tourParam === "1" ||

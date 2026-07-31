@@ -39,14 +39,15 @@ async function readJson(response: Response) {
  * Creates a LiveAvatar sandbox embed for the Labs video prototype.
  * The existing phone and Beckett Realtime/text paths are not involved.
  */
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { supabase, session, response } = await getAdaptiveAuth()
   if (response || !session) return response
 
   const { data: row, error } = await supabase
     .from('adaptive_conversation_sessions')
     .select('id, channel, setup_snapshot')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', session.user.id)
     .single()
 
@@ -69,7 +70,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       method: 'POST',
       headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: `Beckett adaptive video session ${params.id}`,
+        name: `Beckett adaptive video session ${id}`,
         prompt: contextPrompt(snapshot),
         opening_text: 'Hi — I\'m ready when you are.',
         links: [],
@@ -105,14 +106,15 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   return NextResponse.json({ url: body.data.url, contextId: personalized ? contextId : null, personalized, warning, sandbox: true })
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { supabase, session, response } = await getAdaptiveAuth()
   if (response || !session) return response
 
   const { data: row, error } = await supabase
     .from('adaptive_conversation_sessions')
     .select('id, channel')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', session.user.id)
     .single()
 
@@ -129,7 +131,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     cache: 'no-store',
   })
   const contextBody = await readJson(contextResponse)
-  if (!contextResponse.ok || contextBody?.data?.name !== `Beckett adaptive video session ${params.id}`) {
+  if (!contextResponse.ok || contextBody?.data?.name !== `Beckett adaptive video session ${id}`) {
     return NextResponse.json({ error: 'That video context does not belong to this session.' }, { status: 403 })
   }
 

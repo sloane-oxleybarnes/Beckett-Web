@@ -8,13 +8,14 @@ import {
   type AdaptiveState,
 } from '@/lib/openai-adaptive'
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { supabase, session, response } = await getAdaptiveAuth()
   if (response || !session) return response
   const { data: row, error: loadError } = await supabase
     .from('adaptive_conversation_sessions')
     .select('id, status, setup_snapshot, simulation_state, transcript, assessment')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', session.user.id)
     .single()
   if (loadError || !row) return NextResponse.json({ error: 'Session not found.' }, { status: 404 })
@@ -37,7 +38,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   const { error: updateError } = await supabase
     .from('adaptive_conversation_sessions')
     .update({ assessment, status: 'completed', lifecycle: 'completed', completed_at: now, updated_at: now })
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', session.user.id)
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
   return NextResponse.json({ assessment })

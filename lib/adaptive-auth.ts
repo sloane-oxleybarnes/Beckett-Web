@@ -5,12 +5,12 @@ import { hasApprovedBetaAccess } from '@/lib/beta-access'
 export async function getAdaptiveAuth() {
   if (process.env.GPT56_SIMULATOR_ENABLED === 'false') {
     return {
-      supabase: createSupabaseServerClient(),
+      supabase: await createSupabaseServerClient(),
       session: null,
       response: NextResponse.json({ error: 'The Adaptive Conversation Simulator is not enabled.' }, { status: 404 }),
     }
   }
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) return { supabase, session: null, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
 

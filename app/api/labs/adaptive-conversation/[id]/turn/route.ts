@@ -9,7 +9,8 @@ import type { AdaptiveSnapshot, AdaptiveState, AdaptiveTranscriptItem } from '@/
 
 type TranscriptItem = AdaptiveTranscriptItem
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { supabase, session, response } = await getAdaptiveAuth()
   if (response || !session) return response
   const body = await req.json().catch(() => null) as { message?: string } | null
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { data: row, error: loadError } = await supabase
     .from('adaptive_conversation_sessions')
     .select('id, status, lifecycle, setup_snapshot, simulation_state, transcript')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', session.user.id)
     .single()
   if (loadError || !row) return NextResponse.json({ error: 'Session not found.' }, { status: 404 })
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   await supabase
     .from('adaptive_conversation_sessions')
     .update({ lifecycle: 'responding', updated_at: new Date().toISOString() })
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', session.user.id)
   let result
   try {
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     await supabase
       .from('adaptive_conversation_sessions')
       .update({ lifecycle: 'ready', updated_at: new Date().toISOString() })
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('user_id', session.user.id)
     const messageText = error instanceof Error ? error.message : 'The simulator could not respond.'
     return NextResponse.json({ error: messageText }, { status: 502 })
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { error: updateError } = await supabase
     .from('adaptive_conversation_sessions')
     .update({ transcript: nextTranscript, simulation_state: result.state, lifecycle: 'ready', updated_at: now })
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', session.user.id)
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
   return NextResponse.json({

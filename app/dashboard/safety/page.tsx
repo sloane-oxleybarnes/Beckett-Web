@@ -3,7 +3,7 @@ import { allSafetyResources, getSafetyResourceRegionNotice, normalizeSafetyResou
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export default async function SafetyPage() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   const { data: profile } = user
     ? await supabase.from("profiles").select("safety_resource_region").eq("id", user.id).maybeSingle()

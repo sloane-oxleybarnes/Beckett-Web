@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { Suspense, use, useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { getCourse } from '@/lib/courses'
 import type {
@@ -78,11 +79,12 @@ async function callAPI(body: Record<string, unknown>): Promise<unknown> {
   return data
 }
 
-export default function CoursePage({ params }: { params: { id: string } }) {
+function CoursePageContent({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
-  const fallbackCourse = getCourse(params.id)
+  const fallbackCourse = getCourse(id)
   const [loadedCourse, setLoadedCourse] = useState<Course | null>(null)
   const [courseLoading, setCourseLoading] = useState(true)
 
@@ -100,7 +102,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
   useEffect(() => {
     async function loadCourseContent() {
       setCourseLoading(true)
-      const res = await fetch(`/api/courses/content?id=${encodeURIComponent(params.id)}`)
+      const res = await fetch(`/api/courses/content?id=${encodeURIComponent(id)}`)
       if (res.ok) {
         const data = await res.json().catch(() => ({})) as { course?: Course }
         if (data.course) setLoadedCourse(data.course)
@@ -111,7 +113,7 @@ export default function CoursePage({ params }: { params: { id: string } }) {
       setCourseLoading(false)
     }
     loadCourseContent()
-  }, [params.id])
+  }, [id])
 
   useEffect(() => {
     async function checkAccess() {
@@ -2686,12 +2688,12 @@ export default function CoursePage({ params }: { params: { id: string } }) {
           >
             Redo course
           </button>
-          <a
+          <Link
             href="/dashboard/skills"
             className="flex-1 bg-primary text-white rounded-pill py-3 text-center text-sm font-medium hover:bg-primary-dark transition-colors"
           >
             Back to skills
-          </a>
+          </Link>
         </div>
       </div>
     )
@@ -3334,6 +3336,10 @@ export default function CoursePage({ params }: { params: { id: string } }) {
       </div>
     </div>
   )
+}
+
+export default function CoursePage({ params }: { params: Promise<{ id: string }> }) {
+  return <Suspense fallback={null}><CoursePageContent params={params} /></Suspense>
 }
 
 function CourseFeedbackTextarea({

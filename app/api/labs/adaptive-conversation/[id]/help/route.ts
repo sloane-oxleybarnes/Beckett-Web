@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAdaptiveAuth } from '@/lib/adaptive-auth'
 import { callAdaptiveModel } from '@/lib/openai-adaptive'
 
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { supabase, session, response } = await getAdaptiveAuth()
   if (response || !session) return response
   const { data: row, error } = await supabase
     .from('adaptive_conversation_sessions')
     .select('setup_snapshot, transcript, status')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', session.user.id)
     .single()
   if (error || !row) return NextResponse.json({ error: 'Session not found.' }, { status: 404 })
@@ -18,7 +19,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   await supabase
     .from('adaptive_conversation_sessions')
     .update({ lifecycle: 'help', updated_at: new Date().toISOString() })
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', session.user.id)
   const text = await callAdaptiveModel(
     `You are Beckett, helping a user pause a realistic conversation simulation. Do not continue role-play. Give concise, practical coaching based only on the transcript. Name one thing to notice and one possible next move. Do not claim to predict the real person. Return plain text in 2-4 sentences.`,
@@ -28,7 +29,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   await supabase
     .from('adaptive_conversation_sessions')
     .update({ lifecycle: 'paused', updated_at: new Date().toISOString() })
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', session.user.id)
   return NextResponse.json({ help: text.trim() })
 }

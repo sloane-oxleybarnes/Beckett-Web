@@ -5,7 +5,7 @@ import { isReminderKind, isValidReminderTime } from "@/lib/workday-planning";
 const days = new Set([0, 1, 2, 3, 4, 5, 6]);
 
 async function getUser() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   return { supabase, user };
 }

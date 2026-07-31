@@ -3,6 +3,7 @@ import { decryptGoogleAccessToken } from "@/lib/google-token-security";
 import { getGoogleCalendarOAuthConfig, parseGoogleCalendarCredential } from "@/lib/google-calendar-oauth";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { enforceRateLimit, hashRateLimitKey, rateLimitResponse, readJsonWithLimit } from "@/lib/security-rate-limit";
 
 type CalendarMetadata = {
   selectedCalendarIds?: unknown;
@@ -17,7 +18,7 @@ function selectedCalendarIds(metadata: CalendarMetadata | null) {
 }
 
 async function currentIntegration(request: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: "Unauthorized." }, { status: 401 }) };
 
@@ -39,6 +40,8 @@ async function currentIntegration(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const result = await currentIntegration(request);
   if ("error" in result) return result.error;
+  const limit = enforceRateLimit(`calendar-list:${hashRateLimitKey(result.user.id)}`, 20, 10 * 60 * 1000);
+  if (!limit.allowed) return NextResponse.json({ error: "Too many calendar requests. Try again shortly." }, { status: 429, headers: rateLimitResponse(limit) });
 
   const response = await fetch(
     "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&fields=items(id,summary,primary,accessRole,selected)",
@@ -66,12 +69,22 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const result = await currentIntegration(request);
   if ("error" in result) return result.error;
+  const limit = enforceRateLimit(`calendar-select:${hashRateLimitKey(result.user.id)}`, 20, 10 * 60 * 1000);
+  if (!limit.allowed) return NextResponse.json({ error: "Too many calendar requests. Try again shortly." }, { status: 429, headers: rateLimitResponse(limit) });
 
-  const body = (await request.json().catch(() => null)) as { selectedCalendarIds?: unknown } | null;
+  const body = await readJsonWithLimit<{ selectedCalendarIds?: unknown }>(request, 8_000);
   const selected = Array.isArray(body?.selectedCalendarIds)
     ? Array.from(new Set(body.selectedCalendarIds.filter((id): id is string => typeof id === "string" && id.length > 0))).slice(0, 10)
     : [];
   if (!selected.length) return NextResponse.json({ error: "Choose at least one calendar." }, { status: 400 });
+
+  const calendarResponse = await fetch(
+    "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&fields=items(id)",
+    { headers: { Authorization: `Bearer ${result.credential.accessToken}` }, cache: "no-store" },
+  );
+  if (!calendarResponse.ok) return NextResponse.json({ error: "Could not verify your calendar choices." }, { status: 502 });
+  const available = new Set((((await calendarResponse.json()) as { items?: Array<{ id?: string }> }).items || []).map((item) => item.id).filter((id): id is string => Boolean(id)));
+  if (selected.some((id) => !available.has(id))) return NextResponse.json({ error: "Choose only calendars available to this Google account." }, { status: 400 });
 
   const { error } = await supabaseAdmin
     .from("user_integrations")

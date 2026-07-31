@@ -40,6 +40,14 @@ export async function updateLoopsContact(
   }
 }
 
+export async function deleteLoopsContact(email: string) {
+  try {
+    await getClient().deleteContact({ email });
+  } catch (err) {
+    console.error("Loops deleteContact error:", err);
+  }
+}
+
 export async function triggerLoopsEvent(
   email: string,
   eventName: string,

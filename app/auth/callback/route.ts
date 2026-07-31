@@ -26,6 +26,15 @@ function createCallbackClient(request: NextRequest, response: NextResponse) {
   )
 }
 
+function safeInternalPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return null;
+  const path = value.split("?")[0].split("#")[0];
+  if (path === "/dashboard" || path.startsWith("/dashboard/") || path === "/auth/set-password" || path === "/beta") {
+    return value;
+  }
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
 
@@ -38,12 +47,7 @@ export async function GET(request: NextRequest) {
   // Do not apply normal beta-login gating before a user can reset their password.
   const isPasswordAction =
     type === 'recovery' || type === 'invite' || requestedNext === '/auth/set-password'
-  const next =
-    requestedNext?.startsWith('/')
-      ? requestedNext
-      : isPasswordAction
-        ? '/auth/set-password'
-        : '/dashboard'
+  const next = safeInternalPath(requestedNext) || (isPasswordAction ? '/auth/set-password' : '/dashboard')
   const integration = searchParams.get('integration')
   const errorParam = searchParams.get('error')
   const errorDesc  = searchParams.get('error_description')
