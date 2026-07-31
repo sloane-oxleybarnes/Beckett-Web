@@ -36,7 +36,7 @@ const sections = [
     body: [
       "Beckett keeps your core profile, coaching preferences, voluntary workday settings, contacts, connected-service choices, and selected safety-resource region in one protected account system. When a Beckett feature is available on more than one device or surface, it is designed to follow those same choices rather than create a separate version of you.",
       "Some actions always require a new confirmation at the moment you take them. These include connecting Gmail or Calendar, turning on notifications, any future calendar change, starting live meeting support, or saving meeting notes, transcripts, or audio. Beckett does not infer your location; it uses the country or region you choose for safety-resource information.",
-      "During beta, Beckett's reviewed safety-resource set is U.S.-first. If you select another region before Beckett has a reviewed local resource set available, it will say that clearly and identify the fallback rather than imply local accuracy.",
+      "During beta, Beckett lets you choose a country or region for safety-resource routing. Beckett has reviewed resource sets for the United States, Canada, the United Kingdom, and Australia. If you select another region, it will say that clearly and show an international fallback rather than imply local accuracy. Beckett stores the selected region, not precise location data.",
     ],
   },
   {

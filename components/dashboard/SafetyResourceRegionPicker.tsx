@@ -33,7 +33,7 @@ export default function SafetyResourceRegionPicker({ initialRegion }: { initialR
     <section className="mb-5 rounded-card border border-primary/20 bg-primary-light/40 p-5">
       <p className="text-xs font-medium uppercase tracking-wide text-primary">Your resource region</p>
       <h2 className="mt-1 text-xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Choose the country or region you want Beckett to use</h2>
-      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-mid">This is a preference you choose—Beckett does not infer your location. It is used only to select safety-resource information when a reviewed regional set is available.</p>
+      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-mid">This is a preference you choose—Beckett does not infer your precise location. It is used only to select a reviewed regional resource set when one is available; otherwise Beckett clearly labels the international fallback.</p>
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
         <label className="block flex-1 text-sm font-medium text-ink">Country or region
           <select value={region} onChange={(event) => { setRegion(normalizeSafetyResourceRegion(event.target.value)); setStatus("idle"); }} className="mt-1 block w-full rounded-sm border border-border bg-white px-3 py-2 text-sm font-normal text-ink">
