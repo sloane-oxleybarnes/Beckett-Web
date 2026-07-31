@@ -14,13 +14,13 @@ import AdminFeedbackViewer, { type AdminFeedbackRow } from "./FeedbackViewer";
 import { getCourseStudioItems } from "@/lib/course-content";
 import { getSiteContent } from "@/lib/site-content-server";
 import { BETA_MISSION_DEFINITIONS, getBetaMissionDefinition } from "@/lib/beta-missions";
+import { verifyAdminSession } from "@/lib/admin-session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const cookieStore = cookies();
-  const isAuthed =
-    cookieStore.get("admin_auth")?.value === process.env.ADMIN_PASSWORD;
+  const isAuthed = verifyAdminSession(cookieStore.get("admin_auth")?.value);
 
   if (!isAuthed) {
     return <AdminLoginForm />;
