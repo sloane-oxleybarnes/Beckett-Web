@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 
 export async function DELETE(request: NextRequest) {
   const cookieStore = cookies()
-  if (cookieStore.get('admin_auth')?.value !== process.env.ADMIN_PASSWORD) {
+  if (!verifyAdminSession(cookieStore.get('admin_auth')?.value)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
