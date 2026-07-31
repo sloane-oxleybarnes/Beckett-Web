@@ -2,11 +2,12 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { SITE_CONTENT_FIELDS } from "@/lib/site-content";
+import { verifyAdminSession } from "@/lib/admin-session";
 
 export const dynamic = "force-dynamic";
 
 function isAdmin() {
-  return cookies().get("admin_auth")?.value === process.env.ADMIN_PASSWORD;
+  return verifyAdminSession(cookies().get("admin_auth")?.value);
 }
 
 export async function PUT(req: Request) {
