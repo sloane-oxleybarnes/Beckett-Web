@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import type { Profile } from "@/lib/supabase";
 import {
@@ -246,6 +247,8 @@ type CalendarConnection = {
 };
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams();
+  const gmailStatus = searchParams.get("gmail");
   const supabase = createClient();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [fullName, setFullName] = useState("");
@@ -848,6 +851,22 @@ export default function SettingsPage() {
           Slack, move meetings, or change anything without you taking the final action. Disconnecting stops future
           access but does not delete your existing Beckett coaching history or contacts.
         </div>
+        {gmailStatus && gmailStatus !== "connected" && (
+          <div className="mb-5 rounded-sm border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800" role="status">
+            {gmailStatus === "cancelled"
+              ? "Gmail connection cancelled. No access was added."
+              : gmailStatus === "configuration-required"
+                ? "Gmail connection is not configured for this environment yet."
+                : gmailStatus === "session-expired"
+                  ? "Your Beckett session expired before Gmail could finish connecting. Please sign in and try again."
+                  : "Gmail connection could not be completed. Please try again."}
+          </div>
+        )}
+        {gmailStatus === "connected" && (
+          <div className="mb-5 rounded-sm border border-green-200 bg-green-50 p-3 text-xs leading-relaxed text-green-800" role="status">
+            Gmail is connected. Beckett can use read-only thread context when you ask for coaching.
+          </div>
+        )}
         <div className="space-y-4">
           <div id="connected-accounts" className="rounded-sm border border-border bg-bg/40 p-4">
             <div className="mb-4 flex items-center gap-3">
@@ -864,16 +883,7 @@ export default function SettingsPage() {
                 description="Read-only email thread context when you ask Beckett for coaching"
                 connected={diagnostics?.integrations.google.connected}
                 detail={diagnostics?.integrations.google.email || "Google account connected"}
-                onConnect={async () => {
-                  await supabase.auth.signInWithOAuth({
-                    provider: "google",
-                    options: {
-                      scopes: "https://www.googleapis.com/auth/gmail.readonly",
-                      redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/dashboard/settings")}&integration=google`,
-                      queryParams: { access_type: "offline", prompt: "consent" },
-                    },
-                  });
-                }}
+                onConnect={() => window.location.assign("/api/gmail/oauth/start?next=/dashboard/settings")}
                 onDisconnect={() => void disconnectIntegration("google")}
                 disconnecting={disconnectingProvider === "google"}
               />

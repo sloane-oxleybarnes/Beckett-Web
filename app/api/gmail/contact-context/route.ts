@@ -5,16 +5,24 @@ import {
 } from '@/lib/contact-relationship-context'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { callAnthropic } from '@/lib/anthropic'
+import { supabaseAdmin } from '@/lib/server-admin'
+import { decryptGoogleAccessToken } from '@/lib/google-token-security'
 
 export async function GET(req: NextRequest) {
   const supabase = createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const email = req.nextUrl.searchParams.get('email')
   if (!email) return NextResponse.json({ error: 'email required' }, { status: 400 })
 
-  const token = (session as unknown as { provider_token?: string }).provider_token
+  const { data: integration } = await supabaseAdmin
+    .from('user_integrations')
+    .select('access_token')
+    .eq('user_id', user.id)
+    .eq('provider', 'google')
+    .maybeSingle()
+  const token = decryptGoogleAccessToken(integration?.access_token)
   if (!token) return NextResponse.json({ error: 'google_not_connected' })
 
   // Search Gmail for threads with this contact
@@ -61,13 +69,13 @@ Return only the description — no preamble, no labels.`,
   }], 200).then((text) => text.trim())
 
   const relationshipContext = await lookupRelationshipContextByIdentifier({
-    userId: session.user.id,
+    userId: user.id,
     identifier: { platform: 'email', identifier: email, confirmed: true },
   })
 
   if (relationshipContext) {
     await recordSafeInteractionSummary({
-      userId: session.user.id,
+      userId: user.id,
       contactId: relationshipContext.contact.id,
       platform: 'gmail',
       interactionType: 'requested_contact_context',

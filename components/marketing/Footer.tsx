@@ -15,7 +15,7 @@ export default function Footer() {
               className="object-contain object-left"
             />
           </div>
-          <div className="flex items-center gap-6 text-sm text-ink-light">
+          <nav aria-label="Footer navigation" className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-ink-light">
             <Link href="/features" className="hover:text-ink transition-colors">
               Features
             </Link>
@@ -26,15 +26,18 @@ export default function Footer() {
               Beta
             </Link>
             <Link href="/privacy" className="hover:text-ink transition-colors">
-              Privacy
+              Privacy Policy
             </Link>
             <Link href="/terms" className="hover:text-ink transition-colors">
-              Terms
+              Terms of Service
             </Link>
+            <a href="mailto:hello@meetbeckett.co" className="hover:text-ink transition-colors">
+              Contact
+            </a>
             <Link href="/auth/login" className="hover:text-ink transition-colors">
               Sign in
             </Link>
-          </div>
+          </nav>
           <p className="text-sm text-ink-light">
             &copy; {new Date().getFullYear()} Beckett Labs Inc. All rights reserved.
           </p>
