@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { createAdminSession } from "@/lib/admin-session";
 
 export async function POST(req: NextRequest) {
   const { password } = await req.json();
@@ -8,7 +9,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  cookies().set("admin_auth", password, {
+  cookies().set("admin_auth", createAdminSession(), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
