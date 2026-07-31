@@ -5,11 +5,12 @@ import {
 } from "@/lib/contact-identifiers";
 import { getExtensionUserId } from "@/lib/extension-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { normalizeRelationshipTag, normalizeRelationshipTags } from "@/lib/relationship-tags";
 
 async function getAuthedUserId(req: NextRequest): Promise<string | null> {
   const extUserId = await getExtensionUserId(req)
   if (extUserId) return extUserId
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { data: { session } } = await supabase.auth.getSession()
   return session?.user.id ?? null
 }
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
   const userId = await getAuthedUserId(req);
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("contacts")
     .select("*, contact_identifiers(*), contact_insights(*), contact_relationship_summaries(*)")
@@ -40,6 +41,8 @@ export async function POST(req: NextRequest) {
     phone_number?: string | null;
     relationship_type?: string | null;
     relationship_other?: string | null;
+    relationship_tags?: string[];
+    primary_relationship_tag?: string | null;
     notes?: string | null;
     trusted?: boolean;
     identifiers?: ContactIdentifierInput[];
@@ -49,7 +52,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name required" }, { status: 400 });
   }
 
-  const supabase = createSupabaseServerClient();
+  const relationshipTags = normalizeRelationshipTags(body.relationship_tags);
+  const requestedPrimaryTag = normalizeRelationshipTag(body.primary_relationship_tag);
+  const primaryRelationshipTag = requestedPrimaryTag && relationshipTags.includes(requestedPrimaryTag)
+    ? requestedPrimaryTag
+    : relationshipTags[0] || null;
+
+  const supabase = await createSupabaseServerClient();
   const { data: contact, error } = await supabase
     .from("contacts")
     .insert({
@@ -60,6 +69,8 @@ export async function POST(req: NextRequest) {
       phone_number: body.phone_number?.trim() || null,
       relationship_type: body.relationship_type?.trim() || null,
       relationship_other: body.relationship_other?.trim() || null,
+      relationship_tags: relationshipTags,
+      primary_relationship_tag: primaryRelationshipTag,
       notes: body.notes?.trim() || null,
       trusted: body.trusted ?? false,
     })

@@ -7,7 +7,7 @@ import { trackBetaEvent } from "@/lib/beta-events";
 export const dynamic = "force-dynamic";
 
 async function getAuthenticatedUser() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   return { supabase, user };
 }

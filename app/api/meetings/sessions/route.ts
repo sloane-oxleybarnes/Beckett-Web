@@ -6,7 +6,7 @@ function cleanText(value: unknown, max: number) {
 }
 
 export async function GET() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const { data, error } = await supabase.from("meeting_sessions").select("*").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(20);
@@ -15,7 +15,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
@@ -31,4 +31,3 @@ export async function POST(request: NextRequest) {
   if (error) return NextResponse.json({ error: "Could not create the meeting session." }, { status: 500 });
   return NextResponse.json({ session: data }, { status: 201 });
 }
-

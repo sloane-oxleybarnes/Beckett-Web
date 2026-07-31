@@ -8,6 +8,7 @@ import {
   hasOtherAttendees,
   type CalendarEvent,
 } from "@/lib/calendar-insights";
+import { hasEarnedMeetingPrepSignal, type MeetingPrepContact } from "@/lib/meeting-prep-recommendations";
 
 type CalendarResponse = {
   connected: boolean;
@@ -49,6 +50,8 @@ export default function CalendarPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [contacts, setContacts] = useState<MeetingPrepContact[]>([]);
+  const [meetingPrepLearningEnabled, setMeetingPrepLearningEnabled] = useState(false);
   const weekStart = useMemo(() => weekStartForOffset(weekOffset), [weekOffset]);
 
   const loadCalendar = useCallback(async () => {
@@ -82,6 +85,20 @@ export default function CalendarPanel() {
   }, [loadCalendar]);
 
   useEffect(() => {
+    fetch("/api/contacts", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: { contacts?: MeetingPrepContact[] } | null) => setContacts(data?.contacts || []))
+      .catch(() => setContacts([]));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/learning/preferences", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: { preferences?: { pattern_model_enabled?: boolean; meeting_prep_learning_enabled?: boolean } } | null) => setMeetingPrepLearningEnabled(Boolean(data?.preferences?.pattern_model_enabled && data?.preferences?.meeting_prep_learning_enabled)))
+      .catch(() => setMeetingPrepLearningEnabled(false));
+  }, []);
+
+  useEffect(() => {
     const status = new URLSearchParams(window.location.search).get("calendar");
     if (!status) return;
     if (status === "connected") setError(null);
@@ -101,6 +118,10 @@ export default function CalendarPanel() {
   const prepCandidates = useMemo(
     () => (calendar?.events || []).filter((event) => hasOtherAttendees(event) && new Date(event.start).getTime() >= Date.now()).slice(0, 3),
     [calendar]
+  );
+  const recommendedPrepCandidates = useMemo(
+    () => meetingPrepLearningEnabled ? prepCandidates.filter((event) => hasEarnedMeetingPrepSignal(event, contacts)) : [],
+    [contacts, meetingPrepLearningEnabled, prepCandidates]
   );
   const needsConnection = !calendar?.connected || calendar.reauthorize;
 
@@ -124,16 +145,16 @@ export default function CalendarPanel() {
           <section className="mb-5 rounded-card border border-border bg-white p-5 sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-primary">Suggested meeting prep</p>
-                <h2 className="mt-1 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Worth a few minutes before you join</h2>
+                <p className="text-xs font-medium uppercase tracking-wide text-primary">{recommendedPrepCandidates.length ? "Suggested meeting prep" : "Upcoming meetings"}</p>
+                <h2 className="mt-1 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{recommendedPrepCandidates.length ? "Worth a few minutes before you join" : "Prep is available when you want it"}</h2>
               </div>
               <button type="button" onClick={() => void loadCalendar()} className="text-xs font-medium text-primary hover:underline">Refresh</button>
             </div>
-            {prepCandidates.length ? (
+            {recommendedPrepCandidates.length ? (
               <div className="grid gap-3 lg:grid-cols-3">
-                {prepCandidates.map((event) => <article key={event.id} className="rounded-sm border border-border bg-bg/50 p-4"><p className="text-xs font-medium text-primary">{new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(event.start))}</p><h3 className="mt-1 text-sm font-medium text-ink">{event.title}</h3><p className="mt-1 text-xs text-ink-mid">With {attendeeNames(event).slice(0, 3).join(", ")}{event.attendees.length > 3 ? " and others" : ""}</p><Link href={prepHref(event)} className="mt-3 inline-block text-xs font-medium text-primary hover:underline">Prep for this meeting →</Link></article>)}
+                {recommendedPrepCandidates.map((event) => <article key={event.id} className="rounded-sm border border-border bg-bg/50 p-4"><p className="text-xs font-medium text-primary">{new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(event.start))}</p><h3 className="mt-1 text-sm font-medium text-ink">{event.title}</h3><p className="mt-1 text-xs text-ink-mid">With {attendeeNames(event).slice(0, 3).join(", ")}{event.attendees.length > 3 ? " and others" : ""}</p><p className="mt-2 text-xs leading-relaxed text-ink-light">Suggested because you have saved context you can choose to include.</p><Link href={prepHref(event)} className="mt-3 inline-block text-xs font-medium text-primary hover:underline">Prep for this meeting →</Link></article>)}
               </div>
-            ) : <p className="rounded-sm border border-border bg-bg/50 p-4 text-sm text-ink-mid">There are no upcoming meetings with other attendees in this week&apos;s view, so there is nothing to prepare for yet.</p>}
+            ) : prepCandidates.length ? <div className="rounded-sm border border-border bg-bg/50 p-4 text-sm leading-relaxed text-ink-mid">Beckett has not made a proactive prep suggestion yet. Open any meeting&apos;s prep when it is useful; it will begin suggesting prep after you save relevant context or preferences for the people and situations that matter to you.</div> : <p className="rounded-sm border border-border bg-bg/50 p-4 text-sm text-ink-mid">There are no upcoming meetings with other attendees in this week&apos;s view, so there is nothing to prepare for yet.</p>}
           </section>
 
           <section className="rounded-card border border-border bg-white p-5 sm:p-6">

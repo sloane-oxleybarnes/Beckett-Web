@@ -6,19 +6,21 @@ import {
 } from "@/lib/contact-identifiers";
 import { getExtensionUserId } from "@/lib/extension-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { normalizeRelationshipTag, normalizeRelationshipTags } from "@/lib/relationship-tags";
 
 async function getAuthedUserId(req: NextRequest): Promise<string | null> {
   const extUserId = await getExtensionUserId(req)
   if (extUserId) return extUserId
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { data: { session } } = await supabase.auth.getSession()
   return session?.user.id ?? null
 }
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const userId = await getAuthedUserId(req)
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
@@ -29,18 +31,20 @@ export async function PUT(
     phone_number?: string | null
     relationship_type?: string | null
     relationship_other?: string | null
+    relationship_tags?: string[]
+    primary_relationship_tag?: string | null
     notes?: string | null
     trusted?: boolean
     identifiers?: ContactIdentifierInput[]
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   // Ensure the contact belongs to this user
   const { data: existing } = await supabase
     .from('contacts')
-    .select('id, email, slack_handle, phone_number')
-    .eq('id', params.id)
+    .select('id, email, slack_handle, phone_number, relationship_tags, primary_relationship_tag')
+    .eq('id', id)
     .eq('user_id', userId)
     .single()
 
@@ -53,6 +57,18 @@ export async function PUT(
   if (body.phone_number !== undefined) updates.phone_number = body.phone_number?.trim() || null
   if (body.relationship_type !== undefined) updates.relationship_type = body.relationship_type?.trim() || null
   if (body.relationship_other !== undefined) updates.relationship_other = body.relationship_other?.trim() || null
+  const relationshipTags = body.relationship_tags !== undefined
+    ? normalizeRelationshipTags(body.relationship_tags)
+    : normalizeRelationshipTags(existing.relationship_tags)
+  if (body.relationship_tags !== undefined) updates.relationship_tags = relationshipTags
+  if (body.relationship_tags !== undefined || body.primary_relationship_tag !== undefined) {
+    const requestedPrimary = body.primary_relationship_tag === undefined
+      ? normalizeRelationshipTag(existing.primary_relationship_tag)
+      : normalizeRelationshipTag(body.primary_relationship_tag)
+    updates.primary_relationship_tag = requestedPrimary && relationshipTags.includes(requestedPrimary)
+      ? requestedPrimary
+      : relationshipTags[0] || null
+  }
   if (body.notes !== undefined) updates.notes = body.notes?.trim() || null
   if (body.trusted !== undefined) updates.trusted = body.trusted
 
@@ -61,7 +77,7 @@ export async function PUT(
     const { data, error } = await supabase
       .from('contacts')
       .update(updates)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single()
 
@@ -74,7 +90,7 @@ export async function PUT(
 
   if (shouldReplaceIdentifiers) {
     const identifiers = buildContactIdentifierRows({
-      contactId: params.id,
+      contactId: id,
       userId,
       email: body.email !== undefined ? body.email : existing.email,
       slackHandle: body.slack_handle !== undefined ? body.slack_handle : existing.slack_handle,
@@ -85,7 +101,7 @@ export async function PUT(
     const { error: deleteError } = await supabase
       .from('contact_identifiers')
       .delete()
-      .eq('contact_id', params.id)
+      .eq('contact_id', id)
       .eq('user_id', userId)
 
     if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 })
@@ -99,7 +115,7 @@ export async function PUT(
     }
   } else if (legacyPlatforms.length) {
     const identifiers = buildContactIdentifierRows({
-      contactId: params.id,
+      contactId: id,
       userId,
       email: body.email,
       slackHandle: body.slack_handle,
@@ -109,7 +125,7 @@ export async function PUT(
     const { error: deleteError } = await supabase
       .from('contact_identifiers')
       .delete()
-      .eq('contact_id', params.id)
+      .eq('contact_id', id)
       .eq('user_id', userId)
       .in('platform', legacyPlatforms)
 
@@ -129,16 +145,17 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const userId = await getAuthedUserId(req)
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { error } = await supabase
     .from('contacts')
     .delete()
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', userId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

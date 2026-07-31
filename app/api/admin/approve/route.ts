@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
+import { isAdminRequest } from "@/lib/admin-auth";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { triggerLoopsEvent } from "@/lib/loops";
 import { sendBetaInviteEmail } from "@/lib/beta-emails";
@@ -14,8 +14,7 @@ function buildPasswordSetupLink(origin: string, tokenHash: string, type: "invite
 }
 
 export async function POST(req: NextRequest) {
-  const cookieStore = cookies();
-  if (cookieStore.get("admin_auth")?.value !== process.env.ADMIN_PASSWORD) {
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

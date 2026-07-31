@@ -1,6 +1,7 @@
 'use client'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { Suspense, useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
 type Phase = 'setup' | 'conversation' | 'debrief' | 'feedback'
@@ -288,30 +289,6 @@ function ContactOverlay({
   onSelect: (c: ContactContext) => void
   trustedPeople: TrustedPerson[]
 }) {
-  const [gmailEmail, setGmailEmail] = useState('')
-  const [gmailLoading, setGmailLoading] = useState(false)
-  const [gmailResult, setGmailResult] = useState<string | null>(null)
-  const [gmailError, setGmailError] = useState<string | null>(null)
-
-  async function loadGmailContext() {
-    if (!gmailEmail.trim()) return
-    setGmailLoading(true)
-    setGmailError(null)
-    setGmailResult(null)
-    const res = await fetch(`/api/gmail/contact-context?email=${encodeURIComponent(gmailEmail)}`)
-    const data = await res.json() as { summary?: string; error?: string }
-    setGmailLoading(false)
-    if (data.error === 'google_not_connected') {
-      setGmailError('Connect Google in Settings to load email history.')
-    } else if (data.error === 'no_threads_found') {
-      setGmailError('No emails found with that address.')
-    } else if (data.summary) {
-      setGmailResult(data.summary)
-    } else {
-      setGmailError('Something went wrong. Try again.')
-    }
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
@@ -342,55 +319,12 @@ function ContactOverlay({
           </div>
         )}
 
-        <div>
-          <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-3">Email history</p>
-          <p className="text-xs text-ink-mid mb-3">
-            Enter their email address to load context from your recent exchanges.
+        {trustedPeople.length === 0 && (
+          <p className="text-xs text-ink-light">
+            No Trusted People saved yet.{' '}
+            <a href="/dashboard/trusted-people" className="text-primary underline">Add someone</a>
           </p>
-          <div className="flex gap-2 mb-3">
-            <input
-              type="email"
-              value={gmailEmail}
-              onChange={e => setGmailEmail(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') loadGmailContext() }}
-              placeholder="their@email.com"
-              className="flex-1 border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            <button
-              onClick={loadGmailContext}
-              disabled={gmailLoading || !gmailEmail.trim()}
-              className="bg-primary text-white text-sm rounded-pill px-4 py-2 hover:bg-primary-dark transition-colors disabled:opacity-50"
-            >
-              {gmailLoading ? '…' : 'Load'}
-            </button>
-          </div>
-          {gmailError && (
-            <p className="text-xs text-ink-mid mb-3">
-              {gmailError}{' '}
-              {gmailError.includes('Settings') && (
-                <a href="/dashboard/settings" className="text-primary underline">Go to Settings</a>
-              )}
-            </p>
-          )}
-          {gmailResult && (
-            <div className="bg-bg border border-border rounded-card p-3 mb-3">
-              <p className="text-xs font-medium text-ink-light uppercase tracking-wide mb-1">Communication style</p>
-              <p className="text-sm text-ink leading-relaxed">{gmailResult}</p>
-              <button
-                onClick={() => onSelect({ name: gmailEmail, style: gmailResult, notes: '' })}
-                className="mt-3 w-full bg-primary text-white text-sm rounded-pill py-2 hover:bg-primary-dark transition-colors"
-              >
-                Use this context
-              </button>
-            </div>
-          )}
-          {trustedPeople.length === 0 && !gmailResult && !gmailError && (
-            <p className="text-xs text-ink-light">
-              No Trusted People saved yet.{' '}
-              <a href="/dashboard/trusted-people" className="text-primary underline">Add someone</a>
-            </p>
-          )}
-        </div>
+        )}
       </div>
     </div>
   )
@@ -398,18 +332,19 @@ function ContactOverlay({
 
 // ── Main page ──────────────────────────────────────────────────────────────
 
-export default function PracticePage() {
+function PracticePageContent() {
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const [phase, setPhase] = useState<Phase>('setup')
   const [setupStep, setSetupStep] = useState(0)
-  const [mode, setMode] = useState<Mode>('professional')
+  const [mode, setMode] = useState<Mode>(() => searchParams.get('mode') === 'personal' ? 'personal' : 'professional')
   const [conversationFormat, setConversationFormat] = useState<ConversationFormat>('text')
   const [textSubFormat, setTextSubFormat] = useState<TextSubFormat>('slack')
   const [emailSubject, setEmailSubject] = useState('')
-  const [person, setPerson] = useState('')
-  const [situation, setSituation] = useState('')
-  const [goal, setGoal] = useState('')
-  const [relationshipContext, setRelationshipContext] = useState('')
+  const [person, setPerson] = useState(() => searchParams.get('person') || '')
+  const [situation, setSituation] = useState(() => searchParams.get('scenario') || '')
+  const [goal, setGoal] = useState(() => searchParams.get('goal') || '')
+  const [relationshipContext, setRelationshipContext] = useState(() => searchParams.get('context') || '')
   const [personStyle, setPersonStyle] = useState('')
   const [showCustomPersonStyle, setShowCustomPersonStyle] = useState(false)
   const [recurringPattern, setRecurringPattern] = useState('')
@@ -1929,6 +1864,10 @@ export default function PracticePage() {
       )}
     </div>
   )
+}
+
+export default function PracticePage() {
+  return <Suspense fallback={null}><PracticePageContent /></Suspense>
 }
 
 function PracticeTextInput({

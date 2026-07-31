@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { decryptGoogleAccessToken } from "@/lib/google-token-security";
+import { decryptGoogleCredentialTokens } from "@/lib/google-token-security";
 
-const CONNECTED_PROVIDERS = ["google", "slack"] as const;
+const CONNECTED_PROVIDERS = ["google", "google_calendar", "slack"] as const;
 type ConnectedProvider = (typeof CONNECTED_PROVIDERS)[number];
 
 function isConnectedProvider(value: string): value is ConnectedProvider {
@@ -13,7 +13,7 @@ function isConnectedProvider(value: string): value is ConnectedProvider {
 
 async function revokeProviderToken(provider: ConnectedProvider, token: string) {
   try {
-    if (provider === "google") {
+    if (provider !== "slack") {
       await fetch("https://oauth2.googleapis.com/revoke", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -31,46 +31,47 @@ async function revokeProviderToken(provider: ConnectedProvider, token: string) {
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { provider: string } }) {
-  if (!isConnectedProvider(params.provider)) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ provider: string }> }) {
+  const { provider } = await params;
+  if (!isConnectedProvider(provider)) {
     return NextResponse.json({ error: "Unsupported integration." }, { status: 404 });
   }
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
   const { data: integration, error: readError } = await supabaseAdmin
     .from("user_integrations")
     .select("access_token")
-    .eq("user_id", session.user.id)
-    .eq("provider", params.provider)
+    .eq("user_id", user.id)
+    .eq("provider", provider)
     .maybeSingle();
 
   if (readError) return NextResponse.json({ error: "Could not read the integration." }, { status: 500 });
 
   if (integration?.access_token) {
-    const token = params.provider === "google"
-      ? decryptGoogleAccessToken(integration.access_token)
-      : integration.access_token;
-    if (token) await revokeProviderToken(params.provider, token);
+    const tokens = provider === "slack"
+      ? [integration.access_token]
+      : decryptGoogleCredentialTokens(integration.access_token);
+    for (const token of tokens) await revokeProviderToken(provider, token);
   }
 
   const { error: deleteError } = await supabaseAdmin
     .from("user_integrations")
     .delete()
-    .eq("user_id", session.user.id)
-    .eq("provider", params.provider);
+    .eq("user_id", user.id)
+    .eq("provider", provider);
 
   if (deleteError) return NextResponse.json({ error: "Could not disconnect the integration." }, { status: 500 });
 
   await trackBetaEvent({
-    userId: session.user.id,
-    email: session.user.email,
-    eventName: `${params.provider}_disconnected`,
+    userId: user.id,
+    email: user.email,
+    eventName: `${provider}_disconnected`,
     source: "web_app",
   });
 

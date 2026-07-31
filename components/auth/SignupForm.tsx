@@ -41,48 +41,6 @@ export default function SignupPage() {
       return;
     }
 
-    // Non-blocking Loops and HubSpot sync
-    fetch("/api/loops", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "trigger_event",
-        email,
-        eventName: "user_signup",
-        properties: { plan: plan || "free" },
-      }),
-    }).catch(() => {});
-
-    fetch("/api/loops", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "add_contact",
-        email,
-        contactData: {
-          firstName: fullName.split(" ")[0],
-          lastName: fullName.split(" ").slice(1).join(" "),
-          plan: plan || "free",
-          source: "signup",
-        },
-      }),
-    }).catch(() => {});
-
-    fetch("/api/hubspot", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "sync_contact",
-        contact: {
-          email,
-          firstname: fullName.split(" ")[0],
-          lastname: fullName.split(" ").slice(1).join(" "),
-          plan: plan || "free",
-          source: "signup",
-        },
-      }),
-    }).catch(() => {});
-
     router.push("/auth/profile-setup");
     router.refresh();
   }

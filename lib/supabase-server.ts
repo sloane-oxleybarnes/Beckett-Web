@@ -1,6 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
+// Keep this synchronous for the production Next 14 runtime. Callers may still
+// await the returned client, which keeps the same source compatible with the
+// staging Next 15 branch without changing auth behavior.
 export function createSupabaseServerClient() {
   const cookieStore = cookies()
   return createServerClient(

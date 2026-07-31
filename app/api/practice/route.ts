@@ -4,6 +4,8 @@ import { callAnthropic } from '@/lib/anthropic'
 import { AiUsageLimitError, recordAiUsage } from '@/lib/ai-usage'
 import { trackBetaEvent } from '@/lib/beta-events'
 import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
+import { getSafetyResponse } from '@/lib/safety-resources'
+import { fetchSharedWebContext } from '@/lib/shared-web-context'
 import * as Sentry from '@sentry/nextjs'
 import {
   WEB_CREDITS_ENABLED,
@@ -11,6 +13,7 @@ import {
   assertWebCreditsAvailable,
   recordSuccessfulWebCredit,
 } from '@/lib/web-credits'
+import { enforceRateLimit, hashRateLimitKey, rateLimitResponse, readJsonWithLimit } from '@/lib/security-rate-limit'
 
 const METERED_PRACTICE_ACTIONS = new Set([
   'turn',
@@ -40,14 +43,17 @@ function extractJsonObject(text: string) {
 
 export async function POST(req: NextRequest) {
   try {
-  const supabase = createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const limit = enforceRateLimit(`practice:${hashRateLimitKey(user.id)}`, 30, 10 * 60 * 1000)
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many practice requests. Try again shortly.' }, { status: 429, headers: rateLimitResponse(limit) })
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('plan')
-    .eq('id', session.user.id)
+    .select('plan, safety_resource_region')
+    .eq('id', user.id)
     .single()
 
   const plan = profile?.plan || 'free'
@@ -55,7 +61,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Practice requires a Pro or Beta plan.' }, { status: 403 })
   }
 
-  const body = await req.json() as {
+  const body = await readJsonWithLimit<{
     action: 'turn' | 'debrief' | 'inline_feedback' | 'assistant_feedback' | 'suggested_prompts' | 'recommend_format' | 'draft_feedback' | 'intervention_check' | 'prep_tips'
     mode?: 'personal' | 'professional'
     system?: string
@@ -76,9 +82,22 @@ export async function POST(req: NextRequest) {
     practiceFocus?: string
     conversationFormat?: string
     textSubFormat?: string
+  }>(req, 100_000)
+  if (!body) return NextResponse.json({ error: 'Invalid or oversized request.' }, { status: 400 })
+  const messages = body.messages
+  if (messages && (!Array.isArray(messages) || messages.length > 50 || messages.some((message) =>
+    !message || !['user', 'assistant'].includes(message.role) || typeof message.content !== 'string' || message.content.length > 4_000
+  ))) {
+    return NextResponse.json({ error: 'Conversation history is too large or malformed.' }, { status: 400 })
   }
 
   const { action, mode } = body
+  const sharedContextPromise = fetchSharedWebContext(supabase, user.id)
+  const safetyText = [body.situation, body.goal, body.userMessage, body.context, body.personDescription, body.assistantMessage]
+    .filter((value): value is string => typeof value === 'string')
+    .join('\n')
+  const safety = getSafetyResponse(safetyText, profile?.safety_resource_region)
+  if (safety) return NextResponse.json({ error: safety.message, safety }, { status: 422 })
   const callMeteredAnthropic = async (
     system: string | null,
     messages: { role: 'user' | 'assistant'; content: string }[],
@@ -86,26 +105,28 @@ export async function POST(req: NextRequest) {
   ) => {
     if (METERED_PRACTICE_ACTIONS.has(action)) {
       if (WEB_CREDITS_ENABLED) {
-        await assertWebCreditsAvailable(session.user.id)
+        await assertWebCreditsAvailable(user.id)
       } else {
-        await recordAiUsage(session.user.id, {
+        await recordAiUsage(user.id, {
           source: 'dashboard',
           action: `practice_${action}`,
           metadata: { mode: mode || null },
         })
       }
     }
-    const result = await callAnthropic(system, messages, maxTokens)
+    const sharedContext = await sharedContextPromise
+    const combinedSystem = [system, sharedContext.promptContext].filter(Boolean).join('\n\n') || null
+    const result = await callAnthropic(combinedSystem, messages, maxTokens)
     if (WEB_CREDITS_ENABLED && METERED_PRACTICE_ACTIONS.has(action)) {
-      await recordSuccessfulWebCredit(session.user.id, {
+      await recordSuccessfulWebCredit(user.id, {
         source: 'dashboard',
         action: `practice_${action}`,
         metadata: { mode: mode || null },
       })
     }
     await trackBetaEvent({
-      userId: session.user.id,
-      email: session.user.email,
+      userId: user.id,
+      email: user.email,
       eventName: 'analysis_completed',
       source: 'practice',
       metadata: { action: `practice_${action}`, mode: mode || null },

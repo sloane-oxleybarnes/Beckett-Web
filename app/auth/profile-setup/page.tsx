@@ -1,19 +1,10 @@
-import dynamic from "next/dynamic";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { hasApprovedBetaAccess } from "@/lib/beta-access";
-
-const ProfileSetupForm = dynamic(() => import("@/components/auth/ProfileSetupForm"), {
-  ssr: false,
-  loading: () => (
-    <div className="min-h-screen bg-bg flex items-center justify-center">
-      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    </div>
-  ),
-});
+import ProfileSetupForm from "@/components/auth/ProfileSetupForm";
 
 export default async function ProfileSetupPage() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect("/auth/login");
 

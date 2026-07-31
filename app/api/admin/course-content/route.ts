@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getCourse } from "@/lib/courses";
 import {
@@ -9,11 +8,12 @@ import {
 } from "@/lib/course-content";
 import { supabaseAdmin } from "@/lib/server-admin";
 import type { Course } from "@/lib/courses";
+import { isAdminRequest } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
-function isAdmin() {
-  return cookies().get("admin_auth")?.value === process.env.ADMIN_PASSWORD;
+async function isAdmin() {
+  return isAdminRequest();
 }
 
 function jsonCourseCopy(course: Course): Course {
@@ -55,7 +55,7 @@ async function getDraftOrFallback(courseId: string) {
 }
 
 export async function GET() {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -64,7 +64,7 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -100,7 +100,7 @@ export async function PUT(req: Request) {
 }
 
 export async function POST(req: Request) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

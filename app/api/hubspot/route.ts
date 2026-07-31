@@ -1,18 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createOrUpdateHubSpotContact, createHubSpotDeal } from "@/lib/hubspot";
+import { NextResponse } from "next/server";
 
-export async function POST(req: NextRequest) {
-  const { action, contact, deal } = await req.json();
-
-  if (action === "sync_contact") {
-    const id = await createOrUpdateHubSpotContact(contact);
-    return NextResponse.json({ id });
-  }
-
-  if (action === "create_deal") {
-    const id = await createHubSpotDeal(deal);
-    return NextResponse.json({ id });
-  }
-
-  return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+export async function POST() {
+  return NextResponse.json(
+    { error: "Direct HubSpot mutations are disabled. Use an authenticated Beckett workflow." },
+    { status: 410 },
+  );
 }

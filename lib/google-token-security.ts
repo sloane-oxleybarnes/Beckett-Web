@@ -31,14 +31,9 @@ export function encryptGoogleAccessToken(token: string) {
   return `${PREFIX}:${iv.toString("base64url")}:${authTag.toString("base64url")}:${ciphertext.toString("base64url")}`;
 }
 
-/**
- * Decrypts current credentials and accepts a legacy plaintext credential during
- * the migration window. Legacy values remain server-only after the database
- * privilege change; the next Google reconnect replaces them with AES-GCM.
- */
+/** Returns null for a missing, legacy, or invalid stored credential. */
 export function decryptGoogleAccessToken(value: string | null | undefined) {
-  if (!value) return null;
-  if (!value.startsWith(`${PREFIX}:`)) return value;
+  if (!value?.startsWith(`${PREFIX}:`)) return null;
 
   const [, version, ivValue, tagValue, ciphertextValue] = value.split(":");
   if (version !== "v1" || !ivValue || !tagValue || !ciphertextValue) return null;
@@ -54,4 +49,19 @@ export function decryptGoogleAccessToken(value: string | null | undefined) {
   } catch {
     return null;
   }
+}
+
+/** Returns every Google credential that should be revoked for a stored integration. */
+export function decryptGoogleCredentialTokens(value: string | null | undefined) {
+  const decrypted = decryptGoogleAccessToken(value);
+  if (!decrypted) return [];
+  try {
+    const credential = JSON.parse(decrypted) as { accessToken?: unknown; refreshToken?: unknown };
+    const tokens = [credential.accessToken, credential.refreshToken]
+      .filter((token): token is string => typeof token === "string" && token.length > 0);
+    if (tokens.length > 0) return [...new Set(tokens)];
+  } catch {
+    // Gmail stores a single access token rather than a JSON calendar credential.
+  }
+  return [decrypted];
 }

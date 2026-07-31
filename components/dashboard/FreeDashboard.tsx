@@ -19,10 +19,8 @@ const gettingStarted = [
 
 export default function FreeDashboard({
   name,
-  userEmail,
 }: {
   name: string;
-  userEmail: string;
 }) {
   const [betaCode, setBetaCode] = useState("");
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -137,7 +135,7 @@ export default function FreeDashboard({
       </div>
 
       {showUpgrade && (
-        <UpgradeModal userEmail={userEmail} onClose={() => setShowUpgrade(false)} />
+        <UpgradeModal onClose={() => setShowUpgrade(false)} />
       )}
     </div>
   );

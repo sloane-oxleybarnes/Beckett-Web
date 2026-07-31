@@ -1,49 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase";
 
 export default function UpgradeModal({
-  userEmail,
   onClose,
 }: {
-  userEmail: string;
   onClose: () => void;
 }) {
-  const supabase = createClient();
   const [done, setDone] = useState(false);
 
   async function handleIntent() {
-    await supabase.from("upgrade_intents").insert({
-      email: userEmail,
-      target_plan: "pro",
-    });
-
-    fetch("/api/hubspot", {
+    const response = await fetch("/api/upgrade-intent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "create_deal",
-        deal: {
-          dealName: `${userEmail} — Pro intent`,
-          amount: 12,
-          stage: "appointmentscheduled",
-          plan: "pro",
-        },
-      }),
+      body: JSON.stringify({ target_plan: "pro" }),
     }).catch(() => {});
-
-    fetch("/api/loops", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "trigger_event",
-        email: userEmail,
-        eventName: "upgrade_intent",
-      }),
-    }).catch(() => {});
-
-    setDone(true);
+    setDone(Boolean(response?.ok));
   }
 
   return (

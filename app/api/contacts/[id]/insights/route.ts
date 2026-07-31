@@ -3,29 +3,31 @@ import { upsertRelationshipSummary } from '@/lib/contact-relationship-context'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { getExtensionUserId } from '@/lib/extension-auth'
 import { callAnthropic } from '@/lib/anthropic'
+import { relationshipLabelForContact } from '@/lib/relationship-tags'
 
 async function getAuthedUserId(req: NextRequest): Promise<string | null> {
   const extUserId = await getExtensionUserId(req)
   if (extUserId) return extUserId
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { data: { session } } = await supabase.auth.getSession()
   return session?.user.id ?? null
 }
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const userId = await getAuthedUserId(req)
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   // Verify ownership and get contact info
   const { data: contact } = await supabase
     .from('contacts')
-    .select('id, name, email, slack_handle, relationship_type, relationship_other, notes, trusted')
-    .eq('id', params.id)
+    .select('id, name, email, slack_handle, relationship_type, relationship_other, relationship_tags, primary_relationship_tag, notes, trusted')
+    .eq('id', id)
     .eq('user_id', userId)
     .single()
 
@@ -36,7 +38,7 @@ export async function POST(
 Contact: ${contact.name}
 Email: ${contact.email || 'not provided'}
 Slack handle: ${contact.slack_handle || 'not provided'}
-Relationship: ${contact.relationship_type === 'Other' ? contact.relationship_other || 'Other' : contact.relationship_type || 'not provided'}
+Relationship tags (user-editable): ${relationshipLabelForContact(contact) || 'not provided'}
 Trusted contact: ${contact.trusted ? 'yes' : 'no'}
 Notes: ${contact.notes || 'none'}
 
@@ -53,7 +55,7 @@ Respond with only the JSON object, no markdown wrapping.`
   const { data, error } = await supabase
     .from('contact_insights')
     .upsert({
-      contact_id: params.id,
+      contact_id: id,
       summary: insights.summary,
       communication_patterns: insights.communication_patterns,
       common_topics: insights.common_topics,
@@ -68,7 +70,7 @@ Respond with only the JSON object, no markdown wrapping.`
 
   const relationshipSummary = await upsertRelationshipSummary({
     userId,
-    contactId: params.id,
+    contactId: id,
     communicationStyle: insights.communication_patterns || insights.summary,
     recurringTensionPoints: insights.tone_trend,
     whatTendsToWork: insights.responsiveness,

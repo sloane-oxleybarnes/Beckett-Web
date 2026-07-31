@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { sendBetaInviteReminderEmail, sendSetupNudgeEmail } from "@/lib/beta-emails";
 import { trackBetaEvent } from "@/lib/beta-events";
+import { isAdminRequest } from "@/lib/admin-auth";
 
 type AutomationResult = {
   inviteReminders: number;
@@ -10,13 +10,12 @@ type AutomationResult = {
   errors: string[];
 };
 
-function isAuthorized(req: NextRequest) {
+async function isAuthorized(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const authorization = req.headers.get("authorization");
   if (cronSecret && authorization === `Bearer ${cronSecret}`) return true;
 
-  const cookieStore = cookies();
-  return cookieStore.get("admin_auth")?.value === process.env.ADMIN_PASSWORD;
+  return isAdminRequest();
 }
 
 function daysAgo(days: number) {
@@ -159,7 +158,7 @@ async function runEmailAutomations(req: NextRequest, dryRun: boolean) {
 }
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -169,7 +168,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -1,19 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
+import { stripe } from "@/lib/stripe";
 
-// Stripe webhook — stubbed, not live yet
 export async function POST(req: NextRequest) {
-  const body = await req.text();
-  const sig = req.headers.get("stripe-signature");
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  const signature = req.headers.get("stripe-signature");
+  if (!stripe || !webhookSecret) {
+    return NextResponse.json({ error: "Stripe webhook not configured" }, { status: 503 });
+  }
+  if (!signature) return NextResponse.json({ error: "Missing Stripe signature" }, { status: 400 });
 
-  if (!process.env.STRIPE_SECRET_KEY) {
-    return NextResponse.json(
-      { error: "Stripe not configured" },
-      { status: 503 }
-    );
+  const body = await req.text();
+  if (body.length > 2_000_000) return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+  } catch {
+    return NextResponse.json({ error: "Invalid Stripe signature" }, { status: 400 });
   }
 
-  // TODO: verify signature and handle events when Stripe goes live
-  console.log("Stripe webhook received (stub)", { sig, bodyLength: body.length });
-
-  return NextResponse.json({ received: true });
+  // Billing is not live yet. Signature verification is intentionally the only
+  // operation until event handlers and idempotency storage are enabled.
+  return NextResponse.json({ received: true, type: event.type });
 }

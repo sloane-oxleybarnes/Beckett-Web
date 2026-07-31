@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 async function getAuthedUserId(req: NextRequest): Promise<string | null> {
   const extUserId = await getExtensionUserId(req);
   if (extUserId) return extUserId;
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();

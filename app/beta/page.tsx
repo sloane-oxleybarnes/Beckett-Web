@@ -25,8 +25,9 @@ const betaPerks = [
 export default async function BetaPage({
   searchParams,
 }: {
-  searchParams?: { access?: string };
+  searchParams?: Promise<{ access?: string }>;
 }) {
+  const resolvedSearchParams = await searchParams;
   const content = await getSiteContent([
     "beta.hero.badge",
     "beta.hero.title",
@@ -57,7 +58,7 @@ export default async function BetaPage({
         </div>
 
         <div className="bg-white rounded-card border border-border p-8 mb-10">
-          {searchParams?.access === "approval-required" && (
+          {resolvedSearchParams?.access === "approval-required" && (
             <div className="mb-6 rounded-card border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-ink-mid">
               Beckett is invite-only during beta. Request access below, or sign in with the email address from your invitation.
             </div>

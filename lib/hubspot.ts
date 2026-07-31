@@ -174,6 +174,21 @@ export async function createOrUpdateHubSpotContact(
   }
 }
 
+export async function deleteHubSpotContact(contactId: string) {
+  if (!HUBSPOT_API_KEY) return;
+  try {
+    const res = await fetch(`${BASE_URL}/crm/v3/objects/contacts/${encodeURIComponent(contactId)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${HUBSPOT_API_KEY}` },
+    });
+    if (!res.ok && res.status !== 404) {
+      console.error("HubSpot delete error:", await res.text());
+    }
+  } catch (err) {
+    console.error("HubSpot delete error:", err);
+  }
+}
+
 export async function createHubSpotDeal(params: {
   contactId: string;
   dealName: string;
