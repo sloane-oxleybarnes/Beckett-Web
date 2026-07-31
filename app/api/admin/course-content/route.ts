@@ -9,11 +9,12 @@ import {
 } from "@/lib/course-content";
 import { supabaseAdmin } from "@/lib/server-admin";
 import type { Course } from "@/lib/courses";
+import { verifyAdminSession } from "@/lib/admin-session";
 
 export const dynamic = "force-dynamic";
 
 function isAdmin() {
-  return cookies().get("admin_auth")?.value === process.env.ADMIN_PASSWORD;
+  return verifyAdminSession(cookies().get("admin_auth")?.value);
 }
 
 function jsonCourseCopy(course: Course): Course {
