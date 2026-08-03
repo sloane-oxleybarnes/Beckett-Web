@@ -31,14 +31,9 @@ export function encryptGoogleAccessToken(token: string) {
   return `${PREFIX}:${iv.toString("base64url")}:${authTag.toString("base64url")}:${ciphertext.toString("base64url")}`;
 }
 
-/**
- * Decrypts current credentials and accepts a legacy plaintext credential during
- * the migration window. Legacy values remain server-only after the database
- * privilege change; the next Google reconnect replaces them with AES-GCM.
- */
+/** Returns null for a missing, legacy, or invalid stored credential. */
 export function decryptGoogleAccessToken(value: string | null | undefined) {
-  if (!value) return null;
-  if (!value.startsWith(`${PREFIX}:`)) return value;
+  if (!value?.startsWith(`${PREFIX}:`)) return null;
 
   const [, version, ivValue, tagValue, ciphertextValue] = value.split(":");
   if (version !== "v1" || !ivValue || !tagValue || !ciphertextValue) return null;
