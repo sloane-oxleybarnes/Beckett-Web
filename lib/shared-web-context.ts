@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /**
  * The single, deliberately small contract shared by Beckett's web surfaces.
  *
- * This module is intentionally separate from Slack and external client surfaces. It
+ * This module is intentionally separate from Slack and the browser extension. It
  * never reads raw connected-service content or OAuth credentials. Surfaces may
  * use the user-visible summary to explain Beckett's behavior, while AI routes
  * use only `promptContext` to personalize a response the user requested.
