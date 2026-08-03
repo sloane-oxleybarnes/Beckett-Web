@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeContactIdentifier } from "@/lib/contact-identifiers";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { normalizeRelationshipTags } from "@/lib/relationship-tags";
 
 type ContactRow = {
   id: string;
@@ -11,6 +12,8 @@ type ContactRow = {
   phone_number: string | null;
   relationship_type: string | null;
   relationship_other: string | null;
+  relationship_tags: string[] | null;
+  primary_relationship_tag: string | null;
   notes: string | null;
   trusted: boolean;
 };
@@ -89,9 +92,15 @@ export async function POST(req: NextRequest) {
     phone_number: primary.phone_number || duplicate.phone_number || null,
     relationship_type: primary.relationship_type || duplicate.relationship_type || null,
     relationship_other: primary.relationship_other || duplicate.relationship_other || null,
+    relationship_tags: normalizeRelationshipTags([...(primary.relationship_tags || []), ...(duplicate.relationship_tags || [])]),
     notes: mergeNotes(primary.notes, duplicate.notes),
     trusted: primary.trusted || duplicate.trusted,
   };
+  updates.primary_relationship_tag = updates.relationship_tags?.includes(primary.primary_relationship_tag || "")
+    ? primary.primary_relationship_tag
+    : updates.relationship_tags?.includes(duplicate.primary_relationship_tag || "")
+      ? duplicate.primary_relationship_tag
+      : updates.relationship_tags?.[0] || null;
 
   const { data: mergedContact, error: updateError } = await supabase
     .from("contacts")

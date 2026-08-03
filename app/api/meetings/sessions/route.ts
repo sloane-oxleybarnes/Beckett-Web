@@ -31,4 +31,3 @@ export async function POST(request: NextRequest) {
   if (error) return NextResponse.json({ error: "Could not create the meeting session." }, { status: 500 });
   return NextResponse.json({ session: data }, { status: 201 });
 }
-
