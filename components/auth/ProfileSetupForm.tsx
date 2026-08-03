@@ -194,7 +194,14 @@ export default function ProfileSetupForm() {
     });
 
     if (destination === "gmail") {
-      window.location.assign("/api/gmail/oauth/start?next=/dashboard/settings");
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          scopes: "https://www.googleapis.com/auth/gmail.readonly",
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/dashboard/settings")}&integration=google`,
+          queryParams: { access_type: "offline", prompt: "consent" },
+        },
+      });
       return;
     }
 

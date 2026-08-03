@@ -5,4 +5,3 @@ export default function MeetingPrepPage({ searchParams }: { searchParams: { titl
   if (!searchParams.title) redirect("/dashboard/calendar");
   return <MeetingPrepPanel />;
 }
-

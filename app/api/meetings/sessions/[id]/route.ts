@@ -25,4 +25,3 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   if (error) return NextResponse.json({ error: "Could not save the meeting debrief." }, { status: 500 });
   return NextResponse.json({ session: data });
 }
-

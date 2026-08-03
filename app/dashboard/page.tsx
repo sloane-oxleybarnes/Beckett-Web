@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import Link from "next/link";
-import MoodSelector from "@/components/dashboard/MoodSelector";
+import WorkdayReminderNudge from "@/components/dashboard/WorkdayReminderNudge";
 import CoachWalkthrough from "@/components/dashboard/CoachWalkthrough";
 import BetaMissionsCard from "@/components/dashboard/BetaMissionsCard";
+import TodayGuide from "@/components/dashboard/TodayGuide";
 
 type DashboardPageProps = {
   searchParams?: {
@@ -27,30 +28,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     session.user.email?.split("@")[0] ||
     "there";
 
-  let skillsCompleted = 0;
-  const completedCourseIds = new Set<string>();
-  try {
-    const { data: completions } = await supabase
-      .from("course_completions")
-      .select("course_id")
-      .eq("user_id", session.user.id)
-    if (completions) {
-      skillsCompleted = completions.length;
-      completions.forEach((completion: { course_id: string }) => completedCourseIds.add(completion.course_id));
-    }
-  } catch { /* table may not exist yet */ }
-
-  let skillsStarted = 0;
-  try {
-    const { data: progressRows } = await supabase
-      .from("course_progress")
-      .select("course_id")
-      .eq("user_id", session.user.id);
-    if (progressRows) {
-      skillsStarted = progressRows.filter((row: { course_id: string }) => !completedCourseIds.has(row.course_id)).length;
-    }
-  } catch { /* table may not exist yet */ }
-
   const tourParam = Array.isArray(searchParams?.tour) ? searchParams?.tour[0] : searchParams?.tour;
   const isBeta = profile?.plan === "beta";
   const showWalkthrough =
@@ -58,7 +35,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     Boolean(profile?.first_login_complete && !profile?.dashboard_walkthrough_completed_at);
 
   return (
-    <div className="w-full max-w-6xl">
+    <div className="w-full max-w-6xl" data-home-version="adaptive-planning-v1">
       <CoachWalkthrough shouldShow={showWalkthrough} forceShow={tourParam === "1"} isBeta={isBeta} />
       {/* Header */}
       <div className="mb-8">
@@ -68,28 +45,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         >
           Welcome back, {name}.
         </h1>
-        <p className="text-ink-mid text-sm">Here is where things stand today.</p>
+        <p className="text-ink-mid text-sm">Here is your day, refreshed as you go.</p>
       </div>
 
-      <section className="mb-6 rounded-card border border-border bg-white p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-ink-light">
-              Where I am at today
-            </p>
-            <h2 className="mt-1 text-xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>
-              Quick check-in
-            </h2>
-            <p className="mt-1 max-w-xl text-sm leading-relaxed text-ink-mid">
-              Beckett uses this as lightweight context for how much support you may need today.
-            </p>
-          </div>
-          <div className="shrink-0">
-            <p className="text-xs text-ink-light">How are you feeling?</p>
-            <MoodSelector />
-          </div>
-        </div>
-      </section>
+      <TodayGuide name={name} />
+      <WorkdayReminderNudge />
 
       {!isBeta ? <section className="mb-6">
         <div data-tour="start-here" className="rounded-card border border-primary/20 bg-primary-light/40 p-6">
@@ -123,46 +83,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
       <BetaMissionsCard />
 
-      <section className="mb-6">
-        <div className="rounded-card border border-border bg-white p-6">
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Skills</p>
-              <h2 className="mt-1 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>
-                Your coaching progress
-              </h2>
-            </div>
-            <Link href="/dashboard/skills" className="shrink-0 text-xs text-primary hover:underline">
-              View skills →
-            </Link>
-          </div>
-          <div className="mb-5 grid gap-3 sm:grid-cols-2">
-            <MetricCard label="Skills completed" value={skillsCompleted} detail={skillsCompleted === 1 ? "course finished" : "courses finished"} />
-            <MetricCard label="Skills in progress" value={skillsStarted} detail={skillsStarted === 1 ? "course saved" : "courses saved"} />
-          </div>
-          <div className="rounded-card border border-primary/20 bg-primary-light/50 p-5">
-            <p className="text-xs font-medium uppercase tracking-wide text-primary">Recommended next course</p>
-            <h3 className="mt-2 text-base font-medium text-ink">Introducing yourself to a new colleague</h3>
-            <p className="mt-1 text-sm leading-relaxed text-ink-mid">
-              A foundational workplace course for starting a new professional relationship clearly and without over-scripting.
-            </p>
-            <Link href="/dashboard/skills" className="mt-4 inline-block text-xs font-medium text-primary hover:underline">
-              See professional courses →
-            </Link>
-          </div>
-        </div>
-      </section>
-
-    </div>
-  );
-}
-
-function MetricCard({ label, value, detail }: { label: string; value: number; detail: string }) {
-  return (
-    <div className="rounded-card border border-border bg-bg/60 p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-ink-light">{label}</p>
-      <p className="mt-2 text-3xl font-light text-ink">{value}</p>
-      <p className="mt-1 text-xs text-ink-mid">{detail}</p>
     </div>
   );
 }

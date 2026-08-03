@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
   }
 
   const token = (await tokenResponse.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
-  if (!token.access_token || !token.refresh_token || typeof token.expires_in !== "number") {
+  if (!token.access_token || typeof token.expires_in !== "number") {
     return completeRedirect(origin, "authorization-failed", returnTo);
   }
 
@@ -77,12 +77,10 @@ export async function GET(request: NextRequest) {
     {
       user_id: user.id,
       provider: "google",
-      access_token: encryptGoogleAccessToken(JSON.stringify({
-        version: 1,
-        accessToken: token.access_token,
-        refreshToken: token.refresh_token,
-        expiresAt: Date.now() + token.expires_in * 1000,
-      })),
+      // Keep the stored value compatible with the frozen extension backend.
+      // It remains encrypted at rest; refreshable credentials can be introduced
+      // after the extension freeze when its backend contract is updated too.
+      access_token: encryptGoogleAccessToken(token.access_token),
       external_user_id: profile?.emailAddress || null,
       external_team_id: null,
       external_team_name: null,

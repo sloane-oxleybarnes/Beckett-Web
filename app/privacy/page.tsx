@@ -15,7 +15,7 @@ const sections = [
   {
     title: "What Beckett collects and stores",
     body: [
-      "Beckett stores account details, beta access status, onboarding answers, connection status, usage counts, timestamps, contacts you choose to add, and coaching settings.",
+      "Beckett stores account details, beta access status, onboarding answers, connection status, usage counts, timestamps, contacts you choose to add, coaching settings, and voluntary workday choices such as check-ins, reminder preferences, and a same-day focus when you save one. If you save or dismiss an earned learning suggestion, Beckett stores that explicit choice and the safe recommendation metadata shown to you.",
       "This can include personal information such as your name and email address, authentication and connection information, user-provided communication preferences, and workplace communication context you choose to send for coaching.",
       "Beckett does not store full Gmail or Slack message history by default, including raw Slack search results used for a coaching response. For product analytics and CRM, Beckett uses counts, timestamps, connection status, and safe event names, not raw message content.",
       "Beckett does not store Google Calendar events. We retain a Google connection credential only while you keep that connection active, and remove it when you disconnect the service or delete your account.",
@@ -29,6 +29,14 @@ const sections = [
       "That includes authenticating your account, enforcing beta access and usage limits, generating coaching responses, remembering your preferences, connecting Gmail or Slack when you ask, troubleshooting bugs, responding to support requests, and improving coaching quality.",
       "Beckett does not use or transfer user data for purposes unrelated to workplace or workplace-adjacent communication coaching.",
       "Google data is sent to an AI provider only when it is needed to provide a coaching feature you requested. Beckett does not use Google API data to train generalized AI or machine-learning models.",
+    ],
+  },
+  {
+    title: "How your Beckett settings work across devices",
+    body: [
+      "Beckett keeps your core profile, coaching preferences, voluntary workday settings, contacts, connected-service choices, and selected safety-resource region in one protected account system. When a Beckett feature is available on more than one device or surface, it is designed to follow those same choices rather than create a separate version of you.",
+      "Some actions always require a new confirmation at the moment you take them. These include connecting Gmail or Calendar, turning on notifications, any future calendar change, starting live meeting support, or saving meeting notes, transcripts, or audio. Beckett does not infer your location; it uses the country or region you choose for safety-resource information.",
+      "During beta, Beckett lets you choose a country or region for safety-resource routing. Beckett has reviewed resource sets for the United States, Canada, the United Kingdom, and Australia. If you select another region, it will say that clearly and show an international fallback rather than imply local accuracy. Beckett stores the selected region, not precise location data.",
     ],
   },
   {
@@ -140,7 +148,7 @@ export default function PrivacyPage() {
           how it uses and shares data, what feedback can include, and where the coaching
           boundaries are.
         </p>
-        <p className="mt-4 text-sm text-ink-light">Last updated: July 23, 2026</p>
+        <p className="mt-4 text-sm text-ink-light">Last updated: July 29, 2026</p>
       </section>
 
       <section className="mx-auto grid w-full max-w-4xl gap-5 px-5 pb-12">

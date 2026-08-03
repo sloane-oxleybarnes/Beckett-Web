@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
 type Phase = 'setup' | 'conversation' | 'debrief' | 'feedback'
@@ -399,17 +400,18 @@ function ContactOverlay({
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export default function PracticePage() {
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const [phase, setPhase] = useState<Phase>('setup')
   const [setupStep, setSetupStep] = useState(0)
-  const [mode, setMode] = useState<Mode>('professional')
+  const [mode, setMode] = useState<Mode>(() => searchParams.get('mode') === 'personal' ? 'personal' : 'professional')
   const [conversationFormat, setConversationFormat] = useState<ConversationFormat>('text')
   const [textSubFormat, setTextSubFormat] = useState<TextSubFormat>('slack')
   const [emailSubject, setEmailSubject] = useState('')
-  const [person, setPerson] = useState('')
-  const [situation, setSituation] = useState('')
-  const [goal, setGoal] = useState('')
-  const [relationshipContext, setRelationshipContext] = useState('')
+  const [person, setPerson] = useState(() => searchParams.get('person') || '')
+  const [situation, setSituation] = useState(() => searchParams.get('scenario') || '')
+  const [goal, setGoal] = useState(() => searchParams.get('goal') || '')
+  const [relationshipContext, setRelationshipContext] = useState(() => searchParams.get('context') || '')
   const [personStyle, setPersonStyle] = useState('')
   const [showCustomPersonStyle, setShowCustomPersonStyle] = useState(false)
   const [recurringPattern, setRecurringPattern] = useState('')

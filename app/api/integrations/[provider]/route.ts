@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { decryptGoogleAccessToken } from "@/lib/google-token-security";
 
-const CONNECTED_PROVIDERS = ["google", "slack"] as const;
+const CONNECTED_PROVIDERS = ["google", "google_calendar", "slack"] as const;
 type ConnectedProvider = (typeof CONNECTED_PROVIDERS)[number];
 
 function isConnectedProvider(value: string): value is ConnectedProvider {
@@ -13,7 +12,7 @@ function isConnectedProvider(value: string): value is ConnectedProvider {
 
 async function revokeProviderToken(provider: ConnectedProvider, token: string) {
   try {
-    if (provider === "google") {
+    if (provider !== "slack") {
       await fetch("https://oauth2.googleapis.com/revoke", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -53,10 +52,7 @@ export async function DELETE(_req: Request, { params }: { params: { provider: st
   if (readError) return NextResponse.json({ error: "Could not read the integration." }, { status: 500 });
 
   if (integration?.access_token) {
-    const token = params.provider === "google"
-      ? decryptGoogleAccessToken(integration.access_token)
-      : integration.access_token;
-    if (token) await revokeProviderToken(params.provider, token);
+    await revokeProviderToken(params.provider, integration.access_token);
   }
 
   const { error: deleteError } = await supabaseAdmin

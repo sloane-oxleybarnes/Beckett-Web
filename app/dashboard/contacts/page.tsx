@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import {
+  primaryRelationshipTagForContact,
+  relationshipLabelForContact,
+  relationshipTagLabel,
+  relationshipTagOptions,
+  relationshipTagsForContact,
+  type RelationshipTagDefinition,
+} from "@/lib/relationship-tags";
 
 type ContactIdentifier = {
   id?: string;
@@ -27,6 +35,8 @@ type Contact = {
   phone_number: string | null;
   relationship_type: string | null;
   relationship_other: string | null;
+  relationship_tags?: string[] | null;
+  primary_relationship_tag?: string | null;
   notes: string | null;
   trusted: boolean;
   created_at: string;
@@ -50,26 +60,14 @@ const emptyForm = () => ({
   slack_handle: "",
   phone_number: "",
   identifiers: [] as ContactIdentifier[],
-  relationship_type: "",
-  relationship_other: "",
+  relationship_tags: [] as string[],
+  primary_relationship_tag: "",
   notes: "",
   trusted: false,
 });
 
-const relationshipOptions = [
-  "Manager",
-  "Direct report",
-  "Teammate",
-  "Cross-functional colleague",
-  "Client/customer",
-  "Vendor/partner",
-  "Friend at work",
-  "Other",
-];
-
-function relationshipLabel(contact: Pick<Contact, "relationship_type" | "relationship_other">) {
-  if (contact.relationship_type === "Other") return contact.relationship_other || "Other";
-  return contact.relationship_type || "";
+function relationshipLabel(contact: Pick<Contact, "relationship_type" | "relationship_other" | "relationship_tags" | "primary_relationship_tag">, definitions: RelationshipTagDefinition[] = []) {
+  return relationshipLabelForContact(contact, definitions);
 }
 
 const additionalIdentifierOptions = [
@@ -114,6 +112,7 @@ export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [relationshipFilter, setRelationshipFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm());
@@ -124,6 +123,10 @@ export default function ContactsPage() {
   const [mergeTargetId, setMergeTargetId] = useState("");
   const [mergeError, setMergeError] = useState("");
   const [merging, setMerging] = useState(false);
+  const [customRelationshipTag, setCustomRelationshipTag] = useState("");
+  const [customTags, setCustomTags] = useState<RelationshipTagDefinition[]>([]);
+  const [tagError, setTagError] = useState("");
+  const [editingTagLabels, setEditingTagLabels] = useState<Record<string, string>>({});
 
   const loadContacts = useCallback(async () => {
     const res = await fetch("/api/contacts");
@@ -136,22 +139,35 @@ export default function ContactsPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadContacts(); }, [loadContacts]);
+  const loadCustomTags = useCallback(async () => {
+    const res = await fetch("/api/relationship-tags");
+    if (!res.ok) return;
+    const data = await res.json() as { tags?: RelationshipTagDefinition[] };
+    const tags = data.tags || [];
+    setCustomTags(tags);
+    setEditingTagLabels(Object.fromEntries(tags.map((tag) => [tag.id, tag.label])));
+  }, []);
+
+  useEffect(() => { void Promise.all([loadContacts(), loadCustomTags()]); }, [loadContacts, loadCustomTags]);
+
+  const availableRelationshipTags = [...relationshipTagOptions, ...customTags.map((tag) => tag.tag_key)];
 
   const filtered = contacts.filter((c) => {
     const q = search.toLowerCase();
-    const relationship = relationshipLabel(c).toLowerCase();
-    return (
-      !q ||
-      c.name.toLowerCase().includes(q) ||
+    const tags = relationshipTagsForContact(c);
+    const relationship = relationshipLabel(c, customTags).toLowerCase();
+    const matchesFilter = relationshipFilter === ""
+      || (relationshipFilter === "trusted" ? c.trusted : tags.includes(relationshipFilter));
+    if (!matchesFilter) return false;
+    if (!q) return true;
+    return c.name.toLowerCase().includes(q) ||
       c.email?.toLowerCase().includes(q) ||
       c.slack_handle?.toLowerCase().includes(q) ||
       c.phone_number?.toLowerCase().includes(q) ||
       c.contact_identifiers?.some((identifier) =>
         `${identifier.platform} ${identifier.identifier} ${identifier.label || ""}`.toLowerCase().includes(q)
       ) ||
-      relationship.includes(q)
-    );
+      relationship.includes(q);
   });
   const selectedContact = selectedId
     ? contacts.find((contact) => contact.id === selectedId) || null
@@ -165,6 +181,7 @@ export default function ContactsPage() {
   function openAdd() {
     setForm(emptyForm());
     setEditingId(null);
+    setCustomRelationshipTag("");
     setShowForm(true);
     setSelectedId(null);
   }
@@ -183,12 +200,13 @@ export default function ContactsPage() {
           label: identifier.label,
           confirmed: identifier.confirmed,
         })),
-      relationship_type: c.relationship_type || "",
-      relationship_other: c.relationship_other || "",
+      relationship_tags: relationshipTagsForContact(c),
+      primary_relationship_tag: primaryRelationshipTagForContact(c) || "",
       notes: c.notes || "",
       trusted: c.trusted,
     });
     setEditingId(c.id);
+    setCustomRelationshipTag("");
     setShowForm(true);
     setSelectedId(null);
   }
@@ -201,6 +219,91 @@ export default function ContactsPage() {
         { platform: "work_email", identifier: "", label: null, confirmed: true },
       ],
     }));
+  }
+
+  function toggleRelationshipTag(tag: string) {
+    setForm((current) => {
+      const selected = current.relationship_tags.includes(tag);
+      const relationshipTags = selected
+        ? current.relationship_tags.filter((currentTag) => currentTag !== tag)
+        : [...current.relationship_tags, tag];
+      return {
+        ...current,
+        relationship_tags: relationshipTags,
+        primary_relationship_tag: selected && current.primary_relationship_tag === tag
+          ? relationshipTags[0] || ""
+          : current.primary_relationship_tag || tag,
+      };
+    });
+  }
+
+  async function addCustomRelationshipTag() {
+    if (!customRelationshipTag.trim()) return;
+    setTagError("");
+    const res = await fetch("/api/relationship-tags", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: customRelationshipTag }),
+    });
+    const data = await res.json() as { tag?: RelationshipTagDefinition; error?: string };
+    if (!res.ok || !data.tag) {
+      setTagError(data.error || "Could not add that custom tag.");
+      return;
+    }
+    setCustomTags((current) => [...current, data.tag!].sort((a, b) => a.label.localeCompare(b.label)));
+    setEditingTagLabels((current) => ({ ...current, [data.tag!.id]: data.tag!.label }));
+    setForm((current) => current.relationship_tags.includes(data.tag!.tag_key)
+      ? current
+      : {
+          ...current,
+          relationship_tags: [...current.relationship_tags, data.tag!.tag_key],
+          primary_relationship_tag: current.primary_relationship_tag || data.tag!.tag_key,
+        });
+    setCustomRelationshipTag("");
+  }
+
+  async function renameCustomRelationshipTag(tag: RelationshipTagDefinition) {
+    const label = (editingTagLabels[tag.id] || "").trim();
+    if (!label || label === tag.label) return;
+    setTagError("");
+    const res = await fetch("/api/relationship-tags", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: tag.id, label }),
+    });
+    const data = await res.json() as { tag?: RelationshipTagDefinition; error?: string };
+    if (!res.ok || !data.tag) {
+      setTagError(data.error || "Could not rename that custom tag.");
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      relationship_tags: current.relationship_tags.map((item) => item === tag.tag_key ? data.tag!.tag_key : item),
+      primary_relationship_tag: current.primary_relationship_tag === tag.tag_key ? data.tag!.tag_key : current.primary_relationship_tag,
+    }));
+    await Promise.all([loadCustomTags(), loadContacts()]);
+  }
+
+  async function deleteCustomRelationshipTag(tag: RelationshipTagDefinition) {
+    if (!window.confirm(`Remove the custom tag “${tag.label}” from your tag list and every contact using it?`)) return;
+    setTagError("");
+    const res = await fetch(`/api/relationship-tags?id=${encodeURIComponent(tag.id)}`, { method: "DELETE" });
+    const data = await res.json() as { error?: string };
+    if (!res.ok) {
+      setTagError(data.error || "Could not remove that custom tag.");
+      return;
+    }
+    setForm((current) => {
+      const relationshipTags = current.relationship_tags.filter((item) => item !== tag.tag_key);
+      return {
+        ...current,
+        relationship_tags: relationshipTags,
+        primary_relationship_tag: current.primary_relationship_tag === tag.tag_key
+          ? relationshipTags[0] || ""
+          : current.primary_relationship_tag,
+      };
+    });
+    await Promise.all([loadCustomTags(), loadContacts()]);
   }
 
   function updateIdentifier(index: number, patch: Partial<ContactIdentifier>) {
@@ -291,8 +394,8 @@ export default function ContactsPage() {
           confirmed: identifier.platform !== "slack",
         }))
         .filter((identifier) => identifier.identifier),
-      relationship_type: form.relationship_type || null,
-      relationship_other: form.relationship_type === "Other" ? form.relationship_other.trim() || null : null,
+      relationship_tags: form.relationship_tags,
+      primary_relationship_tag: form.primary_relationship_tag || null,
       notes: form.notes.trim() || null,
       trusted: form.trusted,
     };
@@ -382,20 +485,37 @@ export default function ContactsPage() {
         </button>
       </div>
 
-      {/* Search */}
+      {/* Search and filters */}
       {contacts.length > 0 && (
-        <div className="mb-5">
-          <label htmlFor="contact-search" className="sr-only">
-            Search contacts by name, email, Slack handle, phone, identifier, or relationship
-          </label>
-          <input
-            id="contact-search"
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, email, Slack, phone, or identifier..."
-            className="w-full border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          />
+        <div className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
+          <div>
+            <label htmlFor="contact-search" className="sr-only">
+              Search contacts by name, email, Slack handle, phone, identifier, or relationship
+            </label>
+            <input
+              id="contact-search"
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, email, Slack, phone, or relationship..."
+              className="w-full border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label htmlFor="relationship-filter" className="sr-only">Filter by relationship tag</label>
+            <select
+              id="relationship-filter"
+              value={relationshipFilter}
+              onChange={(e) => setRelationshipFilter(e.target.value)}
+              className="w-full border border-border rounded-sm bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">All relationship tags</option>
+              <option value="trusted">Trusted contacts</option>
+              {availableRelationshipTags.map((tag) => (
+                <option key={tag} value={tag}>{relationshipTagLabel(tag, customTags)}</option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
 
@@ -450,38 +570,54 @@ export default function ContactsPage() {
                   className="w-full border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1">Relationship</label>
-                <select
-                  value={form.relationship_type}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      relationship_type: e.target.value,
-                      relationship_other: e.target.value === "Other" ? form.relationship_other : "",
-                    })
-                  }
-                  className="w-full border border-border rounded-sm bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">Choose relationship</option>
-                  {relationshipOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
+            </div>
+            <fieldset className="rounded-sm border border-border bg-bg p-4">
+              <legend className="px-1 text-sm font-medium text-ink">Relationship tags</legend>
+              <p className="mb-3 text-xs leading-relaxed text-ink-light">
+                Choose as many as fit. One person can be a colleague and a friend, for example. Beckett only uses this user-editable context when you choose this contact in Practice or include it in meeting preparation.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {availableRelationshipTags.map((tag) => {
+                  const selected = form.relationship_tags.includes(tag);
+                  return <button key={tag} type="button" onClick={() => toggleRelationshipTag(tag)} aria-pressed={selected} className={`rounded-pill border px-3 py-1.5 text-xs transition-colors ${selected ? "border-primary bg-primary text-white" : "border-border bg-white text-ink-mid hover:border-primary-mid"}`}>{relationshipTagLabel(tag, customTags)}</button>;
+                })}
               </div>
-              {form.relationship_type === "Other" && (
+              <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
                 <div>
-                  <label className="block text-sm font-medium text-ink mb-1">Other relationship</label>
-                  <input
-                    type="text"
-                    value={form.relationship_other}
-                    onChange={(e) => setForm({ ...form, relationship_other: e.target.value })}
-                    placeholder="e.g. mentor, agency partner"
-                    className="w-full border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
+                  <label htmlFor="custom-relationship-tag" className="block text-xs font-medium text-ink">Add a custom tag</label>
+                  <p className="mt-1 text-xs text-ink-light">Custom tags stay in your tag list so you can reuse them for other contacts.</p>
+                </div>
+                <div className="flex gap-2">
+                  <input id="custom-relationship-tag" value={customRelationshipTag} onChange={(e) => setCustomRelationshipTag(e.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void addCustomRelationshipTag(); } }} maxLength={39} placeholder="e.g. Accountability partner" className="min-w-0 flex-1 rounded-sm border border-border bg-white px-3 py-2 text-xs" />
+                  <button type="button" onClick={() => void addCustomRelationshipTag()} className="rounded-pill border border-border bg-white px-3 py-2 text-xs text-ink-mid hover:border-primary-mid">Add</button>
+                </div>
+              </div>
+              {form.relationship_tags.length > 0 && (
+                <div className="mt-4 border-t border-border pt-4">
+                  <label htmlFor="primary-relationship-tag" className="block text-xs font-medium text-ink">Primary tag</label>
+                  <p className="mt-1 text-xs text-ink-light">This appears first in short labels. All selected tags remain available as context.</p>
+                  <select id="primary-relationship-tag" value={form.primary_relationship_tag} onChange={(e) => setForm({ ...form, primary_relationship_tag: e.target.value })} className="mt-2 w-full max-w-sm rounded-sm border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                    {form.relationship_tags.map((tag) => <option key={tag} value={tag}>{relationshipTagLabel(tag, customTags)}</option>)}
+                  </select>
                 </div>
               )}
-            </div>
+              {tagError && <p className="mt-3 text-xs text-red-600" role="alert">{tagError}</p>}
+              {customTags.length > 0 && (
+                <details className="mt-4 border-t border-border pt-4">
+                  <summary className="cursor-pointer text-xs font-medium text-primary">Manage custom tags</summary>
+                  <p className="mt-2 text-xs leading-relaxed text-ink-light">Rename a tag everywhere or remove it from your list and the contacts using it.</p>
+                  <div className="mt-3 space-y-2">
+                    {customTags.map((tag) => (
+                      <div key={tag.id} className="flex flex-wrap items-center gap-2">
+                        <input value={editingTagLabels[tag.id] || ""} onChange={(e) => setEditingTagLabels((current) => ({ ...current, [tag.id]: e.target.value }))} maxLength={39} aria-label={`Rename ${tag.label}`} className="min-w-[150px] flex-1 rounded-sm border border-border bg-white px-3 py-2 text-xs" />
+                        <button type="button" onClick={() => void renameCustomRelationshipTag(tag)} className="rounded-pill border border-border bg-white px-3 py-2 text-xs text-ink-mid hover:border-primary-mid">Save</button>
+                        <button type="button" onClick={() => void deleteCustomRelationshipTag(tag)} className="rounded-pill border border-red-200 bg-white px-3 py-2 text-xs text-red-500 hover:bg-red-50">Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </fieldset>
             <div className="rounded-sm border border-border bg-bg p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -659,8 +795,8 @@ export default function ContactsPage() {
                 >
                   {selectedContact.name}
                 </h2>
-                {relationshipLabel(selectedContact) && (
-                  <p className="mt-1 text-sm text-primary">{relationshipLabel(selectedContact)}</p>
+                {relationshipLabel(selectedContact, customTags) && (
+                  <p className="mt-1 text-sm text-primary">{relationshipLabel(selectedContact, customTags)}</p>
                 )}
                 <p className="mt-2 text-sm text-ink-light">
                   Added {new Date(selectedContact.created_at).toLocaleDateString()}
@@ -674,6 +810,12 @@ export default function ContactsPage() {
                 >
                   Edit
                 </button>
+                <a
+                  href={`/dashboard/practice?mode=professional&person=${encodeURIComponent(selectedContact.name)}&context=${encodeURIComponent(relationshipLabel(selectedContact, customTags))}&scenario=${encodeURIComponent(`Prepare for a conversation with ${selectedContact.name}`)}&goal=${encodeURIComponent("Communicate clearly and leave with a useful next step")}`}
+                  className="border border-border text-sm rounded-pill px-4 py-2 text-ink-mid hover:bg-bg transition-colors"
+                >
+                  Practice with this contact
+                </a>
                 {contacts.length > 1 && (
                   <button
                     onClick={() => openMerge(selectedContact)}
@@ -704,6 +846,12 @@ export default function ContactsPage() {
                 <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-light">Phone</p>
                 <p className="break-words text-sm text-ink">{selectedContact.phone_number || "Not added"}</p>
               </div>
+            </div>
+
+            <div className="mt-5 rounded-card border border-border bg-bg p-4">
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-light">Relationship tags</p>
+              <p className="text-xs leading-relaxed text-ink-light">The primary tag appears first. Beckett uses these only when you choose this contact in Practice or include their context in meeting preparation.</p>
+              <RelationshipTagBadges contact={selectedContact} definitions={customTags} className="mt-3" />
             </div>
 
             <div className="mt-5 rounded-card border border-border bg-bg p-4">
@@ -847,9 +995,7 @@ export default function ContactsPage() {
                     <div className="flex items-center gap-2">
                       <p className="truncate text-sm font-medium text-ink">{c.name}</p>
                     </div>
-                    {relationshipLabel(c) && (
-                      <p className="mt-1 text-xs text-primary">{relationshipLabel(c)}</p>
-                    )}
+                    <RelationshipTagBadges contact={c} definitions={customTags} className="mt-2" compact />
                     <div className="mt-3 flex flex-wrap gap-2">
                       {c.email && (
                         <span className="max-w-full truncate rounded bg-bg px-2 py-0.5 text-xs text-ink-light">
@@ -914,6 +1060,32 @@ export default function ContactsPage() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function RelationshipTagBadges({
+  contact,
+  definitions,
+  className = "",
+  compact = false,
+}: {
+  contact: Pick<Contact, "relationship_type" | "relationship_other" | "relationship_tags" | "primary_relationship_tag">;
+  definitions: RelationshipTagDefinition[];
+  className?: string;
+  compact?: boolean;
+}) {
+  const tags = relationshipTagsForContact(contact);
+  const primary = primaryRelationshipTagForContact(contact);
+  const ordered = primary ? [primary, ...tags.filter((tag) => tag !== primary)] : tags;
+  if (!ordered.length) return <p className={`${className} text-sm text-ink-light`}>No relationship tags yet.</p>;
+  return (
+    <div className={`${className} flex flex-wrap gap-1.5`}>
+      {ordered.map((tag) => (
+        <span key={tag} className={`rounded-pill px-2 py-1 text-xs ${tag === primary ? "bg-primary-light text-ink" : "bg-white text-ink-mid"}`}>
+          {relationshipTagLabel(tag, definitions)}{!compact && tag === primary ? " · primary" : ""}
+        </span>
+      ))}
     </div>
   );
 }

@@ -4,7 +4,6 @@
 
 - Production Google Cloud project: `strange-vortex-496820-t3` (project number `409706780405`)
 - Production OAuth client: **Beckett Web**
-- Client ID: `409706780405-r2mso24tcbmq1no3b2elfrc4vha3s9u6.apps.googleusercontent.com`
 - Requested scopes:
   - `openid`, `email`, `profile`
   - `https://www.googleapis.com/auth/calendar.calendarlist.readonly`
