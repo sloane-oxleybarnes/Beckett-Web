@@ -3,6 +3,7 @@ import { upsertRelationshipSummary } from '@/lib/contact-relationship-context'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { getExtensionUserId } from '@/lib/extension-auth'
 import { callAnthropic } from '@/lib/anthropic'
+import { relationshipLabelForContact } from '@/lib/relationship-tags'
 
 async function getAuthedUserId(req: NextRequest): Promise<string | null> {
   const extUserId = await getExtensionUserId(req)
@@ -24,7 +25,7 @@ export async function POST(
   // Verify ownership and get contact info
   const { data: contact } = await supabase
     .from('contacts')
-    .select('id, name, email, slack_handle, relationship_type, relationship_other, notes, trusted')
+    .select('id, name, email, slack_handle, relationship_type, relationship_other, relationship_tags, primary_relationship_tag, notes, trusted')
     .eq('id', params.id)
     .eq('user_id', userId)
     .single()
@@ -36,7 +37,7 @@ export async function POST(
 Contact: ${contact.name}
 Email: ${contact.email || 'not provided'}
 Slack handle: ${contact.slack_handle || 'not provided'}
-Relationship: ${contact.relationship_type === 'Other' ? contact.relationship_other || 'Other' : contact.relationship_type || 'not provided'}
+Relationship tags (user-editable): ${relationshipLabelForContact(contact) || 'not provided'}
 Trusted contact: ${contact.trusted ? 'yes' : 'no'}
 Notes: ${contact.notes || 'none'}
 
