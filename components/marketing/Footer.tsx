@@ -34,6 +34,30 @@ export default function Footer() {
             <a href="mailto:hello@meetbeckett.co" className="hover:text-ink transition-colors">
               Contact
             </a>
+            <a
+              href="https://www.instagram.com/meet.beckett/"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-ink transition-colors"
+            >
+              Instagram
+            </a>
+            <a
+              href="https://www.linkedin.com/company/beckett-communication-app/"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-ink transition-colors"
+            >
+              LinkedIn
+            </a>
+            <a
+              href="https://www.facebook.com/profile.php?id=61592588274956"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-ink transition-colors"
+            >
+              Facebook
+            </a>
             <Link href="/auth/login" className="hover:text-ink transition-colors">
               Sign in
             </Link>

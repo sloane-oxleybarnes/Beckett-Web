@@ -72,37 +72,44 @@ export default function HomePage() {
   const features = [
     {
       n: "01",
+      title: "Home planning",
+      personal: "Start with how your day actually feels. Beckett turns your check-in into a small, useful next step for focus, rest, or a personal routine.",
+      professional: "See the shape of your day, check in with yourself, and get consent-first suggestions for breaks, focus time, and meeting preparation.",
+      action: "Plan your day →",
+    },
+    {
+      n: "02",
       title: "Message decoder",
       personal: "What did they actually mean? In beta, Beckett helps you practice decoding personal messages and dating signals. Mobile text, DM, and dating-app overlays are coming soon.",
       professional: "Beckett helps separate what a Gmail or Slack message clearly says from uncertain tone, possible interpretations, and useful next steps.",
       action: "Decode this message →",
     },
     {
-      n: "02",
+      n: "03",
       title: "Conversation practice",
       personal: "Practice asking someone out, telling a friend something hard, or navigating a difficult family conversation — with Beckett playing the other person realistically, including the pushback.",
       professional: "Practice asking for a raise, addressing a coworker who's taking credit for your work, or holding your ground in a meeting — before the real thing happens.",
       action: "Practice this conversation →",
     },
     {
-      n: "03",
+      n: "04",
       title: "Skill scenarios",
       personal: "Structured coaching for real situations. Small talk. Dating. Setting limits with family. Beckett walks you through what to say and practices with you until it feels natural.",
       professional: "Structured coaching for workplace situations. Feedback. Salary conversations. Handling passive aggression. Beckett walks you through each one.",
       action: "Start a scenario →",
     },
     {
-      n: "04",
-      title: "Coached next steps",
-      personal: "Personal coaching is in preview through practice and the dating course. Mobile features are coming soon.",
-      professional: "Beckett helps you decide what to say next in Gmail, Slack, and practice sessions. Meeting support is coming after beta testing.",
-      action: "See how it works →",
+      n: "05",
+      title: "Calendar & meeting prep",
+      personal: "Use the same planning ideas for personal routines and goals, while meeting preparation stays focused on work calendars.",
+      professional: "Choose the calendars Beckett can read, view your week, and prepare for meetings when another attendee is involved. Beckett never edits your calendar.",
+      action: "See your week →",
     },
     {
-      n: "05",
-      title: "Safe people mode",
-      personal: "Toggle on for people you fully trust. Beckett completely relaxes — no coaching layer, just warmth. Because some relationships don't need a buffer.",
-      professional: "Toggle on for close colleagues and trusted managers. Beckett steps back and lets you communicate naturally — no professional filter required.",
+      n: "06",
+      title: "Skills and support plans",
+      personal: "Build practical strategies at your own pace, then keep the preferences and support plans that make them easier to use in real life.",
+      professional: "Short lessons cover communication, boundaries, organization, and self-advocacy. About Me, contacts, and support plans keep the guidance personal.",
       action: "",
     },
   ];
@@ -391,19 +398,19 @@ export default function HomePage() {
           <div className="container">
             <div className="sec-label">Platforms</div>
             <h2>Coaching where work<br /><em>gets ambiguous.</em></h2>
-            <p className="sec-sub">For beta, Beckett focuses on Gmail, Slack, the Chrome extension, courses, and practice. Meeting support is next, but not live yet.</p>
+            <p className="sec-sub">Beckett connects the parts of the workday that create pressure: planning, messages, meetings, practice, and practical skills.</p>
             <div className="plat-grid">
               {[
-                { icon: "pi-gmail", letter: "G", name: "Gmail", desc: "Uses the message or thread you choose to decode tone, draft a reply, or improve wording." },
+                { icon: "pi-gmail", letter: "G", name: "Gmail Decode", desc: "Bring a specific thread to clarify the ask and draft a response in your own voice. Read-only; Beckett cannot send." },
                 { icon: "pi-slack", letter: "S", name: "Slack", desc: "Provides private decoding, response help, rewriting, preparation, and practice inside Slack." },
-                { icon: "pi-meet", letter: "C", name: "Chrome extension", desc: "Brings Beckett into the workplace tools beta users are testing now." },
-                { icon: "pi-zoom", letter: "M", name: "Meetings", desc: "Google Meet and Zoom support are planned after the core beta flows are stable.", soon: true },
+                { icon: "pi-meet", letter: "C", name: "Google Calendar", desc: "Choose calendars, view your week, and prepare for meetings with other attendees. Beckett never edits events." },
+                { icon: "pi-zoom", letter: "M", name: "Practice + Skills", desc: "Rehearse high-stakes conversations and build practical strategies you can carry into the day." },
               ].map((p) => (
                 <div key={p.name} className="plat-card">
                   <div className={`plat-icon ${p.icon}`}>{p.letter}</div>
                   <div className="plat-name">{p.name}</div>
                   <div className="plat-desc">{p.desc}</div>
-                  <div className="plat-live">{p.soon ? "Coming soon" : "Live"}</div>
+                  <div className="plat-live">Live in Beckett</div>
                 </div>
               ))}
             </div>
@@ -505,6 +512,9 @@ export default function HomePage() {
           <a href="/privacy">Privacy Policy</a>
           <a href="/terms">Terms of Service</a>
           <a href="mailto:hello@meetbeckett.co">Contact</a>
+          <a href="https://www.instagram.com/meet.beckett/" target="_blank" rel="noreferrer">Instagram</a>
+          <a href="https://www.linkedin.com/company/beckett-communication-app/" target="_blank" rel="noreferrer">LinkedIn</a>
+          <a href="https://www.facebook.com/profile.php?id=61592588274956" target="_blank" rel="noreferrer">Facebook</a>
         </nav>
       </footer>
 
