@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useSearchParams } from "next/navigation";
 import { hasMeaningfulMeetingContext, type MeetingPrepContact } from "@/lib/meeting-prep-recommendations";
+import { relationshipLabelForContact } from "@/lib/relationship-tags";
 
 const split = (value: string) => value.split("\n").map((item) => item.trim()).filter(Boolean);
 type PromptKey = "outcome" | "concern" | "role";
@@ -66,7 +67,7 @@ export default function MeetingPrepPanel() {
 
   function addSavedContext() {
     const context = contactsWithContext
-      .map((contact) => `${contact.name}${contact.relationship_tags?.length ? ` — ${contact.relationship_tags.join(", ")}` : ""}${contact.notes ? `: ${contact.notes}` : ""}`)
+      .map((contact) => `${contact.name}${relationshipLabelForContact(contact) ? ` — ${relationshipLabelForContact(contact)}` : ""}${contact.notes ? `: ${contact.notes}` : ""}`)
       .join("\n");
     if (context) setAttendees((current) => current.includes(context) ? current : `${current}${current ? "\n\n" : ""}User-saved context:\n${context}`);
   }
@@ -100,7 +101,7 @@ export default function MeetingPrepPanel() {
         }),
       });
       if (!updated.ok) throw new Error("Could not save meeting preparation.");
-      setMessage("Meeting preparation saved privately in Beckett.");
+      setMessage("Meeting preparation saved. Open Meeting Companion after the call for notes and follow-up.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not save meeting preparation.");
     } finally {
@@ -136,7 +137,7 @@ export default function MeetingPrepPanel() {
 
       <section className="grid gap-4 md:grid-cols-2">
         <CoachCard title="What Beckett knows" eyebrow="User-controlled context">
-          {contactsWithContext.length ? <><p className="text-sm leading-relaxed text-ink-mid">You have saved context for {contactsWithContext.map((contact) => contact.name).join(", ")}. Beckett will only use it in this prep after you choose to include it.</p><div className="mt-3 flex flex-wrap gap-2">{contactsWithContext.map((contact) => <span key={contact.email || contact.name} className="rounded-pill bg-primary-light px-3 py-1 text-xs text-ink">{contact.name}{contact.relationship_tags?.length ? ` · ${contact.relationship_tags.join(", ")}` : " · saved notes"}</span>)}</div><button type="button" onClick={addSavedContext} className="mt-3 text-sm font-medium text-primary hover:underline">Use this saved context in my prep →</button></> : <p className="text-sm leading-relaxed text-ink-mid">Attendees from your calendar are included here. Add a contact with a relationship note or tag if you want Beckett to make proactive prep suggestions for a future meeting.</p>}
+          {contactsWithContext.length ? <><p className="text-sm leading-relaxed text-ink-mid">You have saved context for {contactsWithContext.map((contact) => contact.name).join(", ")}. Beckett will only use it in this prep after you choose to include it.</p><div className="mt-3 flex flex-wrap gap-2">{contactsWithContext.map((contact) => <span key={contact.email || contact.name} className="rounded-pill bg-primary-light px-3 py-1 text-xs text-ink">{contact.name}{relationshipLabelForContact(contact) ? ` · ${relationshipLabelForContact(contact)}` : " · saved notes"}</span>)}</div><button type="button" onClick={addSavedContext} className="mt-3 text-sm font-medium text-primary hover:underline">Use this saved context in my prep →</button></> : <p className="text-sm leading-relaxed text-ink-mid">Attendees from your calendar are included here. Add a contact with a relationship note or tag if you want Beckett to make proactive prep suggestions for a future meeting.</p>}
           <Area label="Attendees and context you want to include" value={attendees} onChange={setAttendees} placeholder="Names, roles, and any context you want Beckett to consider." rows={4} compact />
         </CoachCard>
         <CoachCard title="Your plan for before" eyebrow="A few useful moves">
@@ -184,4 +185,3 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
 function Area({ label, value, onChange, placeholder, rows = 4, compact = false }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; rows?: number; compact?: boolean }) {
   return <label className={`${compact ? "mt-4" : "mt-4"} block text-sm font-medium text-ink`}>{label}<textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} rows={rows} className="mt-1 block w-full rounded-sm border border-border px-3 py-2 text-sm font-normal" /></label>;
 }
-
