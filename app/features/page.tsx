@@ -16,6 +16,20 @@ export const metadata: Metadata = {
 
 const features = [
   {
+    title: "Home planning",
+    description:
+      "See the shape of your day, check in with yourself, and get consent-first suggestions for breaks, focus time, and meeting preparation.",
+    plan: "free",
+    icon: "☀️",
+  },
+  {
+    title: "Calendar & meeting prep",
+    description:
+      "Choose the calendars Beckett can read, view your week, and prepare for meetings when another attendee is involved. Beckett never edits your calendar.",
+    plan: "free",
+    icon: "📅",
+  },
+  {
     title: "Message decoder",
     description:
       "Separate what a message clearly says from uncertain tone or possible interpretations, then choose a grounded next step.",
@@ -51,11 +65,11 @@ const features = [
     icon: "🎯",
   },
   {
-    title: "Meeting support",
+    title: "Guided practice",
     description:
-      "Google Meet and Zoom coaching are planned after the Gmail and Slack beta flows are stable.",
-    plan: "coming",
-    icon: "🎥",
+      "Role-play a manager one-on-one, a raise request, a boundary, or another difficult conversation before it becomes urgent.",
+    plan: "free",
+    icon: "🎯",
   },
   {
     title: "Slack integration",
@@ -72,11 +86,18 @@ const features = [
     icon: "💼",
   },
   {
-    title: "Skill modules",
+    title: "Skills and learning",
     description:
-      "Structured coaching on specific communication challenges — from giving feedback to navigating conflict.",
+      "Short, practical lessons on communication, boundaries, organization, self-advocacy, and workplace and personal challenges.",
     plan: "free",
     icon: "📚",
+  },
+  {
+    title: "About me and contacts",
+    description:
+      "Keep your communication preferences, strengths, support plans, and user-managed relationship context in one private place.",
+    plan: "free",
+    icon: "🧭",
   },
   {
     title: "Course feedback loop",

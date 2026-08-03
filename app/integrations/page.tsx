@@ -18,6 +18,7 @@ export const metadata: Metadata = {
 const live = [
   { name: "Gmail", icon: "📧", description: "Decode and draft in any Gmail thread." },
   { name: "Slack", icon: "💬", description: "Inline support in channels, DMs, and threads." },
+  { name: "Google Calendar", icon: "📅", description: "Read selected calendars, show a week view, and offer attendee-aware meeting prep." },
   { name: "Chrome extension", icon: "🧩", description: "Brings Beckett into the browser tools beta users are testing now." },
 ];
 
