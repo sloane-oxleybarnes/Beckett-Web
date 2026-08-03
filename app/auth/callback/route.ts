@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/server-admin'
+import { trackBetaEvent } from '@/lib/beta-events'
 import { ensureApprovedBetaPlan, hasApprovedBetaAccess } from '@/lib/beta-access'
+import { encryptGoogleAccessToken } from '@/lib/google-token-security'
 
 function createCallbackClient(request: NextRequest, response: NextResponse) {
   return createServerClient(
@@ -42,6 +44,7 @@ export async function GET(request: NextRequest) {
       : isPasswordAction
         ? '/auth/set-password'
         : '/dashboard'
+  const integration = searchParams.get('integration')
   const errorParam = searchParams.get('error')
   const errorDesc  = searchParams.get('error_description')
 
@@ -51,8 +54,9 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // Auth exchanges write session cookies. Attach them to the same response that
-  // redirects the browser so invite and recovery recipients stay authenticated.
+  // OAuth code exchange writes refreshed session cookies. A route handler must
+  // attach those cookies to the response it returns; mutating the request cookie
+  // store alone leaves the following dashboard request unauthenticated.
   const successResponse = NextResponse.redirect(
     new URL(isPasswordAction ? '/auth/set-password' : next, origin)
   )
@@ -73,12 +77,55 @@ export async function GET(request: NextRequest) {
         })
         if (!approved) {
           await supabase.auth.signOut()
-          return NextResponse.redirect(new URL('/beta?access=approval-required', origin))
+          successResponse.headers.set(
+            'Location',
+            new URL('/beta?access=approval-required', origin).toString()
+          )
+          return successResponse
         }
         await ensureApprovedBetaPlan({
           userId: data.session.user.id,
           email: data.session.user.email,
           plan: profile?.plan,
+        })
+      }
+
+      if ((integration === 'google' || integration === 'calendar') && data.session?.user) {
+        if (!data.session.provider_token) {
+          return NextResponse.redirect(
+            new URL(`${next}?calendar=connection-token-missing`, origin)
+          )
+        }
+        const now = new Date().toISOString()
+        const isCalendarConnection = integration === 'calendar'
+        await supabaseAdmin.from('user_integrations').upsert(
+          {
+            user_id: data.session.user.id,
+            provider: isCalendarConnection ? 'google_calendar' : 'google',
+            access_token: encryptGoogleAccessToken(data.session.provider_token),
+            external_user_id: data.session.user.email || null,
+            external_team_id: null,
+            external_team_name: null,
+            metadata: {
+              provider: isCalendarConnection ? 'google_calendar' : 'google',
+              email: data.session.user.email || null,
+              scopes: isCalendarConnection
+                ? 'calendar.events.readonly'
+                : 'gmail.readonly',
+              token_encryption: 'aes-256-gcm:v1',
+            },
+            connected_at: now,
+            updated_at: now,
+          },
+          { onConflict: 'user_id,provider' }
+        )
+
+        await trackBetaEvent({
+          userId: data.session.user.id,
+          email: data.session.user.email,
+          eventName: isCalendarConnection ? 'calendar_connected' : 'gmail_connected',
+          source: 'web_app',
+          metadata: { integration: isCalendarConnection ? 'calendar' : 'google' },
         })
       }
 

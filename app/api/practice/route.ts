@@ -4,6 +4,8 @@ import { callAnthropic } from '@/lib/anthropic'
 import { AiUsageLimitError, recordAiUsage } from '@/lib/ai-usage'
 import { trackBetaEvent } from '@/lib/beta-events'
 import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
+import { getSafetyResponse } from '@/lib/safety-resources'
+import { fetchSharedWebContext } from '@/lib/shared-web-context'
 import * as Sentry from '@sentry/nextjs'
 import {
   WEB_CREDITS_ENABLED,
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('plan')
+    .select('plan, safety_resource_region')
     .eq('id', session.user.id)
     .single()
 
@@ -79,6 +81,12 @@ export async function POST(req: NextRequest) {
   }
 
   const { action, mode } = body
+  const sharedContextPromise = fetchSharedWebContext(supabase, session.user.id)
+  const safetyText = [body.situation, body.goal, body.userMessage, body.context, body.personDescription, body.assistantMessage]
+    .filter((value): value is string => typeof value === 'string')
+    .join('\n')
+  const safety = getSafetyResponse(safetyText, profile?.safety_resource_region)
+  if (safety) return NextResponse.json({ error: safety.message, safety }, { status: 422 })
   const callMeteredAnthropic = async (
     system: string | null,
     messages: { role: 'user' | 'assistant'; content: string }[],
@@ -95,7 +103,9 @@ export async function POST(req: NextRequest) {
         })
       }
     }
-    const result = await callAnthropic(system, messages, maxTokens)
+    const sharedContext = await sharedContextPromise
+    const combinedSystem = [system, sharedContext.promptContext].filter(Boolean).join('\n\n') || null
+    const result = await callAnthropic(combinedSystem, messages, maxTokens)
     if (WEB_CREDITS_ENABLED && METERED_PRACTICE_ACTIONS.has(action)) {
       await recordSuccessfulWebCredit(session.user.id, {
         source: 'dashboard',

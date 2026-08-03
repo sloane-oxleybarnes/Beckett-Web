@@ -6,8 +6,7 @@ import {
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { callAnthropic } from '@/lib/anthropic'
 import { supabaseAdmin } from '@/lib/server-admin'
-import { decryptGoogleAccessToken, encryptGoogleAccessToken } from '@/lib/google-token-security'
-import { getGoogleGmailOAuthConfig, parseGoogleGmailCredential, refreshGoogleGmailCredential } from '@/lib/google-gmail-oauth'
+import { decryptGoogleAccessToken } from '@/lib/google-token-security'
 
 export async function GET(req: NextRequest) {
   const supabase = createSupabaseServerClient()
@@ -19,24 +18,12 @@ export async function GET(req: NextRequest) {
 
   const { data: integration } = await supabaseAdmin
     .from('user_integrations')
-    .select('id, access_token')
+    .select('access_token')
     .eq('user_id', user.id)
     .eq('provider', 'google')
     .maybeSingle()
-  let credential = parseGoogleGmailCredential(decryptGoogleAccessToken(integration?.access_token))
-  const oauthConfig = getGoogleGmailOAuthConfig(req.nextUrl.origin)
-  if (!integration || !credential || !oauthConfig) return NextResponse.json({ error: 'google_not_connected' })
-
-  if (credential.expiresAt > 0 && credential.expiresAt <= Date.now() + 60_000) {
-    const refreshed = await refreshGoogleGmailCredential(credential, oauthConfig.clientId, oauthConfig.clientSecret)
-    if (!refreshed) return NextResponse.json({ error: 'google_not_connected' })
-    credential = refreshed
-    await supabaseAdmin
-      .from('user_integrations')
-      .update({ access_token: encryptGoogleAccessToken(JSON.stringify(credential)), updated_at: new Date().toISOString() })
-      .eq('id', integration.id)
-  }
-  const token = credential.accessToken
+  const token = decryptGoogleAccessToken(integration?.access_token)
+  if (!token) return NextResponse.json({ error: 'google_not_connected' })
 
   // Search Gmail for threads with this contact
   const query = encodeURIComponent(`from:${email} OR to:${email}`)
