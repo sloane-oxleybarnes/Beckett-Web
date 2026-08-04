@@ -14,13 +14,13 @@ import AdminFeedbackViewer, { type AdminFeedbackRow } from "./FeedbackViewer";
 import { getCourseStudioItems } from "@/lib/course-content";
 import { getSiteContent } from "@/lib/site-content-server";
 import { BETA_MISSION_DEFINITIONS, getBetaMissionDefinition } from "@/lib/beta-missions";
+import { verifyAdminSession } from "@/lib/admin-session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const cookieStore = cookies();
-  const isAuthed =
-    cookieStore.get("admin_auth")?.value === process.env.ADMIN_PASSWORD;
+  const isAuthed = verifyAdminSession(cookieStore.get("admin_auth")?.value);
 
   if (!isAuthed) {
     return <AdminLoginForm />;
@@ -79,7 +79,15 @@ export default async function AdminPage() {
   ]);
 
   const pendingSignups = (signups || []).filter((signup) => !signup.approved);
-  const feedbackRows = (feedback || []) as AdminFeedbackRow[];
+  const feedbackRows = await Promise.all((feedback || []).map(async (row) => {
+    const screenshots = Array.isArray(row.metadata?.screenshots) ? row.metadata.screenshots : [];
+    const screenshotUrls = await Promise.all(screenshots.map(async (screenshot: { path?: unknown; name?: unknown }) => {
+      if (typeof screenshot.path !== "string") return null;
+      const { data } = await supabase.storage.from("feedback-screenshots").createSignedUrl(screenshot.path, 60 * 60);
+      return data?.signedUrl ? { url: data.signedUrl, name: typeof screenshot.name === "string" ? screenshot.name : "Screenshot" } : null;
+    }));
+    return { ...row, screenshotUrls: screenshotUrls.filter(Boolean) };
+  })) as AdminFeedbackRow[];
   const trackerRows = buildBetaTrackerRows({
     signups: signups || [],
     profiles: profiles || [],

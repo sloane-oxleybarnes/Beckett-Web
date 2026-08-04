@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import CreditTracker from "@/components/dashboard/CreditTracker";
 
 type Rating = "yes" | "no";
@@ -11,8 +11,10 @@ export default function BetaFeedbackWidget() {
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState<Rating | null>(null);
   const [comment, setComment] = useState("");
+  const [screenshots, setScreenshots] = useState<File[]>([]);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function submitFeedback(selectedRating = rating) {
     if (!selectedRating || status === "saving") return;
@@ -20,18 +22,19 @@ export default function BetaFeedbackWidget() {
     setStatus("saving");
     setError("");
 
+    const formData = new FormData();
+    formData.set("rating", selectedRating);
+    formData.set("comment", comment);
+    formData.set("page", pathname);
+    formData.set("source", "dashboard");
+    formData.set("metadata", JSON.stringify({
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+    }));
+    screenshots.forEach((screenshot) => formData.append("screenshots", screenshot));
+
     const res = await fetch("/api/feedback", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        rating: selectedRating,
-        comment,
-        page: pathname,
-        source: "dashboard",
-        metadata: {
-          userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
-        },
-      }),
+      body: formData,
     });
 
     const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -43,6 +46,8 @@ export default function BetaFeedbackWidget() {
 
     setStatus("saved");
     setComment("");
+    setScreenshots([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     window.setTimeout(() => {
       setOpen(false);
       setRating(null);
@@ -100,6 +105,47 @@ export default function BetaFeedbackWidget() {
             rows={4}
             className="w-full resize-none rounded-sm border border-border bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
           />
+
+          <div className="mt-3">
+            <input
+              ref={fileInputRef}
+              id="feedback-screenshots"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              className="sr-only"
+              onChange={(event) => {
+                const selected = Array.from(event.target.files || []);
+                const next = [...screenshots, ...selected].slice(0, 3);
+                setScreenshots(next);
+                event.target.value = "";
+              }}
+            />
+            <label
+              htmlFor="feedback-screenshots"
+              className="inline-flex cursor-pointer items-center rounded-pill border border-border px-3 py-1.5 text-xs font-medium text-ink-mid transition-colors hover:border-primary hover:text-primary"
+            >
+              Add screenshots
+            </label>
+            <p className="mt-1 text-xs text-ink-light">Up to 3 PNG, JPG, or WebP images (10 MB each).</p>
+            {screenshots.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {screenshots.map((screenshot, index) => (
+                  <li key={`${screenshot.name}-${index}`} className="flex items-center justify-between gap-2 text-xs text-ink-mid">
+                    <span className="truncate">{screenshot.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setScreenshots((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                      className="shrink-0 text-ink-light hover:text-ink"
+                      aria-label={`Remove ${screenshot.name}`}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <p className="mt-3 rounded-sm bg-bg px-3 py-2 text-xs leading-relaxed text-ink-mid">
             Need help or need to report a privacy or security concern? Email{" "}

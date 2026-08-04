@@ -22,7 +22,10 @@ type OnboardingBody = BetaConsentSubmission & {
   coaching_tone?: CoachingTone;
   neurodivergent_context?: string[];
   neurodivergent_context_other?: string | null;
+  work_apps?: string[];
 };
+
+const allowedWorkApps = new Set(["gmail", "slack", "outlook", "chrome", "teams", "zoom"]);
 
 export async function POST(req: NextRequest) {
   const supabase = createSupabaseServerClient();
@@ -36,6 +39,9 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json()) as OnboardingBody;
   const now = new Date().toISOString();
+  const workApps = Array.isArray(body.work_apps)
+    ? body.work_apps.filter((value): value is string => typeof value === "string" && allowedWorkApps.has(value)).slice(0, 12)
+    : [];
 
   if (!hasRequiredBetaConsentSubmission(body)) {
     return NextResponse.json(
@@ -98,6 +104,7 @@ export async function POST(req: NextRequest) {
       triggersCount: body.workplace_triggers?.length || 0,
       preferencesCount: body.communication_preferences?.length || 0,
       neurodivergentContextCount: body.neurodivergent_context?.length || 0,
+      workApps,
     },
   });
 

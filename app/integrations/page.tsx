@@ -19,6 +19,7 @@ const live = [
   { name: "Gmail", icon: "📧", description: "Decode and draft in any Gmail thread." },
   { name: "Slack", icon: "💬", description: "Inline support in channels, DMs, and threads." },
   { name: "Chrome extension", icon: "🧩", description: "Brings Beckett into the browser tools beta users are testing now." },
+  { name: "Microsoft 365 (staging)", icon: "📨", description: "Read-only Outlook calendar context and user-invoked Mail Decode in the staging preview." },
 ];
 
 const slackCommands = ["respond", "rewrite", "decode", "prep", "practice"];
@@ -27,7 +28,6 @@ const comingSoon = [
   { name: "Google Meet", icon: "🎥" },
   { name: "Zoom", icon: "📹" },
   { name: "Microsoft Teams", icon: "🏢" },
-  { name: "Outlook", icon: "📨" },
   { name: "LinkedIn Messaging", icon: "💼" },
   { name: "Notion", icon: "📝" },
   { name: "Loom", icon: "🎬" },

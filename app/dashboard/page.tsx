@@ -4,6 +4,7 @@ import Link from "next/link";
 import MoodSelector from "@/components/dashboard/MoodSelector";
 import CoachWalkthrough from "@/components/dashboard/CoachWalkthrough";
 import BetaMissionsCard from "@/components/dashboard/BetaMissionsCard";
+import MicrosoftDayPlan from "@/components/dashboard/MicrosoftDayPlan";
 
 type DashboardPageProps = {
   searchParams?: {
@@ -122,6 +123,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       </section> : null}
 
       <BetaMissionsCard />
+
+      <MicrosoftDayPlan />
 
       <section className="mb-6">
         <div className="rounded-card border border-border bg-white p-6">
