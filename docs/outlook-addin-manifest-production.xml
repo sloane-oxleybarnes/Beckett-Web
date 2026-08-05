@@ -15,6 +15,7 @@
   <FormSettings>
     <Form xsi:type="ItemRead">
       <DesktopSettings>
+        <RequestedHeight>450</RequestedHeight>
         <SourceLocation DefaultValue="https://www.meetbeckett.co/outlook-addin" />
       </DesktopSettings>
     </Form>
