@@ -14,7 +14,7 @@ type OfficeItem = {
 };
 type OfficeDialog = { addEventHandler?: (eventType: string, handler: (arg: { message?: string }) => void) => void; close?: () => void };
 type OfficeApi = {
-  context?: { mailbox?: { item?: OfficeItem }; ui?: { displayDialogAsync?: (url: string, options: { height: number; width: number; promptBeforeOpen: boolean }, callback: (result: { status?: string; value?: OfficeDialog }) => void) => void } };
+  context?: { mailbox?: { item?: OfficeItem }; ui?: { displayDialogAsync?: (url: string, options: { height: number; width: number; promptBeforeOpen: boolean }, callback: (result: { status?: string; value?: OfficeDialog }) => void) => void; messageParent?: (message: string) => void } };
   onReady?: (callback: (info?: { host?: string }) => void) => void;
   CoercionType: { Text: string };
   AsyncResultStatus: { Succeeded: string };
