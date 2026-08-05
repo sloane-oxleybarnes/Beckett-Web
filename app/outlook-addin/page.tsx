@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 
 type OfficeResult = { status?: string; value?: unknown };
 type OfficeItem = {
-  subject?: { getAsync?: (callback: (result: OfficeResult) => void) => void };
-  from?: { getAsync?: (callback: (result: OfficeResult) => void) => void };
+  subject?: string;
+  from?: { emailAddress?: string; displayName?: string };
   body?: {
     getAsync?: (coercion: string, callback: (result: OfficeResult) => void) => void;
     setSelectedDataAsync?: (value: string, options: { coercionType: string }, callback: (result: OfficeResult) => void) => void;
@@ -57,28 +57,21 @@ export default function OutlookAddinPage() {
       setStatus("Open this task pane from a message or draft in Outlook.");
       return;
     }
-    current.subject?.getAsync?.((subjectResult) => {
-      const subject = typeof subjectResult.value === "string" ? subjectResult.value : "(no subject)";
-      const readBody = (sender: string) => current.body?.getAsync?.(office.CoercionType.Text, (bodyResult) => {
-        if (bodyResult?.status !== office.AsyncResultStatus.Succeeded) {
-          setStatus("Beckett could not read this item. Try opening it in the reading pane.");
-          return;
-        }
-        setItem({ subject, sender, body: String(bodyResult.value || "").slice(0, 12_000) });
-        setCanInsert(Boolean(current.body?.setSelectedDataAsync));
-        setResult("");
-        setStatus("Ready. Only this selected item will be used if you choose Decode with Beckett.");
-      });
-      if (!current.from?.getAsync) {
-        readBody("");
+    const subject = current.subject || "(no subject)";
+    const sender = current.from?.emailAddress || current.from?.displayName || "";
+    if (!current.body?.getAsync) {
+      setStatus("Beckett could not read this item. Try opening it in the reading pane.");
+      return;
+    }
+    current.body.getAsync(office.CoercionType.Text, (bodyResult) => {
+      if (bodyResult?.status !== office.AsyncResultStatus.Succeeded) {
+        setStatus("Beckett could not read this item. Try opening it in the reading pane.");
         return;
       }
-      current.from.getAsync((fromResult) => {
-        const from = fromResult.value && typeof fromResult.value === "object"
-          ? fromResult.value as { emailAddress?: string; displayName?: string }
-          : {};
-        readBody(from.emailAddress || from.displayName || "");
-      });
+      setItem({ subject, sender, body: String(bodyResult.value || "").slice(0, 12_000) });
+      setCanInsert(Boolean(current.body?.setSelectedDataAsync));
+      setResult("");
+      setStatus("");
     });
   }
 
@@ -138,12 +131,10 @@ export default function OutlookAddinPage() {
   return <main className="min-h-screen bg-bg p-5 text-ink">
     <Script src="https://appsforoffice.microsoft.com/lib/1/hosted/Office.js" onLoad={() => window.Office?.onReady?.((info) => setOfficeHost(info?.host || "Outlook"))} />
     <p className="text-xs font-medium uppercase tracking-wide text-primary">Beckett for Outlook</p>
-    <h1 className="mt-2 text-2xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Private message support</h1>
-    <p className="mt-2 text-sm leading-relaxed text-ink-mid">Beckett uses only the Outlook item you explicitly choose. It never sends messages for you.</p>
     {!officeHost && <div className="mt-4 rounded-sm border border-primary/20 bg-primary-light/30 px-3 py-3 text-xs leading-relaxed text-ink-mid">Open this page from the Beckett task pane inside Outlook.</div>}
-    <div className="mt-4 rounded-sm border border-border bg-white px-3 py-3 text-xs leading-relaxed text-ink-mid" role="status">{status}</div>
-    {authState !== "signed-in" ? <div className="mt-4 rounded-card border border-border bg-white p-4"><p className="text-sm font-medium text-ink">Sign in to Beckett</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">Your Beckett session is checked before selected Outlook content can be decoded.</p><button type="button" onClick={beginOutlookSignIn} className="mt-3 inline-flex rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">Sign in to Beckett</button></div> : <p className="mt-3 text-xs text-ink-light">Signed in to Beckett{authEmail ? ` as ${authEmail}` : ""}.</p>}
-    <button type="button" onClick={readCurrentItem} disabled={!officeHost} className="mt-4 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">Read selected item</button>
+    {status && <div className="mt-4 rounded-sm border border-border bg-white px-3 py-3 text-xs leading-relaxed text-ink-mid" role="status">{status}</div>}
+    {authState !== "signed-in" && <div className="mt-4 rounded-card border border-border bg-white p-4"><button type="button" onClick={beginOutlookSignIn} className="inline-flex rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">Sign in to Beckett</button></div>}
+    <button type="button" onClick={readCurrentItem} disabled={!officeHost} className="mt-4 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">Read this message</button>
     {item && <div className="mt-5 rounded-card border border-border bg-white p-4"><p className="text-xs uppercase tracking-wide text-ink-light">Selected item</p><h2 className="mt-1 text-base font-medium text-ink">{item.subject}</h2><p className="mt-1 text-xs text-ink-mid">{item.sender || "Unknown sender"}</p><button type="button" onClick={() => void decode()} disabled={authState !== "signed-in"} className="mt-4 rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Decode with Beckett</button></div>}
     {result && <div className="mt-5 rounded-card border border-border bg-white p-4"><p className="text-xs uppercase tracking-wide text-primary">Beckett’s read</p><div className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink">{result}</div><button type="button" onClick={insertDraft} disabled={!canInsert} className="mt-4 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-50">Insert into current draft</button>{!canInsert && <p className="mt-2 text-xs text-ink-light">Open a draft to insert text. Beckett will never send it.</p>}</div>}
   </main>;
