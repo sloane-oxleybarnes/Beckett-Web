@@ -16,10 +16,12 @@ export default function AdminApprovalList({ signups }: { signups: Signup[] }) {
   const [list, setList] = useState(signups);
   const [loading, setLoading] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function approve(signup: Signup) {
     setLoading(`approve-${signup.id}`);
     setErrors((prev) => ({ ...prev, [signup.id]: "" }));
+    setNotice(null);
 
     const res = await fetch("/api/admin/approve", {
       method: "POST",
@@ -27,11 +29,17 @@ export default function AdminApprovalList({ signups }: { signups: Signup[] }) {
       body: JSON.stringify({ email: signup.email, id: signup.id }),
     });
 
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
       setList((prev) => prev.filter((s) => s.id !== signup.id));
+      setNotice(
+        data.warning ||
+          (data.existingAccount
+            ? "Approved the existing account and upgraded it to beta."
+            : "Approved the signup and created its secure invitation.")
+      );
       router.refresh();
     } else {
-      const data = await res.json().catch(() => ({}));
       setErrors((prev) => ({
         ...prev,
         [signup.id]: data.error || "Something went wrong.",
@@ -67,6 +75,12 @@ export default function AdminApprovalList({ signups }: { signups: Signup[] }) {
       <h1 className="text-xl font-semibold text-ink mb-6">
         Beta signups — pending approval ({list.length})
       </h1>
+
+      {notice ? (
+        <p role="status" className="mb-4 rounded-sm border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {notice}
+        </p>
+      ) : null}
 
       {list.length === 0 ? (
         <p className="text-ink-mid text-sm">No pending signups.</p>

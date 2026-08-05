@@ -56,66 +56,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let sendApprovalEmail: (() => Promise<unknown>) | null = null;
-
-  if (existingAuthUser) {
-    if (process.env.RESEND_API_KEY) {
-      sendApprovalEmail = () =>
-        sendBetaAccessReadyEmail({
-          email: normalizedEmail,
-          name: signup.name,
-          loginUrl: `${origin}/auth/login?next=${encodeURIComponent("/auth/profile-setup")}`,
-        });
-    } else {
-      sendApprovalEmail = async () => {
-        const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(
-          normalizedEmail,
-          {
-            redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/auth/set-password")}`,
-          }
-        );
-
-        if (recoveryError) throw recoveryError;
-      };
-    }
-  } else if (process.env.RESEND_API_KEY) {
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: "invite",
-      email: normalizedEmail,
-      options: {
-        redirectTo: `${origin}/auth/callback`,
-        data: { plan: "beta" },
-      },
-    });
-
-    if (linkError || !linkData.properties?.action_link) {
-      return NextResponse.json(
-        { error: linkError?.message || "Could not generate invite link." },
-        { status: 500 }
-      );
-    }
-
-    const actionLink = linkData.properties.hashed_token
-      ? buildPasswordSetupLink(origin, linkData.properties.hashed_token, "invite")
-      : linkData.properties.action_link;
-
-    sendApprovalEmail = () =>
-      sendBetaInviteEmail({
-        email: normalizedEmail,
-        name: signup.name,
-        actionLink,
-      });
-  } else {
-    const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(normalizedEmail, {
-      redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/auth/set-password")}`,
-      data: { plan: 'beta' },
-    });
-
-    if (inviteError) {
-      return NextResponse.json({ error: inviteError.message }, { status: 500 });
-    }
-  }
-
+  // The Auth before-user-created hook checks this approved flag. Persist it
+  // before asking Supabase to create a legitimate invited account.
   const now = new Date().toISOString();
   const { error: profileError } = await supabase
     .from("profiles")
@@ -143,16 +85,58 @@ export async function POST(req: NextRequest) {
   }
 
   let emailWarning: string | null = null;
-  if (sendApprovalEmail) {
-    try {
-      await sendApprovalEmail();
-    } catch (error) {
-      emailWarning =
-        error instanceof Error
-          ? `Access was approved, but the email could not be sent: ${error.message}`
-          : "Access was approved, but the email could not be sent.";
-      console.error(emailWarning);
+  try {
+    if (existingAuthUser && process.env.RESEND_API_KEY) {
+      await sendBetaAccessReadyEmail({
+        email: normalizedEmail,
+        name: signup.name,
+        loginUrl: `${origin}/auth/login?next=${encodeURIComponent("/auth/profile-setup")}`,
+      });
+    } else if (existingAuthUser) {
+      const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(
+        normalizedEmail,
+        {
+          redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/auth/set-password")}`,
+        }
+      );
+      if (recoveryError) throw recoveryError;
+    } else if (process.env.RESEND_API_KEY) {
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: "invite",
+        email: normalizedEmail,
+        options: {
+          redirectTo: `${origin}/auth/callback`,
+          data: { plan: "beta" },
+        },
+      });
+      if (linkError || !linkData.properties?.action_link) {
+        throw new Error(linkError?.message || "Could not generate invite link.");
+      }
+
+      const actionLink = linkData.properties.hashed_token
+        ? buildPasswordSetupLink(origin, linkData.properties.hashed_token, "invite")
+        : linkData.properties.action_link;
+      await sendBetaInviteEmail({
+        email: normalizedEmail,
+        name: signup.name,
+        actionLink,
+      });
+    } else {
+      const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
+        normalizedEmail,
+        {
+          redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/auth/set-password")}`,
+          data: { plan: "beta" },
+        }
+      );
+      if (inviteError) throw inviteError;
     }
+  } catch (error) {
+    emailWarning =
+      error instanceof Error
+        ? `Access was approved, but the invitation could not be sent: ${error.message}`
+        : "Access was approved, but the invitation could not be sent.";
+    console.error(emailWarning);
   }
 
   await triggerLoopsEvent(normalizedEmail, "beta_invite_sent");
