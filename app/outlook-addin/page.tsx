@@ -34,7 +34,6 @@ export default function OutlookAddinPage() {
   const [officeHost, setOfficeHost] = useState<string | null>(null);
   const [canInsert, setCanInsert] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("checking");
-  const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [outlookAccessToken, setOutlookAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,7 +43,6 @@ export default function OutlookAddinPage() {
         const data = await response.json().catch(() => ({}));
         if (cancelled) return;
         setAuthState(response.ok && data.authenticated ? "signed-in" : "signed-out");
-        setAuthEmail(typeof data.email === "string" ? data.email : null);
       })
       .catch(() => { if (!cancelled) setAuthState("unknown"); });
     return () => { cancelled = true; };
@@ -109,7 +107,7 @@ export default function OutlookAddinPage() {
         try {
           const payload = JSON.parse(event.message || "{}") as { type?: string; accessToken?: string; email?: string; error?: string };
           if (payload.type === "beckett-auth-success" && payload.accessToken) {
-            setOutlookAccessToken(payload.accessToken); setAuthEmail(payload.email || null); setAuthState("signed-in"); setStatus("Connected to Beckett. You can decode the selected item."); dialog.close?.(); return;
+            setOutlookAccessToken(payload.accessToken); setAuthState("signed-in"); setStatus("Connected to Beckett. You can decode the selected item."); dialog.close?.(); return;
           }
           setStatus(payload.error || "Sign-in did not complete. Please try again.");
         } catch { setStatus("Sign-in did not complete. Please try again."); }
