@@ -12,11 +12,13 @@ type OfficeItem = {
     setSelectedDataAsync?: (value: string, options: { coercionType: string }, callback: (result: OfficeResult) => void) => void;
   };
 };
+type OfficeDialog = { addEventHandler?: (eventType: string, handler: (arg: { message?: string }) => void) => void; close?: () => void };
 type OfficeApi = {
-  context?: { mailbox?: { item?: OfficeItem } };
+  context?: { mailbox?: { item?: OfficeItem }; ui?: { displayDialogAsync?: (url: string, options: { height: number; width: number; promptBeforeOpen: boolean }, callback: (result: { status?: string; value?: OfficeDialog }) => void) => void } };
   onReady?: (callback: (info?: { host?: string }) => void) => void;
   CoercionType: { Text: string };
   AsyncResultStatus: { Succeeded: string };
+  EventType?: { DialogMessageReceived?: string; DialogEventReceived?: string };
 };
 
 declare global {
@@ -33,6 +35,7 @@ export default function OutlookAddinPage() {
   const [canInsert, setCanInsert] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [outlookAccessToken, setOutlookAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +87,7 @@ export default function OutlookAddinPage() {
     setStatus("Decoding this selected item…");
     const response = await fetch("/api/microsoft/mail/decode", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...(outlookAccessToken ? { Authorization: `Bearer ${outlookAccessToken}` } : {}) },
       body: JSON.stringify({ content: item.body, subject: item.subject, sender: item.sender }),
     });
     const data = await response.json().catch(() => ({}));
@@ -101,6 +104,26 @@ export default function OutlookAddinPage() {
     setStatus("Decode complete. Beckett did not send or save anything.");
   }
 
+  function beginOutlookSignIn() {
+    const office = window.Office;
+    const openDialog = office?.context?.ui?.displayDialogAsync;
+    if (!openDialog) return setStatus("Open Beckett from Outlook to sign in.");
+    setStatus("Opening secure sign-in…");
+    openDialog(`${window.location.origin}/auth/login?next=${encodeURIComponent("/outlook-addin/auth-complete")}`, { height: 60, width: 35, promptBeforeOpen: false }, (openResult) => {
+      if (openResult.status !== office.AsyncResultStatus.Succeeded || !openResult.value) return setStatus("Sign-in could not open. Please try again.");
+      const dialog = openResult.value;
+      dialog.addEventHandler?.(office.EventType?.DialogMessageReceived || "DialogMessageReceived", (event) => {
+        try {
+          const payload = JSON.parse(event.message || "{}") as { type?: string; accessToken?: string; email?: string; error?: string };
+          if (payload.type === "beckett-auth-success" && payload.accessToken) {
+            setOutlookAccessToken(payload.accessToken); setAuthEmail(payload.email || null); setAuthState("signed-in"); setStatus("Connected to Beckett. You can decode the selected item."); dialog.close?.(); return;
+          }
+          setStatus(payload.error || "Sign-in did not complete. Please try again.");
+        } catch { setStatus("Sign-in did not complete. Please try again."); }
+      });
+    });
+  }
+
   function insertDraft() {
     const office = window.Office;
     const current = office?.context?.mailbox?.item;
@@ -112,8 +135,6 @@ export default function OutlookAddinPage() {
     });
   }
 
-  const signInUrl = `/auth/login?next=${encodeURIComponent("/outlook-addin")}`;
-
   return <main className="min-h-screen bg-bg p-5 text-ink">
     <Script src="https://appsforoffice.microsoft.com/lib/1/hosted/Office.js" onLoad={() => window.Office?.onReady?.((info) => setOfficeHost(info?.host || "Outlook"))} />
     <p className="text-xs font-medium uppercase tracking-wide text-primary">Beckett for Outlook</p>
@@ -121,7 +142,7 @@ export default function OutlookAddinPage() {
     <p className="mt-2 text-sm leading-relaxed text-ink-mid">Beckett uses only the Outlook item you explicitly choose. It never sends messages for you.</p>
     {!officeHost && <div className="mt-4 rounded-sm border border-primary/20 bg-primary-light/30 px-3 py-3 text-xs leading-relaxed text-ink-mid">Open this page from the Beckett task pane inside Outlook.</div>}
     <div className="mt-4 rounded-sm border border-border bg-white px-3 py-3 text-xs leading-relaxed text-ink-mid" role="status">{status}</div>
-    {authState !== "signed-in" ? <div className="mt-4 rounded-card border border-border bg-white p-4"><p className="text-sm font-medium text-ink">Sign in to Beckett</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">Your Beckett session is checked before selected Outlook content can be decoded.</p><a href={signInUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">Sign in in a new tab</a><button type="button" onClick={() => window.location.reload()} className="ml-2 mt-3 inline-flex rounded-pill border border-border px-4 py-2 text-sm text-ink hover:bg-bg">Refresh sign-in</button></div> : <p className="mt-3 text-xs text-ink-light">Signed in to Beckett{authEmail ? ` as ${authEmail}` : ""}.</p>}
+    {authState !== "signed-in" ? <div className="mt-4 rounded-card border border-border bg-white p-4"><p className="text-sm font-medium text-ink">Sign in to Beckett</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">Your Beckett session is checked before selected Outlook content can be decoded.</p><button type="button" onClick={beginOutlookSignIn} className="mt-3 inline-flex rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">Sign in to Beckett</button></div> : <p className="mt-3 text-xs text-ink-light">Signed in to Beckett{authEmail ? ` as ${authEmail}` : ""}.</p>}
     <button type="button" onClick={readCurrentItem} disabled={!officeHost} className="mt-4 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">Read selected item</button>
     {item && <div className="mt-5 rounded-card border border-border bg-white p-4"><p className="text-xs uppercase tracking-wide text-ink-light">Selected item</p><h2 className="mt-1 text-base font-medium text-ink">{item.subject}</h2><p className="mt-1 text-xs text-ink-mid">{item.sender || "Unknown sender"}</p><button type="button" onClick={() => void decode()} disabled={authState !== "signed-in"} className="mt-4 rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Decode with Beckett</button></div>}
     {result && <div className="mt-5 rounded-card border border-border bg-white p-4"><p className="text-xs uppercase tracking-wide text-primary">Beckett’s read</p><div className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink">{result}</div><button type="button" onClick={insertDraft} disabled={!canInsert} className="mt-4 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-50">Insert into current draft</button>{!canInsert && <p className="mt-2 text-xs text-ink-light">Open a draft to insert text. Beckett will never send it.</p>}</div>}

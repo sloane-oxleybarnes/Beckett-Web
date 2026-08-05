@@ -3,12 +3,16 @@ import { callAnthropic } from "@/lib/anthropic";
 import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
 import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { supabaseAdmin } from "@/lib/server-admin";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  const bearerToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
   const supabase = createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user: cookieUser } } = await supabase.auth.getUser();
+  const { data: { user: bearerUser } } = bearerToken ? await supabaseAdmin.auth.getUser(bearerToken) : { data: { user: null } };
+  const user = cookieUser || bearerUser;
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const body = (await request.json().catch(() => null)) as { content?: unknown; subject?: unknown; sender?: unknown } | null;
   const content = typeof body?.content === "string" ? body.content.trim().slice(0, 12_000) : "";
