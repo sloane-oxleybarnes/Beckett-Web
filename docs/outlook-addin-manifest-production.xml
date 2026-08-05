@@ -6,26 +6,84 @@
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Beckett" />
   <Description DefaultValue="Private communication coaching for selected Outlook messages and drafts." />
-  <IconUrl DefaultValue="https://www.meetbeckett.co/brand/beckett-icon.png" />
-  <HighResolutionIconUrl DefaultValue="https://www.meetbeckett.co/brand/beckett-icon.png" />
-  <SupportUrl DefaultValue="https://www.meetbeckett.co/privacy" />
+  <IconUrl DefaultValue="https://www.meetbeckett.co/brand/outlook-addin-icon-64.png" />
+  <HighResolutionIconUrl DefaultValue="https://www.meetbeckett.co/brand/outlook-addin-icon-128.png" />
+  <SupportUrl DefaultValue="https://www.meetbeckett.co/support" />
   <AppDomains><AppDomain>https://www.meetbeckett.co</AppDomain></AppDomains>
   <Hosts><Host Name="Mailbox" /></Hosts>
   <Requirements><Sets><Set Name="Mailbox" MinVersion="1.5" /></Sets></Requirements>
-  <FormSettings><Form xsi:type="ItemRead"><DesktopSettings><SourceLocation DefaultValue="https://www.meetbeckett.co/outlook-addin" /><RequestedHeight>480</RequestedHeight></DesktopSettings></Form><Form xsi:type="ItemEdit"><DesktopSettings><SourceLocation DefaultValue="https://www.meetbeckett.co/outlook-addin" /><RequestedHeight>480</RequestedHeight></DesktopSettings></Form></FormSettings>
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://www.meetbeckett.co/outlook-addin" />
+        <RequestedHeight>450</RequestedHeight>
+      </DesktopSettings>
+    </Form>
+    <Form xsi:type="ItemEdit">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://www.meetbeckett.co/outlook-addin" />
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
   <Permissions>ReadWriteItem</Permissions>
   <Rule xsi:type="RuleCollection" Mode="Or"><Rule xsi:type="ItemIs" ItemType="Message" FormType="Read" /><Rule xsi:type="ItemIs" ItemType="Message" FormType="Edit" /></Rule>
   <DisableEntityHighlighting>false</DisableEntityHighlighting>
-  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversion" xsi:type="VersionOverridesV1_0">
-    <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversion/1.1" xsi:type="VersionOverridesV1_1">
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
       <Description resid="residDescription" />
       <Requirements><bt:Sets DefaultMinVersion="1.5"><bt:Set Name="Mailbox" /></bt:Sets></Requirements>
       <Hosts><Host xsi:type="MailHost"><DesktopFormFactor>
-        <ExtensionPoint xsi:type="MessageReadCommandSurface"><OfficeTab id="TabDefault"><Group id="BeckettReadGroup"><Label resid="residLabel" /><Control xsi:type="Button" id="BeckettOpenRead"><Label resid="residLabel" /><Supertip><Title resid="residLabel" /><Description resid="residDescription" /></Supertip><Action xsi:type="ShowTaskpane"><SourceLocation resid="taskPaneUrl" /></Action></Control></Group></OfficeTab></ExtensionPoint>
-        <ExtensionPoint xsi:type="MessageComposeCommandSurface"><OfficeTab id="TabDefault"><Group id="BeckettComposeGroup"><Label resid="residLabel" /><Control xsi:type="Button" id="BeckettOpenCompose"><Label resid="residLabel" /><Supertip><Title resid="residLabel" /><Description resid="residDescription" /></Supertip><Action xsi:type="ShowTaskpane"><SourceLocation resid="taskPaneUrl" /></Action></Control></Group></OfficeTab></ExtensionPoint>
+        <ExtensionPoint xsi:type="MessageReadCommandSurface">
+          <OfficeTab id="TabDefault">
+            <Group id="BeckettReadGroup">
+              <Label resid="residLabel" />
+              <Control xsi:type="Button" id="BeckettOpenRead">
+                <Label resid="residLabel" />
+                <Supertip>
+                  <Title resid="residLabel" />
+                  <Description resid="residDescription" />
+                </Supertip>
+                <Icon>
+                  <bt:Image size="16" resid="icon16" />
+                  <bt:Image size="32" resid="icon32" />
+                  <bt:Image size="80" resid="icon80" />
+                </Icon>
+                <Action xsi:type="ShowTaskpane">
+                  <SourceLocation resid="taskPaneUrl" />
+                </Action>
+              </Control>
+            </Group>
+          </OfficeTab>
+        </ExtensionPoint>
+        <ExtensionPoint xsi:type="MessageComposeCommandSurface">
+          <OfficeTab id="TabDefault">
+            <Group id="BeckettComposeGroup">
+              <Label resid="residLabel" />
+              <Control xsi:type="Button" id="BeckettOpenCompose">
+                <Label resid="residLabel" />
+                <Supertip>
+                  <Title resid="residLabel" />
+                  <Description resid="residDescription" />
+                </Supertip>
+                <Icon>
+                  <bt:Image size="16" resid="icon16" />
+                  <bt:Image size="32" resid="icon32" />
+                  <bt:Image size="80" resid="icon80" />
+                </Icon>
+                <Action xsi:type="ShowTaskpane">
+                  <SourceLocation resid="taskPaneUrl" />
+                </Action>
+              </Control>
+            </Group>
+          </OfficeTab>
+        </ExtensionPoint>
       </DesktopFormFactor></Host></Hosts>
       <Resources>
-        <bt:Images><bt:Image id="icon16" DefaultValue="https://www.meetbeckett.co/brand/beckett-icon.png" /><bt:Image id="icon32" DefaultValue="https://www.meetbeckett.co/brand/beckett-icon.png" /><bt:Image id="icon80" DefaultValue="https://www.meetbeckett.co/brand/beckett-icon.png" /></bt:Images>
+        <bt:Images>
+          <bt:Image id="icon16" DefaultValue="https://www.meetbeckett.co/brand/outlook-addin-icon-16.png" />
+          <bt:Image id="icon32" DefaultValue="https://www.meetbeckett.co/brand/outlook-addin-icon-32.png" />
+          <bt:Image id="icon80" DefaultValue="https://www.meetbeckett.co/brand/outlook-addin-icon-80.png" />
+        </bt:Images>
         <bt:Urls><bt:Url id="taskPaneUrl" DefaultValue="https://www.meetbeckett.co/outlook-addin" /></bt:Urls>
         <bt:ShortStrings><bt:String id="residLabel" DefaultValue="Beckett" /></bt:ShortStrings>
         <bt:LongStrings><bt:String id="residDescription" DefaultValue="Private communication coaching for selected Outlook messages and drafts." /></bt:LongStrings>

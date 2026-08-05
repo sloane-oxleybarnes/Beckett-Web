@@ -38,6 +38,14 @@ It does not request mail access, calendar writes, draft creation, Teams access, 
 
 Use `docs/outlook-addin-manifest-production.xml` for production validation or distribution. The task pane reads only the item the user selects and sends it to Beckett only after the user chooses **Decode with Beckett**. Inserting coaching into a draft is a separate user action; the add-in never sends mail.
 
+For a public Outlook listing, follow
+`docs/outlook-marketplace-submission.md`. Run Microsoft production validation
+before every Partner Center submission:
+
+```bash
+npx office-addin-manifest validate -p docs/outlook-addin-manifest-production.xml
+```
+
 Before deployment, verify:
 
 1. OAuth sign-in and reconnect with both a work account and a personal Microsoft account.
