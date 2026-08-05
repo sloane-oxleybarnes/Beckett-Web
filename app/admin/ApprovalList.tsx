@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Signup = {
   id: string;
@@ -11,6 +12,7 @@ type Signup = {
 };
 
 export default function AdminApprovalList({ signups }: { signups: Signup[] }) {
+  const router = useRouter();
   const [list, setList] = useState(signups);
   const [loading, setLoading] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -27,6 +29,7 @@ export default function AdminApprovalList({ signups }: { signups: Signup[] }) {
 
     if (res.ok) {
       setList((prev) => prev.filter((s) => s.id !== signup.id));
+      router.refresh();
     } else {
       const data = await res.json().catch(() => ({}));
       setErrors((prev) => ({
@@ -68,11 +71,11 @@ export default function AdminApprovalList({ signups }: { signups: Signup[] }) {
       {list.length === 0 ? (
         <p className="text-ink-mid text-sm">No pending signups.</p>
       ) : (
-        <div className="flex flex-col gap-3 max-w-2xl">
+        <div className="flex w-full flex-col gap-3">
           {list.map((signup) => (
             <div
               key={signup.id}
-              className="bg-white border border-border rounded-card px-5 py-4 flex items-center justify-between gap-4"
+              className="flex w-full flex-col gap-4 rounded-card border border-border bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="flex flex-col gap-0.5 min-w-0">
                 <span className="text-sm font-medium text-ink truncate">
@@ -94,7 +97,7 @@ export default function AdminApprovalList({ signups }: { signups: Signup[] }) {
                   </span>
                 )}
               </div>
-              <div className="flex gap-2 shrink-0">
+              <div className="flex shrink-0 gap-2">
                 <button
                   onClick={() => approve(signup)}
                   disabled={!!loading}

@@ -3,8 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { triggerLoopsEvent } from "@/lib/loops";
-import { sendBetaInviteEmail } from "@/lib/beta-emails";
+import { sendBetaAccessReadyEmail, sendBetaInviteEmail } from "@/lib/beta-emails";
 import { verifyAdminSession } from "@/lib/admin-session";
+import { findAuthUserByEmail } from "@/lib/admin-beta-approval";
 
 function buildPasswordSetupLink(origin: string, tokenHash: string, type: "invite" | "recovery") {
   const url = new URL("/auth/callback", origin);
@@ -32,13 +33,52 @@ export async function POST(req: NextRequest) {
   );
 
   const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://meetbeckett.co'
-  const { data: signup } = await supabase
+  const { data: signup, error: signupError } = await supabase
     .from("beta_signups")
-    .select("name")
+    .select("name, email, approved")
     .eq("id", id)
     .maybeSingle();
 
-  if (process.env.RESEND_API_KEY) {
+  if (signupError) {
+    return NextResponse.json({ error: signupError.message }, { status: 500 });
+  }
+  if (!signup || signup.email.trim().toLowerCase() !== normalizedEmail) {
+    return NextResponse.json({ error: "Beta signup not found." }, { status: 404 });
+  }
+
+  let existingAuthUser;
+  try {
+    existingAuthUser = await findAuthUserByEmail(supabase.auth.admin, normalizedEmail);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Could not check the existing account." },
+      { status: 500 }
+    );
+  }
+
+  let sendApprovalEmail: (() => Promise<unknown>) | null = null;
+
+  if (existingAuthUser) {
+    if (process.env.RESEND_API_KEY) {
+      sendApprovalEmail = () =>
+        sendBetaAccessReadyEmail({
+          email: normalizedEmail,
+          name: signup.name,
+          loginUrl: `${origin}/auth/login?next=${encodeURIComponent("/auth/profile-setup")}`,
+        });
+    } else {
+      sendApprovalEmail = async () => {
+        const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(
+          normalizedEmail,
+          {
+            redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/auth/set-password")}`,
+          }
+        );
+
+        if (recoveryError) throw recoveryError;
+      };
+    }
+  } else if (process.env.RESEND_API_KEY) {
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "invite",
       email: normalizedEmail,
@@ -59,11 +99,12 @@ export async function POST(req: NextRequest) {
       ? buildPasswordSetupLink(origin, linkData.properties.hashed_token, "invite")
       : linkData.properties.action_link;
 
-    await sendBetaInviteEmail({
-      email: normalizedEmail,
-      name: signup?.name || null,
-      actionLink,
-    });
+    sendApprovalEmail = () =>
+      sendBetaInviteEmail({
+        email: normalizedEmail,
+        name: signup.name,
+        actionLink,
+      });
   } else {
     const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(normalizedEmail, {
       redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/auth/set-password")}`,
@@ -75,29 +116,56 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  await supabase
+  const now = new Date().toISOString();
+  const { error: profileError } = await supabase
     .from("profiles")
     .update({ plan: "beta" })
     .eq("email", normalizedEmail);
 
-  await supabase
+  if (profileError) {
+    return NextResponse.json({ error: profileError.message }, { status: 500 });
+  }
+
+  const { error: approvalError } = await supabase
     .from("beta_signups")
     .update({
       approved: true,
-      approved_at: new Date().toISOString(),
-      invite_sent_at: new Date().toISOString(),
-      lifecycle_stage: "invited",
-      last_activity_at: new Date().toISOString(),
+      approved_at: now,
+      invite_sent_at: now,
+      lifecycle_stage: existingAuthUser?.last_sign_in_at ? "account_created" : "invited",
+      last_activity_at: now,
+      ...(existingAuthUser ? { invite_reminder_sent_at: now } : {}),
     })
     .eq("id", id);
+
+  if (approvalError) {
+    return NextResponse.json({ error: approvalError.message }, { status: 500 });
+  }
+
+  let emailWarning: string | null = null;
+  if (sendApprovalEmail) {
+    try {
+      await sendApprovalEmail();
+    } catch (error) {
+      emailWarning =
+        error instanceof Error
+          ? `Access was approved, but the email could not be sent: ${error.message}`
+          : "Access was approved, but the email could not be sent.";
+      console.error(emailWarning);
+    }
+  }
 
   await triggerLoopsEvent(normalizedEmail, "beta_invite_sent");
   await trackBetaEvent({
     email: normalizedEmail,
     eventName: "beta_invite_sent",
     source: "admin",
-    metadata: { signupId: id },
+    metadata: { signupId: id, existingAccount: Boolean(existingAuthUser) },
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    existingAccount: Boolean(existingAuthUser),
+    warning: emailWarning,
+  });
 }

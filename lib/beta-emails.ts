@@ -184,6 +184,28 @@ export async function sendBetaInviteEmail(params: {
   });
 }
 
+export async function sendBetaAccessReadyEmail(params: {
+  email: string;
+  name?: string | null;
+  loginUrl: string;
+}) {
+  return sendBrandedEmail({
+    to: params.email,
+    subject: "You are approved for the Beckett beta",
+    preview: "Your existing Beckett account now has beta access.",
+    heading: "Your Beckett beta access is ready.",
+    body: [
+      `Hi${params.name ? ` ${params.name.split(" ")[0]}` : ""} - you have been approved for the Beckett beta.`,
+      "Your existing Beckett account now has beta access, so there is no need to create another account.",
+      "Sign in with the same method you used before. Beckett will continue setup and ask a few coaching-profile questions so it can support you more personally.",
+    ],
+    button: {
+      label: "Continue to Beckett",
+      href: params.loginUrl,
+    },
+  });
+}
+
 export async function sendBetaInviteReminderEmail(params: {
   email: string;
   name?: string | null;

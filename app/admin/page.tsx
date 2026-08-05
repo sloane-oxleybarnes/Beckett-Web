@@ -49,8 +49,7 @@ export default async function AdminPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("profiles")
-      .select("id, email, full_name, display_name, first_name, plan, created_at, first_login_complete, onboarding_completed_at, extension_connected_at")
-      .in("plan", ["beta", "pro"]),
+      .select("id, email, full_name, display_name, first_name, plan, created_at, first_login_complete, onboarding_completed_at, extension_connected_at"),
     supabase
       .from("user_integrations")
       .select("user_id, provider, connected_at, updated_at"),
@@ -80,9 +79,16 @@ export default async function AdminPage() {
 
   const pendingSignups = (signups || []).filter((signup) => !signup.approved);
   const feedbackRows = (feedback || []) as AdminFeedbackRow[];
+  const signupEmails = new Set((signups || []).map((signup) => signup.email.toLowerCase()));
+  const trackerProfiles = (profiles || []).filter(
+    (profile) =>
+      profile.plan === "beta" ||
+      profile.plan === "pro" ||
+      signupEmails.has(profile.email.toLowerCase())
+  );
   const trackerRows = buildBetaTrackerRows({
     signups: signups || [],
-    profiles: profiles || [],
+    profiles: trackerProfiles,
     integrations: integrations || [],
     aiUsage: aiUsage || [],
     courseCompletions: courseCompletions || [],
@@ -169,6 +175,7 @@ type ProfileRow = {
   full_name: string | null;
   display_name?: string | null;
   first_name?: string | null;
+  plan: string;
   created_at: string;
   onboarding_completed_at?: string | null;
   extension_connected_at?: string | null;
@@ -260,7 +267,9 @@ function buildBetaTrackerRows({
       approvedAt: signup?.approved_at || null,
       inviteSentAt: signup?.invite_sent_at || null,
       lastActivityAt: signup?.last_activity_at || recentEvents[0]?.createdAt || null,
-      approved: Boolean(signup?.approved || profile),
+      approved: Boolean(
+        signup?.approved || profile?.plan === "beta" || profile?.plan === "pro"
+      ),
       accountCreatedAt: profile?.created_at || null,
       onboardedAt: profile?.onboarding_completed_at || null,
       extensionConnectedAt: profile?.extension_connected_at || null,
