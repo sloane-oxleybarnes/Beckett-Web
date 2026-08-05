@@ -125,7 +125,7 @@ export function buildSharedWebContext({
     },
     connectedTools: {
       gmail: providers.has("google"),
-      calendar: providers.has("google_calendar"),
+      calendar: providers.has("google_calendar") || providers.has("microsoft"),
     },
     savedContext: {
       toolkitItems: toolkitItems.length,

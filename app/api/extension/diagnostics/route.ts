@@ -33,6 +33,7 @@ export async function GET() {
   const limit = unlimited ? UNLIMITED_AI_LIMIT : getDailyAiLimit();
   const slack = integrations?.find((item) => item.provider === "slack");
   const google = integrations?.find((item) => item.provider === "google");
+  const microsoft = integrations?.find((item) => item.provider === "microsoft");
 
   return NextResponse.json({
     beckett: {
@@ -65,6 +66,17 @@ export async function GET() {
                 : null),
             connectedAt: google.connected_at || null,
             updatedAt: google.updated_at || null,
+          }
+        : { connected: false },
+      microsoft: microsoft
+        ? {
+            connected: true,
+            email:
+              (microsoft.metadata && typeof microsoft.metadata === "object" && "email" in microsoft.metadata
+                ? String(microsoft.metadata.email)
+                : microsoft.external_user_id || null),
+            connectedAt: microsoft.connected_at || null,
+            updatedAt: microsoft.updated_at || null,
           }
         : { connected: false },
     },

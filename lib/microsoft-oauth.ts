@@ -1,0 +1,294 @@
+import { createHash } from "node:crypto";
+import { decryptOAuthToken, encryptOAuthToken } from "@/lib/oauth-token-crypto";
+import { supabaseAdmin } from "@/lib/server-admin";
+import type { CalendarEvent } from "@/lib/calendar-insights";
+
+export const MICROSOFT_CALENDAR_SCOPES = [
+  "openid",
+  "profile",
+  "email",
+  "offline_access",
+  "User.Read",
+  "Calendars.ReadBasic",
+].join(" ");
+
+const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
+
+type MicrosoftTokenResponse = {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  token_type?: string;
+  scope?: string;
+  error?: string;
+  error_description?: string;
+};
+
+type MicrosoftMetadata = {
+  provider?: string;
+  email?: string | null;
+  display_name?: string | null;
+  scopes?: string;
+  token_type?: string;
+  expires_at?: string;
+  refresh_token_encrypted?: string | null;
+  token_encrypted?: boolean;
+  selectedCalendarIds?: string[];
+  [key: string]: unknown;
+};
+
+type MicrosoftEvent = {
+  id?: string;
+  subject?: string;
+  start?: { dateTime?: string; timeZone?: string };
+  end?: { dateTime?: string; timeZone?: string };
+  attendees?: Array<{
+    emailAddress?: { name?: string; address?: string };
+    status?: { response?: string };
+  }>;
+  isCancelled?: boolean;
+};
+
+function authority() {
+  const tenant = process.env.MICROSOFT_TENANT_ID?.trim() || "common";
+  return `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0`;
+}
+
+export function microsoftNeedsReconnect(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /access is denied|invalid[_ ](?:client|grant|authentication)|interaction required|consent required|token/i.test(message);
+}
+
+export function getMicrosoftClientId() {
+  return process.env.MICROSOFT_CLIENT_ID?.trim() || "";
+}
+
+export function getMicrosoftClientSecret() {
+  return process.env.MICROSOFT_CLIENT_SECRET?.trim() || "";
+}
+
+export function getMicrosoftRedirectUri(requestOrigin?: string) {
+  return process.env.MICROSOFT_REDIRECT_URI?.trim()
+    || (requestOrigin ? `${requestOrigin}/api/microsoft/oauth/callback` : "");
+}
+
+export function isMicrosoftConfigured(requestOrigin?: string) {
+  return Boolean(
+    getMicrosoftClientId()
+    && getMicrosoftClientSecret()
+    && getMicrosoftRedirectUri(requestOrigin)
+    && process.env.MICROSOFT_TOKEN_ENCRYPTION_KEY?.trim(),
+  );
+}
+
+export function createMicrosoftCodeChallenge(verifier: string) {
+  return createHash("sha256").update(verifier).digest("base64url");
+}
+
+export function buildMicrosoftAuthorizationUrl(state: string, redirectUri: string, codeChallenge: string) {
+  const url = new URL(`${authority()}/authorize`);
+  url.searchParams.set("client_id", getMicrosoftClientId());
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("response_mode", "query");
+  url.searchParams.set("scope", MICROSOFT_CALENDAR_SCOPES);
+  url.searchParams.set("state", state);
+  url.searchParams.set("code_challenge", codeChallenge);
+  url.searchParams.set("code_challenge_method", "S256");
+  return url;
+}
+
+export async function exchangeMicrosoftCode(code: string, redirectUri: string, codeVerifier: string) {
+  const response = await fetch(`${authority()}/token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: getMicrosoftClientId(),
+      client_secret: getMicrosoftClientSecret(),
+      code,
+      redirect_uri: redirectUri,
+      grant_type: "authorization_code",
+      scope: MICROSOFT_CALENDAR_SCOPES,
+      code_verifier: codeVerifier,
+    }),
+    cache: "no-store",
+  });
+  const token = (await response.json().catch(() => ({}))) as MicrosoftTokenResponse;
+  if (!response.ok || !token.access_token) {
+    throw new Error(token.error_description || token.error || "Microsoft token exchange failed");
+  }
+  return token;
+}
+
+async function graphFetch<T>(accessToken: string, path: string) {
+  const response = await fetch(`${GRAPH_ROOT}${path}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  const data = (await response.json().catch(() => ({}))) as T & { error?: { message?: string } };
+  if (!response.ok) throw new Error(data.error?.message || `Microsoft Graph request failed (${response.status})`);
+  return data;
+}
+
+export async function getMicrosoftProfile(accessToken: string) {
+  return graphFetch<{ id?: string; displayName?: string; mail?: string; userPrincipalName?: string }>(
+    accessToken,
+    "/me?$select=id,displayName,mail,userPrincipalName",
+  );
+}
+
+export async function saveMicrosoftConnection(
+  userId: string,
+  token: MicrosoftTokenResponse,
+  profile: { id?: string; displayName?: string; mail?: string; userPrincipalName?: string },
+) {
+  const { data: existing, error: readError } = await supabaseAdmin
+    .from("user_integrations")
+    .select("metadata")
+    .eq("user_id", userId)
+    .eq("provider", "microsoft")
+    .maybeSingle();
+  if (readError) throw readError;
+
+  const previous = existing?.metadata && typeof existing.metadata === "object"
+    ? existing.metadata as MicrosoftMetadata
+    : {};
+  const now = new Date().toISOString();
+  const email = profile.mail || profile.userPrincipalName || null;
+  const metadata: MicrosoftMetadata = {
+    ...previous,
+    provider: "microsoft",
+    email,
+    display_name: profile.displayName || null,
+    scopes: token.scope || previous.scopes || MICROSOFT_CALENDAR_SCOPES,
+    token_type: token.token_type || previous.token_type || "Bearer",
+    expires_at: new Date(Date.now() + Math.max(token.expires_in || 3600, 60) * 1000).toISOString(),
+    refresh_token_encrypted: token.refresh_token
+      ? encryptOAuthToken(token.refresh_token)
+      : previous.refresh_token_encrypted || null,
+    token_encrypted: true,
+  };
+
+  const { error } = await supabaseAdmin.from("user_integrations").upsert({
+    user_id: userId,
+    provider: "microsoft",
+    access_token: encryptOAuthToken(token.access_token || ""),
+    external_user_id: profile.id || email,
+    external_team_id: null,
+    external_team_name: null,
+    metadata,
+    connected_at: now,
+    updated_at: now,
+  }, { onConflict: "user_id,provider" });
+  if (error) throw error;
+}
+
+export async function getMicrosoftAccessToken(userId: string) {
+  const { data: integration, error } = await supabaseAdmin
+    .from("user_integrations")
+    .select("access_token, metadata")
+    .eq("user_id", userId)
+    .eq("provider", "microsoft")
+    .maybeSingle();
+  if (error) throw error;
+  if (!integration?.access_token) return null;
+
+  const metadata = (integration.metadata || {}) as MicrosoftMetadata;
+  const expiresAt = metadata.expires_at ? Date.parse(metadata.expires_at) : 0;
+  if (expiresAt > Date.now() + 120_000) return decryptOAuthToken(integration.access_token);
+  if (!metadata.refresh_token_encrypted) throw new Error("Microsoft connection needs to be refreshed");
+
+  const response = await fetch(`${authority()}/token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: getMicrosoftClientId(),
+      client_secret: getMicrosoftClientSecret(),
+      grant_type: "refresh_token",
+      refresh_token: decryptOAuthToken(metadata.refresh_token_encrypted),
+      scope: metadata.scopes || MICROSOFT_CALENDAR_SCOPES,
+    }),
+    cache: "no-store",
+  });
+  const token = (await response.json().catch(() => ({}))) as MicrosoftTokenResponse;
+  if (!response.ok || !token.access_token) {
+    throw new Error(token.error_description || token.error || "Microsoft token refresh failed");
+  }
+
+  const nextMetadata: MicrosoftMetadata = {
+    ...metadata,
+    scopes: token.scope || metadata.scopes || MICROSOFT_CALENDAR_SCOPES,
+    token_type: token.token_type || metadata.token_type || "Bearer",
+    expires_at: new Date(Date.now() + Math.max(token.expires_in || 3600, 60) * 1000).toISOString(),
+    refresh_token_encrypted: token.refresh_token
+      ? encryptOAuthToken(token.refresh_token)
+      : metadata.refresh_token_encrypted,
+    token_encrypted: true,
+  };
+  const { error: updateError } = await supabaseAdmin
+    .from("user_integrations")
+    .update({
+      access_token: encryptOAuthToken(token.access_token),
+      metadata: nextMetadata,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId)
+    .eq("provider", "microsoft");
+  if (updateError) throw updateError;
+  return token.access_token;
+}
+
+export async function listMicrosoftCalendars(userId: string) {
+  const token = await getMicrosoftAccessToken(userId);
+  if (!token) return null;
+  return graphFetch<{ value?: Array<{ id?: string; name?: string; isDefaultCalendar?: boolean }> }>(
+    token,
+    "/me/calendars?$select=id,name,isDefaultCalendar",
+  );
+}
+
+export async function listMicrosoftCalendarEvents(
+  userId: string,
+  calendarIds: string[],
+  startDateTime: string,
+  endDateTime: string,
+) {
+  const { data: integration, error: metadataError } = await supabaseAdmin
+    .from("user_integrations")
+    .select("metadata")
+    .eq("user_id", userId)
+    .eq("provider", "microsoft")
+    .maybeSingle();
+  if (metadataError) throw metadataError;
+  const accountEmail = integration?.metadata && typeof integration.metadata === "object" && "email" in integration.metadata
+    ? String(integration.metadata.email || "").toLowerCase()
+    : "";
+  const token = await getMicrosoftAccessToken(userId);
+  if (!token) return null;
+  const selected = calendarIds.length ? calendarIds.slice(0, 10) : ["default"];
+  const groups = await Promise.all(selected.map(async (calendarId) => {
+    const base = calendarId === "default"
+      ? "/me/calendarView"
+      : `/me/calendars/${encodeURIComponent(calendarId)}/calendarView`;
+    const params = new URLSearchParams({
+      startDateTime,
+      endDateTime,
+      "$select": "id,subject,start,end,attendees,isCancelled",
+      "$orderby": "start/dateTime",
+      "$top": "100",
+    });
+    const payload = await graphFetch<{ value?: MicrosoftEvent[] }>(token, `${base}?${params}`);
+    return (payload.value || []).filter((event) => event.id && event.start?.dateTime && !event.isCancelled).map((event): CalendarEvent => ({
+      id: `microsoft:${calendarId}:${event.id as string}`,
+      title: event.subject?.trim() || "Untitled meeting",
+      start: event.start?.dateTime as string,
+      end: event.end?.dateTime || null,
+      attendees: (event.attendees || []).filter((attendee) => attendee.emailAddress?.address?.toLowerCase() !== accountEmail).map((attendee) => ({
+        name: attendee.emailAddress?.name || null,
+        email: attendee.emailAddress?.address || null,
+        responseStatus: attendee.status?.response || null,
+      })),
+    }));
+  }));
+  return groups.flat().sort((first, second) => new Date(first.start).getTime() - new Date(second.start).getTime());
+}

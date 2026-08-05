@@ -140,8 +140,8 @@ export default function CalendarPanel() {
       ) : needsConnection ? (
         <div className="rounded-card border border-border bg-white p-8 text-center">
           <p className="mb-3 text-3xl">📅</p>
-          <h2 className="mb-2 text-lg font-medium text-ink">Manage Google Calendar</h2>
-          <p className="mx-auto mb-6 max-w-md text-sm leading-relaxed text-ink-mid">Connect or manage Google Calendar in Settings. Beckett uses only the calendars you choose there.</p>
+          <h2 className="mb-2 text-lg font-medium text-ink">Connect a calendar</h2>
+          <p className="mx-auto mb-6 max-w-md text-sm leading-relaxed text-ink-mid">Connect Google Calendar or Microsoft 365 in Settings. Beckett uses only the calendars you choose there.</p>
           <button type="button" onClick={() => window.location.assign("/dashboard/settings#connected-accounts")} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">Open Connected accounts</button>
         </div>
       ) : (
@@ -185,7 +185,7 @@ export default function CalendarPanel() {
       )}
 
       <div className="mt-5 rounded-sm border border-primary/15 bg-primary-light/40 p-4 text-sm leading-relaxed text-ink-mid">
-        Beckett reads selected calendar event titles, timing, and attendees to show your week and offer meeting context. It does not create, edit, cancel, or respond to calendar events, and it does not store your events.
+        Beckett reads selected Google or Microsoft calendar event titles, timing, and attendees to show your week and offer meeting context. It does not create, edit, cancel, or respond to calendar events, and it does not store your events.
       </div>
     </div>
   );

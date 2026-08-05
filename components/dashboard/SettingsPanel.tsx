@@ -11,6 +11,7 @@ import {
 } from "@/lib/onboarding";
 import { CHROME_WEB_STORE_URL } from "@/lib/app-links";
 import GoogleCalendarConnection from "@/components/dashboard/GoogleCalendarConnection";
+import MicrosoftCalendarConnection from "@/components/dashboard/MicrosoftCalendarConnection";
 
 function ConnectRow({
   icon,
@@ -210,6 +211,12 @@ type Diagnostics = {
       updatedAt?: string | null;
     };
     google: {
+      connected: boolean;
+      email?: string | null;
+      connectedAt?: string | null;
+      updatedAt?: string | null;
+    };
+    microsoft: {
       connected: boolean;
       email?: string | null;
       connectedAt?: string | null;
@@ -631,10 +638,10 @@ export default function SettingsPage() {
         </h2>
         <p className="text-sm text-ink-mid mb-5">
           Connect only the tools you want Beckett to use for coaching. Beckett stores connection
-          status and usage metadata, not full Gmail or Slack message history by default.
+          status and usage metadata, not full Gmail, Slack, Google Calendar, or Microsoft Calendar history by default.
         </p>
         <div className="mb-5 rounded-sm border border-primary/15 bg-primary-light/40 p-3 text-xs leading-relaxed text-ink-mid">
-          Gmail is read-only and Slack is used only for context. Beckett cannot send email, post to
+          Gmail and connected calendars are read-only, and Slack is used only for context. Beckett cannot send email, post to
           Slack, move meetings, or change anything without you taking the final action. Disconnecting
           stops future access but does not delete your existing Beckett coaching history or contacts.
         </div>
@@ -651,6 +658,7 @@ export default function SettingsPage() {
             disconnecting={disconnectingProvider === "google"}
           />
           <GoogleCalendarConnection />
+          <MicrosoftCalendarConnection />
           {/* Slack */}
           <ConnectRow
             icon="💬"
@@ -707,6 +715,7 @@ export default function SettingsPage() {
               <HealthPill ok={diagnostics.extension.tokenIssued} label="Extension token" />
               <HealthPill ok={diagnostics.integrations.slack.connected} label="Slack" />
               <HealthPill ok={diagnostics.integrations.google.connected} label="Google" />
+              <HealthPill ok={diagnostics.integrations.microsoft.connected} label="Microsoft 365" />
               <HealthPill ok={diagnostics.api.reachable} label="API reachable" />
             </div>
 
