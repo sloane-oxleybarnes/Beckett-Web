@@ -8,6 +8,7 @@ import {
   signInCard,
   workspaceAddOnRoute,
 } from "@/lib/google-workspace-addon";
+import { gmailOpenCreatedDraftAction } from "@/lib/google-workspace-gmail-action";
 import { createGmailReplyDraft, getSelectedGmailThread } from "@/lib/google-workspace-gmail";
 
 export const runtime = "nodejs";
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const thread = await getSelectedGmailThread(event);
-      const { draftId, threadServerPermId } = await createGmailReplyDraft(event, thread, profile.email, reply);
+      const { draftId, draftThreadId } = await createGmailReplyDraft(event, thread, profile.email, reply);
 
       await trackBetaEvent({
         userId: profile.id,
@@ -45,13 +46,7 @@ export async function POST(request: NextRequest) {
         metadata: { platform: "gmail", action: "create_reply_draft", messageCount: thread.messages.length },
       });
 
-      return NextResponse.json({
-        hostAppAction: {
-          gmailAction: {
-            openCreatedDraftAction: { draftId, threadServerPermId },
-          },
-        },
-      });
+      return NextResponse.json(gmailOpenCreatedDraftAction(draftId, draftThreadId));
     } catch (error) {
       const message = error instanceof Error ? error.message : "gmail_draft_failed";
       console.error("Google Workspace Gmail draft creation failed", { message, userId: profile.id });
