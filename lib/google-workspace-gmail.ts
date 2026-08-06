@@ -84,6 +84,12 @@ function emailFromAddress(value: string) {
   return (value.match(/<([^>]+)>/) || value.match(/([^\s<>]+@[^\s<>]+)/))?.[1]?.toLowerCase() || "";
 }
 
+function emailsFromAddressList(value: string) {
+  return Array.from(value.matchAll(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi)).map((match) =>
+    match[1].toLowerCase(),
+  );
+}
+
 function normalizeMessage(message: GmailMessage): SelectedGmailMessage {
   const headers = message.payload?.headers;
   const from = header(headers, "From");
@@ -142,8 +148,13 @@ export async function createGmailReplyDraft(
 
   const currentUser = userEmail?.trim().toLowerCase() || "";
   const latest = thread.messages[thread.messages.length - 1];
+  const latestSentByUser = Boolean(currentUser && latest?.fromEmail === currentUser);
+  const latestNonUserRecipient = latestSentByUser
+    ? emailsFromAddressList(latest?.to || "").find((email) => email !== currentUser) || ""
+    : "";
   const recipient =
     [...thread.messages].reverse().find((message) => message.fromEmail && message.fromEmail !== currentUser)?.from ||
+    latestNonUserRecipient ||
     latest?.from ||
     "";
   if (!recipient) throw new Error("gmail_reply_recipient_missing");
@@ -209,11 +220,13 @@ export async function getSelectedGmailThread(event: WorkspaceAddOnEvent): Promis
   return { id: normalized.threadId || threadId, messages: [normalized], selectedMessageId: messageId };
 }
 
-export function threadForPrompt(thread: SelectedGmailThread) {
+export function threadForPrompt(thread: SelectedGmailThread, userEmail?: string | null) {
+  const currentUser = userEmail?.trim().toLowerCase() || "";
   return thread.messages
     .map((message, index) => {
       const date = message.date ? ` — ${message.date}` : "";
-      return `Message ${index + 1} from ${message.from || "Unknown"}${date}:\n${message.body}`;
+      const sender = currentUser && message.fromEmail === currentUser ? `You (${message.from || currentUser})` : message.from || "Unknown";
+      return `Message ${index + 1} from ${sender}${date}:\n${message.body}`;
     })
     .join("\n\n---\n\n")
     .slice(0, 45_000);

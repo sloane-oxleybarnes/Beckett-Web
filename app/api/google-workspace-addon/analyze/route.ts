@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
         [
           {
             role: "user",
-            content: `Subject: ${latest.subject}\nSelected conversation:\n\n${threadForPrompt(thread)}`,
+            content: `Subject: ${latest.subject}\nSelected conversation:\n\n${threadForPrompt(thread, profile.email)}`,
           },
         ],
         700,

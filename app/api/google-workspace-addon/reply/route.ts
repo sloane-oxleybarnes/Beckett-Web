@@ -61,6 +61,8 @@ export async function POST(request: NextRequest) {
       const result = await callAnthropic(
         [
           "You are Beckett, a private communication coach.",
+          `The Beckett user is ${profile.email || "the signed-in user"}. Messages labeled You were written by the Beckett user. Never address the Beckett user as the recipient of a suggested reply.`,
+          "If the newest message is labeled You, draft a follow-up to the other participant rather than a response to the user's own message.",
           `Draft three possible replies to the user-selected Gmail conversation${refinement ? " that incorporate the user's requested additions" : ""}.`,
           "The first should be direct and clear. The second should be warm and collaborative. The third should set a gentle limit.",
           "Preserve the user's agency, avoid inventing facts, and do not imply that Beckett sent or will send anything.",
@@ -75,7 +77,7 @@ export async function POST(request: NextRequest) {
             role: "user",
             content: [
               `Subject: ${latest.subject}`,
-              `Selected conversation:\n\n${threadForPrompt(thread)}`,
+              `Selected conversation:\n\n${threadForPrompt(thread, profile.email)}`,
               ...(refinement ? [`User-requested details to include:\n${refinement}`] : []),
             ].join("\n\n"),
           },
