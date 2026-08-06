@@ -30,20 +30,32 @@ export type WorkspaceAddOnProfile = {
   googleSubject: string;
 };
 
+type CardHeader = {
+  title: string;
+  subtitle?: string;
+  imageUrl?: string;
+  imageType?: "CIRCLE" | "SQUARE";
+  imageAltText?: string;
+};
+
 export type Card = {
   name?: string;
-  header?: { title: string; subtitle?: string; imageUrl?: string; imageType?: "CIRCLE" | "SQUARE" };
+  header?: CardHeader;
   sections: Array<{
     header?: string;
     collapsible?: boolean;
+    uncollapsibleWidgetsCount?: number;
     widgets: Array<Record<string, unknown>>;
   }>;
   fixedFooter?: Record<string, unknown>;
+  sectionDividerStyle?: "SOLID_DIVIDER" | "NO_DIVIDER";
   displayStyle?: "PEEK" | "REPLACE";
-  peekCardHeader?: { title: string; subtitle?: string };
+  peekCardHeader?: CardHeader;
 };
 
 const googleAuth = new OAuth2Client();
+const BECKETT_ICON_URL = "https://www.meetbeckett.co/brand/beckett-icon.png";
+const BECKETT_BUTTON_COLOR = { red: 0.729, green: 0.459, blue: 0.09 };
 
 function requiredEnv(name: string) {
   const value = process.env[name]?.trim();
@@ -166,12 +178,71 @@ export function formatCardText(value: string, maxLength = 12_000) {
   return escapeCardText(trimmed).replace(/\n/g, "<br>");
 }
 
-export function textWidget(text: string) {
-  return { textParagraph: { text } };
+export function formatCardRichText(value: string, maxLength = 12_000) {
+  const lines = value.trim().slice(0, maxLength).split(/\r?\n/);
+  return lines
+    .map((line) => {
+      const bulleted = line.replace(/^\s*[-*]\s+/, "• ");
+      return escapeCardText(bulleted)
+        .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+        .replace(/__(.+?)__/g, "<b>$1</b>");
+    })
+    .join("<br>");
+}
+
+export function parseLabeledSections(value: string, labels: Array<{ key: string; label: string }>) {
+  const buckets = Object.fromEntries(labels.map(({ key }) => [key, [] as string[]])) as Record<string, string[]>;
+  const normalizedLabels = labels.map(({ key, label }) => ({ key, label: label.toLowerCase() }));
+  let currentKey = labels[0]?.key || "content";
+  let foundHeading = false;
+
+  for (const rawLine of value.split(/\r?\n/)) {
+    const possibleHeading = rawLine
+      .trim()
+      .replace(/^#{1,6}\s*/, "")
+      .replace(/^\*\*(.*?)\*\*$/, "$1")
+      .replace(/^__(.*?)__$/, "$1")
+      .replace(/:$/, "")
+      .trim()
+      .toLowerCase();
+    const matched = normalizedLabels.find(({ label }) => possibleHeading === label);
+    if (matched) {
+      currentKey = matched.key;
+      foundHeading = true;
+      continue;
+    }
+    if (/^\s*-{3,}\s*$/.test(rawLine)) continue;
+    buckets[currentKey] ??= [];
+    buckets[currentKey].push(rawLine);
+  }
+
+  if (!foundHeading && labels[0]) {
+    buckets[labels[0].key] = value.split(/\r?\n/);
+  }
+
+  return Object.fromEntries(Object.entries(buckets).map(([key, lines]) => [key, lines.join("\n").trim()]));
+}
+
+export function beckettCardHeader(title: string, subtitle?: string): CardHeader {
+  return {
+    title,
+    ...(subtitle ? { subtitle } : {}),
+    imageUrl: BECKETT_ICON_URL,
+    imageType: "CIRCLE",
+    imageAltText: "Beckett logo",
+  };
+}
+
+export function brandedSectionHeader(label: string) {
+  return `<font color="#BA7517"><b>${escapeCardText(label)}</b></font>`;
+}
+
+export function textWidget(text: string, maxLines?: number) {
+  return { textParagraph: { text, ...(maxLines ? { maxLines } : {}) } };
 }
 
 export function decoratedTextWidget(topLabel: string, text: string) {
-  return { decoratedText: { topLabel, text } };
+  return { decoratedText: { topLabel, text, wrapText: true } };
 }
 
 export function buttonWidget(text: string, functionUrl: string, parameters?: Record<string, string>) {
@@ -180,7 +251,7 @@ export function buttonWidget(text: string, functionUrl: string, parameters?: Rec
       buttons: [
         {
           text,
-          color: { red: 0.729, green: 0.459, blue: 0.09 },
+          color: BECKETT_BUTTON_COLOR,
           onClick: {
             action: {
               function: functionUrl,
@@ -201,10 +272,20 @@ export function openLinkButtonWidget(text: string, url: string) {
       buttons: [
         {
           text,
-          color: { red: 0.729, green: 0.459, blue: 0.09 },
+          color: BECKETT_BUTTON_COLOR,
           onClick: { openLink: { url, onClose: "RELOAD", openAs: "OVERLAY" } },
         },
       ],
+    },
+  };
+}
+
+export function actionFixedFooter(text: string, functionUrl: string) {
+  return {
+    primaryButton: {
+      text,
+      color: BECKETT_BUTTON_COLOR,
+      onClick: { action: { function: functionUrl } },
     },
   };
 }
@@ -224,7 +305,7 @@ export function triggerCardResponse(card: Card) {
 
 export function errorCard(title: string, message: string): Card {
   return {
-    header: { title: "Beckett", subtitle: title },
+    header: beckettCardHeader("Beckett", title),
     sections: [{ widgets: [textWidget(formatCardText(message))] }],
   };
 }
@@ -232,7 +313,7 @@ export function errorCard(title: string, message: string): Card {
 export function signInCard(request: NextRequest): Card {
   const signInUrl = endpointUrl(request, "/auth/login?next=%2Fdashboard");
   return {
-    header: { title: "Connect Beckett", subtitle: "Private communication coaching" },
+    header: beckettCardHeader("Connect Beckett", "Private communication coaching"),
     sections: [
       {
         widgets: [

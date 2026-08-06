@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import {
+  beckettCardHeader,
   buttonWidget,
   endpointUrl,
   isWorkspaceAddOnPlanEligible,
@@ -19,13 +20,13 @@ export async function POST(request: NextRequest) {
     if (!profile) return triggerCardResponse(signInCard(request));
     if (!isWorkspaceAddOnPlanEligible(profile.plan)) {
       return triggerCardResponse({
-        header: { title: "Beckett", subtitle: "Plan required" },
+        header: beckettCardHeader("Beckett", "Plan required"),
         sections: [{ widgets: [textWidget("Your Beckett plan does not currently include Gmail analysis.")] }],
       });
     }
     return triggerCardResponse({
       name: "beckett-selected-message",
-      header: { title: "Analyze this conversation", subtitle: "Nothing is read until you continue" },
+      header: beckettCardHeader("Analyze this conversation", "Nothing is read until you continue"),
       sections: [
         {
           widgets: [

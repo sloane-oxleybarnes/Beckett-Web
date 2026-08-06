@@ -7,6 +7,7 @@ This is the native Gmail replacement for the Gmail portion of the Beckett Chrome
 - `POST /api/google-workspace-addon/home` — add-on homepage and Beckett account status.
 - `POST /api/google-workspace-addon/message` — contextual card shown for an open Gmail message.
 - `POST /api/google-workspace-addon/analyze` — user-invoked Gmail retrieval and Beckett analysis.
+- `POST /api/google-workspace-addon/reply` — user-invoked reply coaching with two editable wording options; it does not create or send a Gmail draft.
 
 Every endpoint verifies Google's service-account ID token. User identity comes from Google's verified user ID token and is mapped to an existing Beckett profile by Google subject or verified email. The add-on does not use browser cookies or the stored broad `gmail.readonly` integration token.
 
@@ -31,6 +32,8 @@ GOOGLE_WORKSPACE_ADDON_ORIGIN=https://your-stable-deployment.example.com
 7. Reload Gmail, open a message, open Beckett from the right sidebar, authorize the listed scopes, and click **Analyze selected conversation**.
 
 Use a deployment with a stable hostname. Preview URLs that change on every deploy will fail ID-token audience validation.
+
+The manifest also declares Beckett's toolbar and button colors, the fixed-footer widget, and universal menu links for Beckett, settings, privacy, and help. Those settings live in the Google HTTP deployment and must be updated there when the manifest changes.
 
 ## Scope test
 
@@ -57,7 +60,6 @@ That is a sensitive scope, but it remains substantially narrower than the restri
 After the read/analyze flow passes the test deployment:
 
 1. Add a compose trigger using `gmail.addons.current.action.compose`.
-2. Add a user-invoked **Draft a reply** analysis action.
-3. Return Google's draft-update response to insert editable text at the cursor, without sending it.
-4. Move any Gmail-specific preferences still stored in `chrome.storage.local` into the Beckett profile.
-5. Prepare the Marketplace listing, reviewer test account, privacy disclosures, and verification video.
+2. Return Google's draft-update response to insert the selected reply wording at the cursor, without sending it.
+3. Move any Gmail-specific preferences still stored in `chrome.storage.local` into the Beckett profile.
+4. Prepare the Marketplace listing, reviewer test account, privacy disclosures, and verification video.
