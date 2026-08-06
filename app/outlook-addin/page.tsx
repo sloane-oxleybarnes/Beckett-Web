@@ -89,8 +89,6 @@ export default function OutlookAddinPage() {
     });
   }
 
-  async function decode() { if (item && authState === "signed-in") await decodeItem(item); }
-
   function beginOutlookSignIn() {
     const office = window.Office;
     const openDialog = office?.context?.ui?.displayDialogAsync;
