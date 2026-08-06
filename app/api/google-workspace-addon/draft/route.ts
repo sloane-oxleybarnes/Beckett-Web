@@ -13,8 +13,17 @@ import { createGmailReplyDraft, getSelectedGmailThread } from "@/lib/google-work
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const GMAIL_COMPOSE_SCOPE = "https://www.googleapis.com/auth/gmail.addons.current.action.compose";
+
 export async function POST(request: NextRequest) {
   return workspaceAddOnRoute(request, async (event) => {
+    const authorizedScopes = event.authorizationEventObject?.authorizedScopes || [];
+    if (!authorizedScopes.includes(GMAIL_COMPOSE_SCOPE)) {
+      return NextResponse.json({
+        requesting_google_scopes: { scopes: [GMAIL_COMPOSE_SCOPE] },
+      });
+    }
+
     const profile = await resolveWorkspaceAddOnProfile(event);
     if (!profile) return cardResponse(signInCard(request));
     if (!isWorkspaceAddOnPlanEligible(profile.plan)) {
