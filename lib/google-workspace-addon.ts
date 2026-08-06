@@ -93,7 +93,7 @@ export async function verifyWorkspaceAddOnRequest(request: NextRequest, event: W
   }
 }
 
-async function verifyWorkspaceUser(event: WorkspaceAddOnEvent): Promise<TokenPayload> {
+export async function verifyWorkspaceAddOnUser(event: WorkspaceAddOnEvent): Promise<TokenPayload> {
   const idToken = event.authorizationEventObject?.userIdToken || "";
   if (!idToken) throw new Error("missing_user_token");
   const ticket = await googleAuth.verifyIdToken({
@@ -108,7 +108,7 @@ async function verifyWorkspaceUser(event: WorkspaceAddOnEvent): Promise<TokenPay
 }
 
 export async function resolveWorkspaceAddOnProfile(event: WorkspaceAddOnEvent): Promise<WorkspaceAddOnProfile | null> {
-  const user = await verifyWorkspaceUser(event);
+  const user = await verifyWorkspaceAddOnUser(event);
   const googleSubject = user.sub;
   const email = user.email!.trim().toLowerCase();
 
@@ -355,16 +355,23 @@ export function errorCard(title: string, message: string): Card {
   };
 }
 
-export function signInCard(request: NextRequest): Card {
-  const signInUrl = endpointUrl(request, "/auth/login?next=%2Fdashboard");
+export async function signInCard(request: NextRequest, event: WorkspaceAddOnEvent): Promise<Card> {
+  const { createWorkspaceAddOnConnectUrl } = await import("@/lib/google-workspace-addon-link");
+  const connectUrl = await createWorkspaceAddOnConnectUrl(request, event);
+  const requestAccessUrl = endpointUrl(request, "/beta?source=google_workspace_addon");
   return {
-    header: beckettCardHeader("Connect Beckett", "Private communication coaching"),
+    header: beckettCardHeader("Connect Beckett", "Use your coaching context in Gmail"),
     sections: [
       {
         widgets: [
-          textWidget("Sign in to your Beckett account to analyze the Gmail message you choose."),
-          textWidget("Beckett only receives message content after you select an analysis action."),
-          openLinkButtonWidget("Sign in to Beckett", signInUrl),
+          textWidget("Connect this Google account to an existing Beckett account. You can use a different email address for Beckett."),
+          openLinkButtonWidget("Connect Beckett account", connectUrl),
+        ],
+      },
+      {
+        widgets: [
+          textWidget("New to Beckett? Request access, then return to Gmail after your account is ready."),
+          openLinkButtonWidget("Request Beckett access", requestAccessUrl),
         ],
       },
     ],
