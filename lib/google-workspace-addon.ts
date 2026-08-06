@@ -193,7 +193,7 @@ export function formatCardRichText(value: string, maxLength = 12_000) {
 export function parseLabeledSections(value: string, labels: Array<{ key: string; label: string }>) {
   const buckets = Object.fromEntries(labels.map(({ key }) => [key, [] as string[]])) as Record<string, string[]>;
   const normalizedLabels = labels.map(({ key, label }) => ({ key, label: label.toLowerCase() }));
-  let currentKey = labels[0]?.key || "content";
+  let currentKey: string | null = null;
   let foundHeading = false;
 
   for (const rawLine of value.split(/\r?\n/)) {
@@ -212,6 +212,7 @@ export function parseLabeledSections(value: string, labels: Array<{ key: string;
       continue;
     }
     if (/^\s*-{3,}\s*$/.test(rawLine)) continue;
+    if (!currentKey) continue;
     buckets[currentKey] ??= [];
     buckets[currentKey].push(rawLine);
   }

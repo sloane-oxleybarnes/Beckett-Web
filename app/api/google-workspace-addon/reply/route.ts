@@ -56,10 +56,12 @@ export async function POST(request: NextRequest) {
       const result = await callAnthropic(
         [
           "You are Beckett, a private communication coach.",
-          "Draft two possible replies to the user-selected Gmail conversation.",
-          "The first should be direct and concise. The second should be warm and collaborative.",
+          "Draft three possible replies to the user-selected Gmail conversation.",
+          "The first should be direct and clear. The second should be warm and collaborative. The third should set a gentle limit.",
           "Preserve the user's agency, avoid inventing facts, and do not imply that Beckett sent or will send anything.",
-          "Return exactly two sections named Direct and concise and Warm and collaborative.",
+          "Do not summarize or analyze the conversation, and do not include a preface.",
+          "Return exactly three sections named Direct and clear, Warm and collaborative, and Sets a gentle limit.",
+          "Begin immediately with Direct and clear.",
           "Use those section names as plain-text headings on their own lines. Do not use Markdown, hashtags, asterisks, or separator lines.",
           beckettBoundaryPrompt(),
         ].join("\n\n"),
@@ -69,7 +71,7 @@ export async function POST(request: NextRequest) {
             content: `Subject: ${latest.subject}\nSelected conversation:\n\n${threadForPrompt(thread)}`,
           },
         ],
-        650,
+        850,
       );
 
       if (WEB_CREDITS_ENABLED) {
@@ -89,8 +91,9 @@ export async function POST(request: NextRequest) {
       });
 
       const sections = parseLabeledSections(result, [
-        { key: "direct", label: "Direct and concise" },
+        { key: "direct", label: "Direct and clear" },
         { key: "warm", label: "Warm and collaborative" },
+        { key: "boundary", label: "Sets a gentle limit" },
       ]);
 
       return cardResponse(
@@ -102,12 +105,16 @@ export async function POST(request: NextRequest) {
               widgets: [decoratedTextWidget("Replying to", formatCardText(latest.from || "Unknown sender", 500))],
             },
             {
-              header: brandedSectionHeader("Direct and concise"),
+              header: brandedSectionHeader("Direct and clear"),
               widgets: [textWidget(formatCardRichText(sections.direct || result), 10)],
             },
             {
               header: brandedSectionHeader("Warm and collaborative"),
               widgets: [textWidget(formatCardRichText(sections.warm || "Adapt the direct version with a warmer opening and close."), 10)],
+            },
+            {
+              header: brandedSectionHeader("Sets a gentle limit"),
+              widgets: [textWidget(formatCardRichText(sections.boundary || "State what you can do and offer a realistic next step."), 10)],
             },
             {
               widgets: [
