@@ -90,7 +90,7 @@ export default function MicrosoftCalendarConnection() {
   }
 
   async function disconnect() {
-    if (!window.confirm("Disconnect Microsoft 365? Beckett will delete its stored Microsoft tokens and stop reading calendar events.")) return;
+    if (!window.confirm("Disconnect Microsoft 365? Beckett will delete its stored Microsoft tokens and stop reading selected calendar and Outlook thread context.")) return;
     setDisconnecting(true);
     setError(null);
     try {
@@ -113,8 +113,8 @@ export default function MicrosoftCalendarConnection() {
     <div className="flex items-start gap-3">
       <span className="mt-0.5 text-lg">▦</span>
       <div className="min-w-0">
-        <p className="text-sm font-medium text-ink">Microsoft 365 Calendar</p>
-        <p className="text-xs text-ink-light">Read-only Outlook meeting context from only the calendars you choose.</p>
+        <p className="text-sm font-medium text-ink">Microsoft 365</p>
+        <p className="text-xs text-ink-light">Read-only calendar context and, when you choose it in Outlook, the messages in one selected email conversation.</p>
       </div>
     </div>
     <div className="mt-3 flex flex-wrap items-center gap-2 pl-8">

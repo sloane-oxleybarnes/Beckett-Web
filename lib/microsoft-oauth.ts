@@ -10,6 +10,7 @@ export const MICROSOFT_CALENDAR_SCOPES = [
   "offline_access",
   "User.Read",
   "Calendars.ReadBasic",
+  "Mail.Read",
 ].join(" ");
 
 const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
@@ -47,6 +48,25 @@ type MicrosoftEvent = {
     status?: { response?: string };
   }>;
   isCancelled?: boolean;
+};
+
+type MicrosoftMailMessage = {
+  id?: string;
+  conversationId?: string;
+  conversationIndex?: string;
+  subject?: string;
+  from?: { emailAddress?: { name?: string; address?: string } };
+  receivedDateTime?: string;
+  sentDateTime?: string;
+  uniqueBody?: { content?: string };
+  body?: { content?: string };
+};
+
+export type MicrosoftThreadMessage = {
+  sender: string;
+  subject: string;
+  body: string;
+  sentAt: string | null;
 };
 
 function authority() {
@@ -128,6 +148,10 @@ async function graphFetch<T>(accessToken: string, path: string) {
   const data = (await response.json().catch(() => ({}))) as T & { error?: { message?: string } };
   if (!response.ok) throw new Error(data.error?.message || `Microsoft Graph request failed (${response.status})`);
   return data;
+}
+
+export function microsoftHasMailReadScope(scopes: unknown) {
+  return typeof scopes === "string" && scopes.split(/\s+/).some((scope) => scope.toLowerCase() === "mail.read");
 }
 
 export async function getMicrosoftProfile(accessToken: string) {
@@ -245,6 +269,60 @@ export async function listMicrosoftCalendars(userId: string) {
     token,
     "/me/calendars?$select=id,name,isDefaultCalendar",
   );
+}
+
+export async function getMicrosoftMessageThread(userId: string, itemId: string) {
+  const { data: integration, error } = await supabaseAdmin
+    .from("user_integrations")
+    .select("metadata")
+    .eq("user_id", userId)
+    .eq("provider", "microsoft")
+    .maybeSingle();
+  if (error) throw error;
+  const metadata = (integration?.metadata || {}) as MicrosoftMetadata;
+  if (!integration || !microsoftHasMailReadScope(metadata.scopes)) {
+    const scopeError = new Error("Microsoft Mail permission is not connected");
+    scopeError.name = "MicrosoftMailPermissionError";
+    throw scopeError;
+  }
+
+  const accessToken = await getMicrosoftAccessToken(userId);
+  if (!accessToken) throw new Error("Microsoft connection needs to be refreshed");
+  const current = await graphFetch<MicrosoftMailMessage>(
+    accessToken,
+    `/me/messages/${encodeURIComponent(itemId)}?$select=id,conversationId`,
+  );
+  if (!current.conversationId) throw new Error("Outlook could not identify this email conversation");
+
+  const filter = `conversationId eq '${current.conversationId.replace(/'/g, "''")}'`;
+  const listParams = new URLSearchParams({
+    "$filter": filter,
+    "$select": "id,conversationIndex,subject,from,receivedDateTime,sentDateTime",
+    "$top": "25",
+  });
+  const list = await graphFetch<{ value?: MicrosoftMailMessage[] }>(accessToken, `/me/messages?${listParams}`);
+  const summaries = (list.value || []).filter((message) => message.id).sort((first, second) => {
+    const firstTime = Date.parse(first.sentDateTime || first.receivedDateTime || "") || 0;
+    const secondTime = Date.parse(second.sentDateTime || second.receivedDateTime || "") || 0;
+    return firstTime - secondTime || String(first.conversationIndex || "").localeCompare(String(second.conversationIndex || ""));
+  }).slice(-12);
+
+  const messages = await Promise.all(summaries.map(async (summary): Promise<MicrosoftThreadMessage | null> => {
+    const message = await graphFetch<MicrosoftMailMessage>(
+      accessToken,
+      `/me/messages/${encodeURIComponent(summary.id as string)}?$select=subject,from,receivedDateTime,sentDateTime,uniqueBody,body`,
+    );
+    const body = (message.uniqueBody?.content || message.body?.content || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    if (!body) return null;
+    const sender = message.from?.emailAddress?.name || message.from?.emailAddress?.address || "Unknown sender";
+    return {
+      sender,
+      subject: message.subject?.trim() || "(no subject)",
+      body: body.slice(0, 4_000),
+      sentAt: message.sentDateTime || message.receivedDateTime || null,
+    };
+  }));
+  return messages.filter((message): message is MicrosoftThreadMessage => Boolean(message));
 }
 
 export async function listMicrosoftCalendarEvents(
