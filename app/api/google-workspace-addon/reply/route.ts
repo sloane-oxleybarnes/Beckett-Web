@@ -10,12 +10,10 @@ import {
   recordSuccessfulWebCredit,
 } from "@/lib/web-credits";
 import {
-  actionFixedFooter,
   beckettCardHeader,
   brandedSectionHeader,
   cardResponse,
   decoratedTextWidget,
-  endpointUrl,
   errorCard,
   formatCardRichText,
   formatCardText,
@@ -37,7 +35,7 @@ export async function POST(request: NextRequest) {
     const profile = await resolveWorkspaceAddOnProfile(event);
     if (!profile) return cardResponse(signInCard(request));
     if (!isWorkspaceAddOnPlanEligible(profile.plan)) {
-      return cardResponse(errorCard("Plan required", "Your Beckett plan does not currently include Gmail analysis."));
+      return cardResponse(errorCard("Plan required", "Your Beckett plan does not currently include Gmail reply coaching."));
     }
 
     try {
@@ -50,7 +48,7 @@ export async function POST(request: NextRequest) {
       } else {
         await recordAiUsage(profile.id, {
           source: "google_workspace_addon",
-          action: "analyze_message",
+          action: "draft_reply",
           metadata: { platform: "gmail", messageCount: thread.messages.length },
         });
       }
@@ -58,9 +56,10 @@ export async function POST(request: NextRequest) {
       const result = await callAnthropic(
         [
           "You are Beckett, a private communication coach.",
-          "Analyze only the user-selected Gmail conversation supplied below.",
-          "Do not claim to know a sender's intent as fact. Separate visible evidence from possible interpretations.",
-          "Return exactly three concise sections named Likely read, What it asks, and Possible next move.",
+          "Draft two possible replies to the user-selected Gmail conversation.",
+          "The first should be direct and concise. The second should be warm and collaborative.",
+          "Preserve the user's agency, avoid inventing facts, and do not imply that Beckett sent or will send anything.",
+          "Return exactly two sections named Direct and concise and Warm and collaborative.",
           "Use those section names as plain-text headings on their own lines. Do not use Markdown, hashtags, asterisks, or separator lines.",
           beckettBoundaryPrompt(),
         ].join("\n\n"),
@@ -70,13 +69,13 @@ export async function POST(request: NextRequest) {
             content: `Subject: ${latest.subject}\nSelected conversation:\n\n${threadForPrompt(thread)}`,
           },
         ],
-        700,
+        650,
       );
 
       if (WEB_CREDITS_ENABLED) {
         await recordSuccessfulWebCredit(profile.id, {
           source: "google_workspace_addon",
-          action: "analyze_message",
+          action: "draft_reply",
           metadata: { platform: "gmail", messageCount: thread.messages.length },
         });
       }
@@ -84,59 +83,41 @@ export async function POST(request: NextRequest) {
       await trackBetaEvent({
         userId: profile.id,
         email: profile.email,
-        eventName: "analysis_completed",
+        eventName: "reply_drafted",
         source: "google_workspace_addon",
-        metadata: { platform: "gmail", action: "analyze_message", messageCount: thread.messages.length },
+        metadata: { platform: "gmail", action: "draft_reply", messageCount: thread.messages.length },
       });
 
       const sections = parseLabeledSections(result, [
-        { key: "likelyRead", label: "Likely read" },
-        { key: "whatItAsks", label: "What it asks" },
-        { key: "possibleNextMove", label: "Possible next move" },
+        { key: "direct", label: "Direct and concise" },
+        { key: "warm", label: "Warm and collaborative" },
       ]);
 
       return cardResponse(
         {
-          name: "beckett-analysis-result",
-          header: beckettCardHeader("Beckett’s read", latest.subject.slice(0, 120)),
+          name: "beckett-reply-ideas",
+          header: beckettCardHeader("Reply ideas", latest.subject.slice(0, 120)),
           sections: [
             {
-              header: brandedSectionHeader("Conversation"),
-              collapsible: true,
-              uncollapsibleWidgetsCount: 1,
-              widgets: [
-                decoratedTextWidget("From", formatCardText(latest.from || "Unknown sender", 500)),
-                decoratedTextWidget(
-                  "Context used",
-                  `${thread.messages.length} message${thread.messages.length === 1 ? "" : "s"} from this user-selected conversation`,
-                ),
-              ],
+              widgets: [decoratedTextWidget("Replying to", formatCardText(latest.from || "Unknown sender", 500))],
             },
             {
-              header: brandedSectionHeader("Likely read"),
-              widgets: [textWidget(formatCardRichText(sections.likelyRead || result), 9)],
+              header: brandedSectionHeader("Direct and concise"),
+              widgets: [textWidget(formatCardRichText(sections.direct || result), 10)],
             },
             {
-              header: brandedSectionHeader("What it asks"),
-              widgets: [textWidget(formatCardRichText(sections.whatItAsks || "No explicit request is visible in the selected conversation."), 9)],
-            },
-            {
-              header: brandedSectionHeader("Possible next move"),
-              widgets: [textWidget(formatCardRichText(sections.possibleNextMove || "Choose the next step that best fits your context."), 9)],
+              header: brandedSectionHeader("Warm and collaborative"),
+              widgets: [textWidget(formatCardRichText(sections.warm || "Adapt the direct version with a warmer opening and close."), 10)],
             },
             {
               widgets: [
                 decoratedTextWidget(
-                  "Private by design",
-                  "Only this user-selected conversation was used. Beckett did not send or change any email.",
+                  "You stay in control",
+                  "Review and personalize any wording before you use it. Beckett has not created or sent a Gmail draft.",
                 ),
               ],
             },
           ],
-          fixedFooter: actionFixedFooter(
-            "Help me reply",
-            endpointUrl(request, "/api/google-workspace-addon/reply"),
-          ),
         },
         true,
       );
@@ -147,12 +128,12 @@ export async function POST(request: NextRequest) {
       if (error instanceof WebCreditLimitError) {
         return cardResponse(errorCard("Credit limit reached", error.message));
       }
-      const message = error instanceof Error ? error.message : "analysis_failed";
-      console.error("Google Workspace Gmail analysis failed", { message, userId: profile.id });
+      const message = error instanceof Error ? error.message : "reply_draft_failed";
+      console.error("Google Workspace Gmail reply coaching failed", { message, userId: profile.id });
       const friendly = message.startsWith("gmail_api_error:403")
         ? "Google did not grant access to this message. Reopen Beckett and approve the requested Gmail permission."
-        : "Beckett could not analyze this conversation. Please reopen the email and try again.";
-      return cardResponse(errorCard("Analysis unavailable", friendly));
+        : "Beckett could not prepare reply ideas. Please reopen the email and try again.";
+      return cardResponse(errorCard("Reply ideas unavailable", friendly));
     }
   });
 }

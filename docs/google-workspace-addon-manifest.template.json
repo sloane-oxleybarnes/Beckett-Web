@@ -9,9 +9,37 @@
     "common": {
       "name": "Beckett",
       "logoUrl": "https://www.meetbeckett.co/brand/beckett-icon.png",
+      "layoutProperties": {
+        "primaryColor": "#1A1917",
+        "secondaryColor": "#BA7517"
+      },
+      "addOnWidgetSet": {
+        "usedWidgets": [
+          "STYLED_BUTTONS",
+          "FIXED_FOOTER"
+        ]
+      },
       "homepageTrigger": {
         "runFunction": "https://YOUR_DEPLOYMENT_HOST/api/google-workspace-addon/home"
       },
+      "universalActions": [
+        {
+          "label": "Open Beckett",
+          "openLink": "https://YOUR_DEPLOYMENT_HOST/dashboard"
+        },
+        {
+          "label": "Beckett settings",
+          "openLink": "https://YOUR_DEPLOYMENT_HOST/dashboard/settings"
+        },
+        {
+          "label": "Privacy",
+          "openLink": "https://www.meetbeckett.co/privacy"
+        },
+        {
+          "label": "Get help",
+          "openLink": "mailto:hello@meetbeckett.co"
+        }
+      ],
       "openLinkUrlPrefixes": [
         "https://YOUR_DEPLOYMENT_HOST/",
         "https://www.meetbeckett.co/"
