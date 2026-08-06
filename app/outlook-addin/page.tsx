@@ -26,10 +26,11 @@ declare global {
 }
 
 type AuthState = "checking" | "signed-in" | "signed-out" | "unknown";
+type Analysis = { intent?: string; tone?: string; want?: string; responses?: Array<{ label?: string; tag?: string; text?: string }> };
 
 export default function OutlookAddinPage() {
   const [item, setItem] = useState<{ subject: string; sender: string; body: string } | null>(null);
-  const [result, setResult] = useState("");
+  const [result, setResult] = useState<Analysis | null>(null);
   const [status, setStatus] = useState("Open a message or draft in Outlook, then choose Read selected item.");
   const [officeHost, setOfficeHost] = useState<string | null>(null);
   const [canInsert, setCanInsert] = useState(false);
@@ -58,7 +59,7 @@ export default function OutlookAddinPage() {
     const data = await response.json().catch(() => ({}));
     if (response.status === 401) { setAuthState("signed-out"); setStatus("Sign in to Beckett to analyze this message."); return; }
     if (!response.ok) { setStatus(data.error || "Could not analyze this message."); return; }
-    setResult(data.result || "");
+    setResult(data.result && typeof data.result === "object" ? data.result as Analysis : null);
     setStatus("");
   }
 
@@ -83,7 +84,7 @@ export default function OutlookAddinPage() {
       const selectedItem = { subject, sender, body: String(bodyResult.value || "").slice(0, 12_000) };
       setItem(selectedItem);
       setCanInsert(Boolean(current.body?.setSelectedDataAsync));
-      setResult("");
+      setResult(null);
       setStatus("");
       if (analyzeAfterRead && authState === "signed-in") void decodeItem(selectedItem);
     });
@@ -109,11 +110,11 @@ export default function OutlookAddinPage() {
     });
   }
 
-  function insertDraft() {
+  function insertDraft(text: string) {
     const office = window.Office;
     const current = office?.context?.mailbox?.item;
-    if (!office || !current?.body?.setSelectedDataAsync || !result) return;
-    current.body.setSelectedDataAsync(result, { coercionType: office.CoercionType.Text }, (response) => {
+    if (!office || !current?.body?.setSelectedDataAsync || !text) return;
+    current.body.setSelectedDataAsync(text, { coercionType: office.CoercionType.Text }, (response) => {
       setStatus(response?.status === office.AsyncResultStatus.Succeeded
         ? "Inserted into the draft. Review it before sending."
         : "This Outlook item is not a writable draft.");
@@ -128,6 +129,6 @@ export default function OutlookAddinPage() {
     {authState !== "signed-in" && <div className="mt-4 rounded-card border border-border bg-white p-4"><button type="button" onClick={beginOutlookSignIn} className="inline-flex rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">Sign in to Beckett</button></div>}
     <button type="button" onClick={() => readCurrentItem(true)} disabled={!officeHost} className="mt-4 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">Analyze message</button>
     {item && !result && <div className="mt-5 rounded-card border border-border bg-white p-4"><p className="text-xs uppercase tracking-wide text-ink-light">Selected item</p><h2 className="mt-1 text-base font-medium text-ink">{item.subject}</h2><p className="mt-1 text-xs text-ink-mid">{item.sender || "Unknown sender"}</p></div>}
-    {result && <div className="mt-5 rounded-card border border-border bg-white p-4"><p className="text-xs uppercase tracking-wide text-primary">Beckett’s read</p><div className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink">{result}</div><button type="button" onClick={insertDraft} disabled={!canInsert} className="mt-4 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-50">Insert into current draft</button>{!canInsert && <p className="mt-2 text-xs text-ink-light">Open a draft to insert text. Beckett will never send it.</p>}</div>}
+    {result && <div className="mt-5 space-y-3 rounded-card border border-border bg-white p-4"><section><p className="text-xs uppercase tracking-wide text-ink-light">Intent</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.intent}</p></section><section><p className="text-xs uppercase tracking-wide text-ink-light">Tone</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.tone}</p></section><section><p className="text-xs uppercase tracking-wide text-ink-light">What they want</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.want}</p></section>{result.responses?.map((response) => <section key={response.tag || response.label} className="border-t border-border pt-3"><p className="text-xs font-medium text-primary">{response.label}</p><p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink">{response.text}</p><button type="button" onClick={() => insertDraft(response.text || "")} disabled={!canInsert || !response.text} className="mt-3 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-50">Insert into current draft</button></section>)}{!canInsert && <p className="text-xs text-ink-light">Open a draft to insert a reply. Beckett will never send it.</p>}</div>}
   </main>;
 }

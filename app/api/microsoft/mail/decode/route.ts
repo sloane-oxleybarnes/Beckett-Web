@@ -7,6 +7,17 @@ import { supabaseAdmin } from "@/lib/server-admin";
 
 export const dynamic = "force-dynamic";
 
+function parseAnalysis(text: string) {
+  const trimmed = text.trim();
+  const candidate = trimmed.match(/\{[\s\S]*\}/)?.[0] || trimmed;
+  return JSON.parse(candidate) as {
+    intent?: string;
+    tone?: string;
+    want?: string;
+    responses?: Array<{ label?: string; tag?: string; text?: string }>;
+  };
+}
+
 export async function POST(request: NextRequest) {
   const bearerToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
   const supabase = createSupabaseServerClient();
@@ -24,10 +35,10 @@ export async function POST(request: NextRequest) {
     await recordAiUsage(user.id, { source: "outlook_addin", action: "decode_selected_item" });
     const result = await callAnthropic(
       `You are Beckett, a private communication coach. Explain only what the selected text supports, state uncertainty clearly, and never claim to know the sender's hidden intent. Never send or save a message.\n\n${beckettBoundaryPrompt()}`,
-      [{ role: "user", content: `Decode this user-selected Outlook item.\n\nSubject: ${subject}\nFrom: ${sender}\n\nMessage:\n${content}\n\nReturn concise sections: Likely read, What it asks, and Possible next move.` }],
+      [{ role: "user", content: `Analyze this user-selected Outlook message.\n\nSubject: ${subject}\nFrom: ${sender}\n\nMessage:\n${content}\n\nRespond ONLY with valid JSON, no markdown:\n{\n  "intent": "what the sender likely means or wants",\n  "tone": "the emotional tone, stated with appropriate uncertainty",\n  "want": "what the sender likely wants the user to do or say next",\n  "responses": [\n    { "label": "Direct and clear", "tag": "direct", "text": "ready-to-send reply, max 35 words" },\n    { "label": "Warm and collaborative", "tag": "warm", "text": "ready-to-send reply, max 35 words" },\n    { "label": "Sets a gentle limit", "tag": "boundary", "text": "ready-to-send reply, max 35 words" }\n  ]\n}` }],
       650,
     );
-    return NextResponse.json({ result: result.trim() });
+    return NextResponse.json({ result: parseAnalysis(result) });
   } catch (error) {
     if (error instanceof AiUsageLimitError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json({ error: "Beckett could not decode this item right now." }, { status: 502 });
