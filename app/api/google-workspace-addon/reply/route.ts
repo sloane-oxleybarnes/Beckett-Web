@@ -12,14 +12,17 @@ import {
 import {
   brandedSectionHeader,
   buttonWidget,
+  cardUpdateResponse,
   cardResponse,
   endpointUrl,
   errorCard,
+  formSubmitButtonWidget,
   formatCardRichText,
   isWorkspaceAddOnPlanEligible,
   parseLabeledSections,
   resolveWorkspaceAddOnProfile,
   signInCard,
+  textInputWidget,
   textWidget,
   workspaceAddOnRoute,
 } from "@/lib/google-workspace-addon";
@@ -37,6 +40,9 @@ export async function POST(request: NextRequest) {
       return cardResponse(errorCard("Plan required", "Your Beckett plan does not currently include Gmail reply coaching."));
     }
 
+    const refinement =
+      event.commonEventObject?.formInputs?.replyRefinement?.stringInputs?.value?.[0]?.trim().slice(0, 1_000) || "";
+
     try {
       const thread = await getSelectedGmailThread(event);
       const latest = thread.messages[thread.messages.length - 1];
@@ -47,15 +53,15 @@ export async function POST(request: NextRequest) {
       } else {
         await recordAiUsage(profile.id, {
           source: "google_workspace_addon",
-          action: "draft_reply",
-          metadata: { platform: "gmail", messageCount: thread.messages.length },
+          action: refinement ? "refine_reply" : "draft_reply",
+          metadata: { platform: "gmail", messageCount: thread.messages.length, refined: Boolean(refinement) },
         });
       }
 
       const result = await callAnthropic(
         [
           "You are Beckett, a private communication coach.",
-          "Draft three possible replies to the user-selected Gmail conversation.",
+          `Draft three possible replies to the user-selected Gmail conversation${refinement ? " that incorporate the user's requested additions" : ""}.`,
           "The first should be direct and clear. The second should be warm and collaborative. The third should set a gentle limit.",
           "Preserve the user's agency, avoid inventing facts, and do not imply that Beckett sent or will send anything.",
           "Do not summarize or analyze the conversation, and do not include a preface.",
@@ -67,7 +73,11 @@ export async function POST(request: NextRequest) {
         [
           {
             role: "user",
-            content: `Subject: ${latest.subject}\nSelected conversation:\n\n${threadForPrompt(thread)}`,
+            content: [
+              `Subject: ${latest.subject}`,
+              `Selected conversation:\n\n${threadForPrompt(thread)}`,
+              ...(refinement ? [`User-requested details to include:\n${refinement}`] : []),
+            ].join("\n\n"),
           },
         ],
         850,
@@ -76,17 +86,21 @@ export async function POST(request: NextRequest) {
       if (WEB_CREDITS_ENABLED) {
         await recordSuccessfulWebCredit(profile.id, {
           source: "google_workspace_addon",
-          action: "draft_reply",
-          metadata: { platform: "gmail", messageCount: thread.messages.length },
+          action: refinement ? "refine_reply" : "draft_reply",
+          metadata: { platform: "gmail", messageCount: thread.messages.length, refined: Boolean(refinement) },
         });
       }
 
       await trackBetaEvent({
         userId: profile.id,
         email: profile.email,
-        eventName: "reply_drafted",
+        eventName: refinement ? "reply_refined" : "reply_drafted",
         source: "google_workspace_addon",
-        metadata: { platform: "gmail", action: "draft_reply", messageCount: thread.messages.length },
+        metadata: {
+          platform: "gmail",
+          action: refinement ? "refine_reply" : "draft_reply",
+          messageCount: thread.messages.length,
+        },
       });
 
       const sections = parseLabeledSections(result, [
@@ -95,10 +109,9 @@ export async function POST(request: NextRequest) {
         { key: "boundary", label: "Sets a gentle limit" },
       ]);
 
-      return cardResponse(
-        {
-          name: "beckett-reply-ideas",
-          sections: [
+      const replyCard = {
+        name: "beckett-reply-ideas",
+        sections: [
             {
               header: brandedSectionHeader("Direct and clear"),
               widgets: [
@@ -126,10 +139,25 @@ export async function POST(request: NextRequest) {
                 }),
               ],
             },
-          ],
-        },
-        true,
-      );
+            {
+              header: brandedSectionHeader("Want to adjust these?"),
+              widgets: [
+                textInputWidget(
+                  "replyRefinement",
+                  "Add anything you want the replies to include",
+                  "For example: Mention that I’m unavailable Friday and suggest Tuesday afternoon instead.",
+                ),
+                formSubmitButtonWidget(
+                  "Update responses",
+                  endpointUrl(request, "/api/google-workspace-addon/reply"),
+                  ["replyRefinement"],
+                ),
+              ],
+            },
+        ],
+      };
+
+      return refinement ? cardUpdateResponse(replyCard, true) : cardResponse(replyCard, true);
     } catch (error) {
       if (error instanceof AiUsageLimitError) {
         return cardResponse(errorCard("Daily limit reached", error.message));
