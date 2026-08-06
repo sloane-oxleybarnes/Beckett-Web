@@ -1,22 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMicrosoftMessageThread, microsoftNeedsReconnect } from "@/lib/microsoft-oauth";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { getOutlookAddinUser } from "@/lib/outlook-addin-auth";
 
 export const dynamic = "force-dynamic";
 
-async function authenticatedUser(request: NextRequest) {
-  const bearerToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
-  const supabase = createSupabaseServerClient();
-  const { data: { user: cookieUser } } = await supabase.auth.getUser();
-  const { data: { user: bearerUser } } = bearerToken
-    ? await supabaseAdmin.auth.getUser(bearerToken)
-    : { data: { user: null } };
-  return cookieUser || bearerUser;
-}
-
 export async function POST(request: NextRequest) {
-  const user = await authenticatedUser(request);
+  const user = await getOutlookAddinUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const body = (await request.json().catch(() => null)) as { itemId?: unknown } | null;
   const itemId = typeof body?.itemId === "string" ? body.itemId.trim().slice(0, 4_000) : "";

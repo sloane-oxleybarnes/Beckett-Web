@@ -17,6 +17,7 @@
     "package:extension": "node scripts/package-extension.js"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.18.0",
     "@sentry/nextjs": "^10.57.0",
     "@stripe/stripe-js": "^9.5.0",
     "@supabase/ssr": "^0.10.3",

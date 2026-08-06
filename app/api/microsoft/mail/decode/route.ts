@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { callAnthropic } from "@/lib/anthropic";
 import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
 import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { getOutlookAddinUser } from "@/lib/outlook-addin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +20,7 @@ function parseAnalysis(text: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const bearerToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
-  const supabase = createSupabaseServerClient();
-  const { data: { user: cookieUser } } = await supabase.auth.getUser();
-  const { data: { user: bearerUser } } = bearerToken ? await supabaseAdmin.auth.getUser(bearerToken) : { data: { user: null } };
-  const user = cookieUser || bearerUser;
+  const user = await getOutlookAddinUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const body = (await request.json().catch(() => null)) as { content?: unknown; subject?: unknown; sender?: unknown; thread?: unknown } | null;
   const content = typeof body?.content === "string" ? body.content.trim().slice(0, 12_000) : "";
