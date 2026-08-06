@@ -55,17 +55,30 @@ Do not add broad `gmail.readonly`, `gmail.compose`, `gmail.modify`, or `mail.goo
 
 ## Reviewer journey
 
-- [ ] Provide a Beckett reviewer account with completed onboarding and available Gmail coaching credits.
+- [x] Provide a Beckett reviewer account with completed onboarding and available Gmail coaching credits.
 - [ ] Provide a second Google account or documented path for testing cross-email account linking.
-- [ ] Show first install and granular authorization.
+- [x] Show first install and granular authorization.
 - [ ] Show the account-required card and successful account connection.
 - [ ] Analyze a selected four-message thread.
-- [ ] Generate all three reply approaches.
+- [x] Generate all three reply approaches.
 - [ ] Refine replies with an optional user instruction.
-- [ ] Create a Gmail draft and demonstrate that Beckett does not send it.
+- [x] Create a Gmail draft and demonstrate that Beckett does not send it.
 - [ ] Show confirmed-contact personalization and the fallback for an unknown contact.
 - [ ] Show email-style learning off by default, opt in, and opt out.
 - [ ] Demonstrate permission denial, expired account-link token, plan/credit exhaustion, and a recoverable API error.
+
+### Reviewer fixture
+
+- Google and Beckett account: `beckettdemo@gmail.com` (Google sign-in; do not store its password in this repository).
+- Beckett plan: beta, with onboarding completed and email-style learning left off by default.
+- Confirmed demo contact: `hello@meetbeckett.co` / Sloane Oxley.
+- Saved contact context: direct and collaborative communication, early notice for timeline changes, and a clear shared next step.
+- Predictable inbox scenarios:
+  - `Reviewer Scenario 1 — Launch timeline alignment`
+  - `Reviewer Scenario 2 — Check-in after the client meeting`
+  - `Reviewer Scenario 3 — Request outside the agreed scope`
+
+Production smoke test completed on August 6, 2026 against the draft Marketplace listing and production HTTP deployment. Scenario 1 successfully completed selected-message analysis, generated all three reply approaches, included both the coaching profile and confirmed-contact context, and created an editable Gmail reply draft without sending it. The production `beta_events` records showed `coachingProfileIncluded: true`, `contactContextIncluded: true`, and `reply_draft_created`; `interaction_summaries` recorded the selected Gmail thread against the confirmed contact.
 
 ## Marketplace assets
 
