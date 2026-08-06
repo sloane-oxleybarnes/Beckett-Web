@@ -40,6 +40,26 @@ declare global { interface Window { Office?: OfficeApi } }
 type AuthState = "checking" | "signed-in" | "signed-out" | "unknown";
 type SelectedItem = { subject: string; sender: string; body: string; itemId: string | null };
 type Analysis = { intent?: string; tone?: string; want?: string; responses?: Array<{ label?: string; tag?: string; text?: string }> };
+type PersistedSession = { accessToken: string; refreshToken: string };
+
+const OUTLOOK_SESSION_KEY = "beckett-outlook-session";
+
+function readPersistedSession(): PersistedSession | null {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(OUTLOOK_SESSION_KEY) || "null") as Partial<PersistedSession> | null;
+    return parsed?.accessToken && parsed.refreshToken ? { accessToken: parsed.accessToken, refreshToken: parsed.refreshToken } : null;
+  } catch { return null; }
+}
+
+function persistSession(session: { access_token?: string; refresh_token?: string } | null) {
+  try {
+    if (session?.access_token && session.refresh_token) {
+      window.localStorage.setItem(OUTLOOK_SESSION_KEY, JSON.stringify({ accessToken: session.access_token, refreshToken: session.refresh_token }));
+    } else {
+      window.localStorage.removeItem(OUTLOOK_SESSION_KEY);
+    }
+  } catch { /* Outlook storage may be unavailable in a restricted host. */ }
+}
 
 function readAsync<T>(run: (callback: (result: OfficeResult) => void) => void, office: OfficeApi) {
   return new Promise<T>((resolve, reject) => run((result) => result.status === office.AsyncResultStatus.Succeeded ? resolve(result.value as T) : reject(new Error("Outlook could not read this item."))));
@@ -58,13 +78,19 @@ export default function OutlookAddinPage() {
   useEffect(() => {
     const supabase = createClient();
     let active = true;
-    void supabase.auth.getSession().then(({ data }) => {
+    void (async () => {
+      const saved = readPersistedSession();
+      const { data, error } = saved
+        ? await supabase.auth.setSession({ access_token: saved.accessToken, refresh_token: saved.refreshToken })
+        : await supabase.auth.getSession();
       if (!active) return;
+      persistSession(data.session);
       setOutlookAccessToken(data.session?.access_token || null);
-      setAuthState(data.session ? "signed-in" : "signed-out");
-    }).catch(() => { if (active) setAuthState("unknown"); });
+      setAuthState(data.session ? "signed-in" : error ? "unknown" : "signed-out");
+    })().catch(() => { if (active) setAuthState("unknown"); });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!active) return;
+      persistSession(session);
       setOutlookAccessToken(session?.access_token || null);
       setAuthState(session ? "signed-in" : "signed-out");
     });
@@ -171,6 +197,7 @@ export default function OutlookAddinPage() {
         try {
           const payload = JSON.parse(event.message || "{}") as { type?: string; accessToken?: string; refreshToken?: string; error?: string };
           if (payload.type === "beckett-auth-success" && payload.accessToken && payload.refreshToken) {
+            persistSession({ access_token: payload.accessToken, refresh_token: payload.refreshToken });
             void createClient().auth.setSession({ access_token: payload.accessToken, refresh_token: payload.refreshToken });
             setOutlookAccessToken(payload.accessToken);
             setAuthState("signed-in");
