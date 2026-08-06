@@ -1,0 +1,32 @@
+{
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/gmail.addons.execute",
+    "https://www.googleapis.com/auth/gmail.addons.current.message.action",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "openid"
+  ],
+  "addOns": {
+    "common": {
+      "name": "Beckett",
+      "logoUrl": "https://www.meetbeckett.co/brand/beckett-icon.png",
+      "homepageTrigger": {
+        "runFunction": "https://YOUR_DEPLOYMENT_HOST/api/google-workspace-addon/home"
+      },
+      "openLinkUrlPrefixes": [
+        "https://YOUR_DEPLOYMENT_HOST/",
+        "https://www.meetbeckett.co/"
+      ]
+    },
+    "gmail": {
+      "contextualTriggers": [
+        {
+          "unconditional": {},
+          "onTriggerFunction": "https://YOUR_DEPLOYMENT_HOST/api/google-workspace-addon/message"
+        }
+      ]
+    },
+    "httpOptions": {
+      "granularOauthPermissionSupport": "OPT_IN"
+    }
+  }
+}
