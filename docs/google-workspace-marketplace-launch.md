@@ -26,7 +26,7 @@ This runbook prepares Beckett's HTTP Gmail add-on for public Marketplace distrib
 - [x] Restore the public signup page behind the `BETA_INVITE_ONLY=false` environment policy.
 - [x] Preserve the Gmail account-link return path through signup, email confirmation, Google OAuth, and onboarding.
 - [ ] Set `BETA_INVITE_ONLY=false` in production only as part of the approved production release.
-- [ ] Complete a production smoke test with a brand-new account before Marketplace submission.
+- [x] Complete a production smoke test with a brand-new account before Marketplace submission.
 
 The add-on now supports explicit linking when the Gmail and Beckett login emails differ. It uses a 30-minute, one-time opaque token, requires an authenticated Beckett session, shows both account emails, and requires confirmation before linking.
 
@@ -56,16 +56,19 @@ Do not add broad `gmail.readonly`, `gmail.compose`, `gmail.modify`, or `mail.goo
 ## Reviewer journey
 
 - [x] Provide a Beckett reviewer account with completed onboarding and available Gmail coaching credits.
-- [ ] Provide a second Google account or documented path for testing cross-email account linking.
+- [x] Provide a second Google account or documented path for testing cross-email account linking.
 - [x] Show first install and granular authorization.
-- [ ] Show the account-required card and successful account connection.
+- [x] Show the account-required card and successful account connection.
 - [ ] Analyze a selected four-message thread.
 - [x] Generate all three reply approaches.
 - [ ] Refine replies with an optional user instruction.
 - [x] Create a Gmail draft and demonstrate that Beckett does not send it.
-- [ ] Show confirmed-contact personalization and the fallback for an unknown contact.
+- [x] Show confirmed-contact personalization and the fallback for an unknown contact.
 - [ ] Show email-style learning off by default, opt in, and opt out.
-- [ ] Demonstrate permission denial, expired account-link token, plan/credit exhaustion, and a recoverable API error.
+- [x] Demonstrate permission denial and recovery.
+- [x] Demonstrate plan/credit exhaustion and restore the account afterward.
+- [ ] Demonstrate an expired account-link token.
+- [ ] Demonstrate a recoverable API error.
 
 ### Reviewer fixture
 
@@ -79,6 +82,18 @@ Do not add broad `gmail.readonly`, `gmail.compose`, `gmail.modify`, or `mail.goo
   - `Reviewer Scenario 3 — Request outside the agreed scope`
 
 Production smoke test completed on August 6, 2026 against the draft Marketplace listing and production HTTP deployment. Scenario 1 successfully completed selected-message analysis, generated all three reply approaches, included both the coaching profile and confirmed-contact context, and created an editable Gmail reply draft without sending it. The production `beta_events` records showed `coachingProfileIncluded: true`, `contactContextIncluded: true`, and `reply_draft_created`; `interaction_summaries` recorded the selected Gmail thread against the confirmed contact.
+
+### Critical onboarding test matrix — August 6, 2026
+
+All temporary database fixtures and account-link changes used by these tests were removed or restored after verification. No test draft was sent.
+
+- [x] Brand-new Beckett user: `beckettdemo@gmail.com` completed production onboarding and used the Gmail add-on successfully.
+- [x] Different Gmail and Beckett addresses: `beckettdemo@gmail.com` was explicitly linked while signed into Beckett as `hello@meetbeckett.co`; the confirmation screen displayed both addresses and the production event recorded `googleEmailMatchesBeckett: false`. The original one-to-one account mappings were then restored and verified.
+- [x] No matching contact: an email from `priya.shah@northstar-demo.test` analyzed normally with `contactContextIncluded: false` and `coachingProfileIncluded: true`.
+- [x] No credits: a temporary, exact credit-usage fixture produced the **Credit limit reached** card. The fixture was deleted and daily usage returned to its original value.
+- [x] Denied draft permission: the add-on was installed with message/action and execution access but without compose access. Analysis and reply generation still worked; **Use in Gmail draft** returned the recoverable **Permission required** card and the Gmail draft count remained unchanged. Compose access was then restored and draft creation succeeded.
+- [x] Consumer Gmail: `beckettdemo@gmail.com` completed install, granular consent, account connection, analysis, three reply approaches, and editable draft creation on the production candidate.
+- [x] Managed Workspace Gmail: `hello@meetbeckett.co` completed production analysis, reply generation, and editable draft creation. Production events recorded `analysis_completed`, `reply_drafted`, and `reply_draft_created` for the managed account.
 
 ## Marketplace assets
 
