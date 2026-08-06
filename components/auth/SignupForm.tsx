@@ -4,34 +4,34 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { profileSetupPath, safeInternalPath } from "@/lib/auth-next";
 
-export default function SignupPage() {
+export default function SignupForm() {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const planParam = searchParams.get("plan") || "free";
+  const safeNext = safeInternalPath(searchParams.get("next"));
+  const onboardingPath = profileSetupPath(safeNext);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [plan, setPlan] = useState<"free" | "pro">(
-    planParam === "pro" ? "pro" : "free"
-  );
-  const [betaCode, setBetaCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [confirmationSent, setConfirmationSent] = useState(false);
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    const { error: signupError } = await supabase.auth.signUp({
+    const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(onboardingPath)}`;
+    const { data, error: signupError } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { full_name: fullName },
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+        emailRedirectTo: callbackUrl,
       },
     });
 
@@ -49,7 +49,7 @@ export default function SignupPage() {
         action: "trigger_event",
         email,
         eventName: "user_signup",
-        properties: { plan: plan || "free" },
+        properties: { plan: "free" },
       }),
     }).catch(() => {});
 
@@ -62,7 +62,7 @@ export default function SignupPage() {
         contactData: {
           firstName: fullName.split(" ")[0],
           lastName: fullName.split(" ").slice(1).join(" "),
-          plan: plan || "free",
+          plan: "free",
           source: "signup",
         },
       }),
@@ -77,23 +77,44 @@ export default function SignupPage() {
           email,
           firstname: fullName.split(" ")[0],
           lastname: fullName.split(" ").slice(1).join(" "),
-          plan: plan || "free",
+          plan: "free",
           source: "signup",
         },
       }),
     }).catch(() => {});
 
-    router.push("/auth/profile-setup");
-    router.refresh();
+    if (data.session) {
+      router.push(onboardingPath);
+      router.refresh();
+      return;
+    }
+
+    setConfirmationSent(true);
+    setLoading(false);
   }
 
   async function handleGoogleSignup() {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(onboardingPath)}`,
       },
     });
+  }
+
+  if (confirmationSent) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md rounded-card border border-border bg-white p-8 text-center shadow-sm">
+          <h1 className="mb-3 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>
+            Check your email
+          </h1>
+          <p className="text-sm leading-relaxed text-ink-mid">
+            We sent a confirmation link to <strong>{email}</strong>. Confirm it to finish setting up your Beckett account.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -191,58 +212,6 @@ export default function SignupPage() {
                 className="w-full border border-border rounded-sm px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 placeholder="8+ characters"
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-ink mb-2">
-                Plan
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {(["free", "pro"] as const).map((p) => (
-                  <label
-                    key={p}
-                    className={`flex items-center gap-2 border rounded-sm px-3 py-2 cursor-pointer text-sm transition-colors ${
-                      plan === p
-                        ? "border-primary bg-primary-light text-primary"
-                        : "border-border text-ink hover:border-primary-mid"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="plan"
-                      value={p}
-                      checked={plan === p}
-                      onChange={() => setPlan(p)}
-                      className="sr-only"
-                    />
-                    <span className="capitalize font-medium">{p}</span>
-                    {p === "pro" && (
-                      <span className="ml-auto text-xs text-ink-light">
-                        coming soon
-                      </span>
-                    )}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1">
-                Beta code{" "}
-                <span className="text-ink-light font-normal">(optional)</span>
-              </label>
-              <input
-                type="text"
-                value={betaCode}
-                onChange={(e) => setBetaCode(e.target.value)}
-                className="w-full border border-border rounded-sm px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                placeholder="Enter your beta code"
-              />
-              {betaCode && (
-                <p className="text-xs text-primary mt-1">
-                  Beta code will give you full Pro access
-                </p>
-              )}
             </div>
 
             <button

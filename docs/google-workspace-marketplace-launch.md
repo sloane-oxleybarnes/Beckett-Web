@@ -20,12 +20,13 @@ This runbook prepares Beckett's HTTP Gmail add-on for public Marketplace distrib
 - [ ] Set production `GOOGLE_WORKSPACE_ADDON_ORIGIN=https://www.meetbeckett.co`.
 - [ ] Verify the add-on never uses preview deployment URLs.
 
-## Access-model decision required
+## Access model
 
-The web app is currently invite-only. Before a public Marketplace review, choose one:
-
-1. **Open free account creation (recommended for public launch):** set the production access policy to allow new users, restore a public sign-up page, and give new accounts the free plan limits.
-2. **Keep approval-required access:** preserve the beta request flow and state "Beckett account and approval required" in the listing. This is public distribution but not immediate public usability and creates a weaker reviewer/user experience.
+- [x] Product decision: open free account creation for public Marketplace users.
+- [x] Restore the public signup page behind the `BETA_INVITE_ONLY=false` environment policy.
+- [x] Preserve the Gmail account-link return path through signup, email confirmation, Google OAuth, and onboarding.
+- [ ] Set `BETA_INVITE_ONLY=false` in production only as part of the approved production release.
+- [ ] Complete a production smoke test with a brand-new account before Marketplace submission.
 
 The add-on now supports explicit linking when the Gmail and Beckett login emails differ. It uses a 15-minute, one-time opaque token, requires an authenticated Beckett session, shows both account emails, and requires confirmation before linking.
 
