@@ -1,4 +1,5 @@
 import dynamic from "next/dynamic";
+import { isBetaInviteOnly } from "@/lib/beta-access";
 
 const LoginForm = dynamic(() => import("@/components/auth/LoginForm"), {
   ssr: false,
@@ -10,5 +11,5 @@ const LoginForm = dynamic(() => import("@/components/auth/LoginForm"), {
 });
 
 export default function LoginPage() {
-  return <LoginForm />;
+  return <LoginForm inviteOnly={isBetaInviteOnly()} />;
 }

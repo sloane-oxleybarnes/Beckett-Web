@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AddToSlackButton from "@/components/integrations/AddToSlackButton";
 import { createClient } from "@/lib/supabase";
@@ -16,6 +16,7 @@ import {
   type CoachingTone,
 } from "@/lib/onboarding";
 import { CHROME_WEB_STORE_URL } from "@/lib/app-links";
+import { safeInternalPath } from "@/lib/auth-next";
 
 const steps = [
   "Before we begin",
@@ -73,6 +74,8 @@ function TrustNote({ children }: { children: ReactNode }) {
 export default function ProfileSetupForm() {
   const supabase = createClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const safeNext = safeInternalPath(searchParams.get("next"));
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -111,7 +114,7 @@ export default function ProfileSetupForm() {
 
       const hasConsent = hasCurrentBetaConsent(profile);
       if (profile?.first_login_complete && hasConsent) {
-        router.replace("/dashboard");
+        router.replace(safeNext || "/dashboard");
         return;
       }
 
@@ -192,6 +195,12 @@ export default function ProfileSetupForm() {
         first_login_complete: true,
       },
     });
+
+    if (safeNext) {
+      router.push(safeNext);
+      router.refresh();
+      return;
+    }
 
     if (destination === "gmail") {
       window.location.assign("/api/gmail/oauth/start?next=/dashboard/settings");

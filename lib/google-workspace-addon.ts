@@ -358,7 +358,12 @@ export function errorCard(title: string, message: string): Card {
 export async function signInCard(request: NextRequest, event: WorkspaceAddOnEvent): Promise<Card> {
   const { createWorkspaceAddOnConnectUrl } = await import("@/lib/google-workspace-addon-link");
   const connectUrl = await createWorkspaceAddOnConnectUrl(request, event);
-  const requestAccessUrl = endpointUrl(request, "/beta?source=google_workspace_addon");
+  const parsedConnectUrl = new URL(connectUrl);
+  const connectPath = parsedConnectUrl.pathname + parsedConnectUrl.search;
+  const createAccountUrl = endpointUrl(
+    request,
+    `/auth/signup?source=google_workspace_addon&next=${encodeURIComponent(connectPath)}`,
+  );
   return {
     header: beckettCardHeader("Connect Beckett", "Use your coaching context in Gmail"),
     sections: [
@@ -370,8 +375,8 @@ export async function signInCard(request: NextRequest, event: WorkspaceAddOnEven
       },
       {
         widgets: [
-          textWidget("New to Beckett? Request access, then return to Gmail after your account is ready."),
-          openLinkButtonWidget("Request Beckett access", requestAccessUrl),
+          textWidget("New to Beckett? Create a free account, complete setup, and connect it to Gmail."),
+          openLinkButtonWidget("Create free Beckett account", createAccountUrl),
         ],
       },
     ],
