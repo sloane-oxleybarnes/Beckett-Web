@@ -28,7 +28,7 @@ This runbook prepares Beckett's HTTP Gmail add-on for public Marketplace distrib
 - [ ] Set `BETA_INVITE_ONLY=false` in production only as part of the approved production release.
 - [ ] Complete a production smoke test with a brand-new account before Marketplace submission.
 
-The add-on now supports explicit linking when the Gmail and Beckett login emails differ. It uses a 15-minute, one-time opaque token, requires an authenticated Beckett session, shows both account emails, and requires confirmation before linking.
+The add-on now supports explicit linking when the Gmail and Beckett login emails differ. It uses a 30-minute, one-time opaque token, requires an authenticated Beckett session, shows both account emails, and requires confirmation before linking.
 
 ## Scope freeze
 
