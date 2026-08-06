@@ -10,15 +10,12 @@ import {
   recordSuccessfulWebCredit,
 } from "@/lib/web-credits";
 import {
-  beckettCardHeader,
   brandedSectionHeader,
   buttonWidget,
   cardResponse,
-  decoratedTextWidget,
   endpointUrl,
   errorCard,
   formatCardRichText,
-  formatCardText,
   isWorkspaceAddOnPlanEligible,
   parseLabeledSections,
   resolveWorkspaceAddOnProfile,
@@ -101,11 +98,7 @@ export async function POST(request: NextRequest) {
       return cardResponse(
         {
           name: "beckett-reply-ideas",
-          header: beckettCardHeader("Reply ideas", latest.subject.slice(0, 120)),
           sections: [
-            {
-              widgets: [decoratedTextWidget("Replying to", formatCardText(latest.from || "Unknown sender", 500))],
-            },
             {
               header: brandedSectionHeader("Direct and clear"),
               widgets: [
@@ -131,14 +124,6 @@ export async function POST(request: NextRequest) {
                 buttonWidget("Use in Gmail draft", endpointUrl(request, "/api/google-workspace-addon/draft"), {
                   reply: sections.boundary || "State what you can do and offer a realistic next step.",
                 }),
-              ],
-            },
-            {
-              widgets: [
-                decoratedTextWidget(
-                  "You stay in control",
-                  "Review and personalize any wording before you use it. Beckett has not created or sent a Gmail draft.",
-                ),
               ],
             },
           ],

@@ -11,7 +11,6 @@ import {
 } from "@/lib/web-credits";
 import {
   actionFixedFooter,
-  beckettCardHeader,
   brandedSectionHeader,
   cardResponse,
   endpointUrl,
@@ -97,7 +96,6 @@ export async function POST(request: NextRequest) {
       return cardResponse(
         {
           name: "beckett-analysis-result",
-          header: beckettCardHeader("Beckett’s read", latest.subject.slice(0, 120)),
           sections: [
             {
               header: brandedSectionHeader("What's happening"),
