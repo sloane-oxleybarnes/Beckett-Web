@@ -15,6 +15,7 @@ type GmailMessage = {
   payload?: GmailPart;
 };
 type GmailThread = { id?: string; messages?: GmailMessage[] };
+type GmailDraft = { id?: string; message?: GmailMessage };
 
 export type SelectedGmailMessage = {
   id: string;
@@ -113,6 +114,71 @@ async function gmailFetch<T>(event: WorkspaceAddOnEvent, path: string): Promise<
   });
   if (!response.ok) throw new Error(`gmail_api_error:${response.status}`);
   return response.json() as Promise<T>;
+}
+
+function safeHeaderValue(value: string) {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+function encodeBase64Url(value: string) {
+  return Buffer.from(value, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+export async function createGmailReplyDraft(
+  event: WorkspaceAddOnEvent,
+  thread: SelectedGmailThread,
+  userEmail: string | null,
+  replyText: string,
+) {
+  const userToken = event.authorizationEventObject?.userOAuthToken;
+  const messageToken = event.gmail?.accessToken;
+  if (!userToken || !messageToken) throw new Error("gmail_authorization_missing");
+
+  const currentUser = userEmail?.trim().toLowerCase() || "";
+  const latest = thread.messages[thread.messages.length - 1];
+  const recipient =
+    [...thread.messages].reverse().find((message) => message.fromEmail && message.fromEmail !== currentUser)?.from ||
+    latest?.from ||
+    "";
+  if (!recipient) throw new Error("gmail_reply_recipient_missing");
+
+  const subject = latest?.subject || "(no subject)";
+  const replySubject = /^re:/i.test(subject) ? subject : `Re: ${subject}`;
+  const referenceValues = [latest?.references, latest?.messageIdHeader].filter(Boolean).join(" ");
+  const mimeLines = [
+    `To: ${safeHeaderValue(recipient)}`,
+    `Subject: ${safeHeaderValue(replySubject)}`,
+    ...(latest?.messageIdHeader ? [`In-Reply-To: ${safeHeaderValue(latest.messageIdHeader)}`] : []),
+    ...(referenceValues ? [`References: ${safeHeaderValue(referenceValues)}`] : []),
+    "MIME-Version: 1.0",
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    replyText.trim(),
+  ];
+
+  const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${userToken}`,
+      "X-Goog-Gmail-Access-Token": messageToken,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      message: {
+        threadId: thread.id,
+        raw: encodeBase64Url(mimeLines.join("\r\n")),
+      },
+    }),
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(`gmail_draft_api_error:${response.status}`);
+
+  const draft = (await response.json()) as GmailDraft;
+  const draftId = draft.id || "";
+  const threadServerPermId = draft.message?.threadId || thread.id;
+  if (!draftId || !threadServerPermId) throw new Error("gmail_draft_response_invalid");
+  return { draftId, threadServerPermId };
 }
 
 export async function getSelectedGmailThread(event: WorkspaceAddOnEvent): Promise<SelectedGmailThread> {

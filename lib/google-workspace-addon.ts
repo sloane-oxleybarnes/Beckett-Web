@@ -54,7 +54,6 @@ export type Card = {
 };
 
 const googleAuth = new OAuth2Client();
-const BECKETT_ICON_URL = "https://www.meetbeckett.co/brand/beckett-icon.png";
 const BECKETT_BUTTON_COLOR = { red: 0.729, green: 0.459, blue: 0.09 };
 
 function requiredEnv(name: string) {
@@ -228,9 +227,6 @@ export function beckettCardHeader(title: string, subtitle?: string): CardHeader 
   return {
     title,
     ...(subtitle ? { subtitle } : {}),
-    imageUrl: BECKETT_ICON_URL,
-    imageType: "CIRCLE",
-    imageAltText: "Beckett logo",
   };
 }
 
