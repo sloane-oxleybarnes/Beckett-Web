@@ -11,7 +11,7 @@ import {
   verifyWorkspaceAddOnUser,
 } from "@/lib/google-workspace-addon";
 
-const LINK_LIFETIME_MS = 15 * 60 * 1_000;
+const LINK_LIFETIME_MS = 30 * 60 * 1_000;
 
 type LinkSessionRow = {
   id: string;

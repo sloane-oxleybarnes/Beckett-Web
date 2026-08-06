@@ -12,7 +12,7 @@ This is the native Gmail replacement for the Gmail portion of the Beckett Chrome
 - `POST /api/google-workspace-addon/style-memory` — changes the user's explicit email-style learning preference.
 - `POST /api/google-workspace-addon/connect` — explicitly links a verified Google identity to the signed-in Beckett account using a one-time connection token.
 
-Google-triggered endpoints verify Google's service-account ID token. User identity comes from Google's verified user ID token and is mapped to an existing Beckett profile by Google subject or verified email. If the emails differ, the user can explicitly link the accounts through a 15-minute, one-time connection URL. The Gmail add-on does not use browser cookies or the stored broad `gmail.readonly` integration token to read a selected message.
+Google-triggered endpoints verify Google's service-account ID token. User identity comes from Google's verified user ID token and is mapped to an existing Beckett profile by Google subject or verified email. If the emails differ, the user can explicitly link the accounts through a 30-minute, one-time connection URL. The Gmail add-on does not use browser cookies or the stored broad `gmail.readonly` integration token to read a selected message.
 
 ## Required environment variables
 
