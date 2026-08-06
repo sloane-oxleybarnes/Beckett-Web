@@ -19,6 +19,13 @@ type RelationshipSummary = {
   updated_at: string | null;
 };
 
+type RecentInteraction = {
+  summary: string;
+  tone_observed: string | null;
+  occurred_at: string | null;
+  platform: string | null;
+};
+
 export type ContactRelationshipContext = {
   contact: ContactMatch;
   identifierConfirmed: boolean;
@@ -30,7 +37,11 @@ function relationshipLabel(contact: ContactMatch) {
   return contact.relationship_type || null;
 }
 
-function formatRelationshipPromptContext(contact: ContactMatch, summary: RelationshipSummary | null) {
+function formatRelationshipPromptContext(
+  contact: ContactMatch,
+  summary: RelationshipSummary | null,
+  recentInteractions: RecentInteraction[] = [],
+) {
   const lines = [
     `Matched Beckett contact: ${contact.name}.`,
     relationshipLabel(contact) ? `Relationship: ${relationshipLabel(contact)}.` : null,
@@ -41,6 +52,16 @@ function formatRelationshipPromptContext(contact: ContactMatch, summary: Relatio
     summary?.what_tends_to_work ? `Preferred approach: ${summary.what_tends_to_work}` : null,
     summary?.unresolved_topics ? `Unresolved topics: ${summary.unresolved_topics}` : null,
   ].filter(Boolean);
+
+  if (recentInteractions.length) {
+    lines.push(
+      "Recent user-selected interaction summaries:",
+      ...recentInteractions.map((interaction) => {
+        const tone = interaction.tone_observed ? ` Tone observed: ${interaction.tone_observed}` : "";
+        return `- ${interaction.summary}${tone}`;
+      }),
+    );
+  }
 
   if (!lines.length) return "";
   return [
@@ -88,11 +109,41 @@ export async function lookupRelationshipContextByIdentifier({
     .eq("contact_id", contact.id)
     .maybeSingle();
 
+  const { data: recentInteractions } = await supabaseAdmin
+    .from("interaction_summaries")
+    .select("summary, tone_observed, occurred_at, platform")
+    .eq("user_id", userId)
+    .eq("contact_id", contact.id)
+    .order("occurred_at", { ascending: false })
+    .limit(3);
+
   return {
     contact: contact as ContactMatch,
     identifierConfirmed: Boolean(identifierRow.confirmed),
-    promptContext: formatRelationshipPromptContext(contact as ContactMatch, (summary as RelationshipSummary | null) || null),
+    promptContext: formatRelationshipPromptContext(
+      contact as ContactMatch,
+      (summary as RelationshipSummary | null) || null,
+      (recentInteractions as RecentInteraction[] | null) || [],
+    ),
   };
+}
+
+export async function lookupRelationshipContextByEmail({
+  userId,
+  email,
+}: {
+  userId: string;
+  email: string;
+}) {
+  for (const platform of ["email", "work_email", "personal_email"] as const) {
+    const context = await lookupRelationshipContextByIdentifier({
+      userId,
+      identifier: { platform, identifier: email, confirmed: true },
+      requireConfirmed: true,
+    });
+    if (context) return context;
+  }
+  return null;
 }
 
 export async function recordSafeInteractionSummary({
@@ -106,6 +157,7 @@ export async function recordSafeInteractionSummary({
   suggestedFollowup,
   metadata = {},
   updateRelationshipSummary = true,
+  dedupeKey,
 }: {
   userId: string;
   contactId: string;
@@ -117,10 +169,24 @@ export async function recordSafeInteractionSummary({
   suggestedFollowup?: string | null;
   metadata?: Record<string, unknown>;
   updateRelationshipSummary?: boolean;
+  dedupeKey?: string | null;
 }) {
   const occurredAt = new Date().toISOString();
 
-  await supabaseAdmin.from("interaction_summaries").insert({
+  if (dedupeKey) {
+    const { data: existing } = await supabaseAdmin
+      .from("interaction_summaries")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("contact_id", contactId)
+      .eq("platform", platform)
+      .contains("metadata", { dedupe_key: dedupeKey })
+      .limit(1)
+      .maybeSingle();
+    if (existing) return { created: false };
+  }
+
+  const { error: insertError } = await supabaseAdmin.from("interaction_summaries").insert({
     user_id: userId,
     contact_id: contactId,
     platform,
@@ -130,22 +196,24 @@ export async function recordSafeInteractionSummary({
     user_response_pattern: userResponsePattern || null,
     suggested_followup: suggestedFollowup || null,
     occurred_at: occurredAt,
-    metadata,
+    metadata: { ...metadata, ...(dedupeKey ? { dedupe_key: dedupeKey } : {}) },
   });
+  if (insertError) throw insertError;
 
-  if (!updateRelationshipSummary) return;
+  if (!updateRelationshipSummary) return { created: true };
 
-  await supabaseAdmin.from("contact_relationship_summaries").upsert(
+  const { error: summaryError } = await supabaseAdmin.from("contact_relationship_summaries").upsert(
     {
       user_id: userId,
       contact_id: contactId,
-      communication_style: summary,
       last_interaction_at: occurredAt,
       generated_from: platform,
       updated_at: occurredAt,
     },
     { onConflict: "user_id,contact_id" }
   );
+  if (summaryError) throw summaryError;
+  return { created: true };
 }
 
 export async function upsertRelationshipSummary({

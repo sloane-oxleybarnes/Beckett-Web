@@ -1,4 +1,5 @@
 import type { WorkspaceAddOnEvent } from "@/lib/google-workspace-addon";
+import { createHash } from "node:crypto";
 
 type GmailHeader = { name?: string; value?: string };
 type GmailPart = {
@@ -88,6 +89,38 @@ function emailsFromAddressList(value: string) {
   return Array.from(value.matchAll(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi)).map((match) =>
     match[1].toLowerCase(),
   );
+}
+
+export function gmailParticipantEmails(thread: SelectedGmailThread, userEmail?: string | null) {
+  const currentUser = userEmail?.trim().toLowerCase() || "";
+  const seen = new Set<string>();
+  const emails: string[] = [];
+
+  for (const message of thread.messages) {
+    for (const email of [message.fromEmail, ...emailsFromAddressList(message.to)]) {
+      const normalized = email.trim().toLowerCase();
+      if (!normalized || normalized === currentUser || seen.has(normalized)) continue;
+      seen.add(normalized);
+      emails.push(normalized);
+    }
+  }
+
+  return emails;
+}
+
+export function gmailPrimaryCounterpartEmail(thread: SelectedGmailThread, userEmail?: string | null) {
+  const currentUser = userEmail?.trim().toLowerCase() || "";
+  const latestOtherSender = [...thread.messages]
+    .reverse()
+    .find((message) => message.fromEmail && message.fromEmail !== currentUser)?.fromEmail;
+  return latestOtherSender || gmailParticipantEmails(thread, currentUser)[0] || null;
+}
+
+export function gmailInteractionDedupeKey(thread: SelectedGmailThread) {
+  const visibleMessageIds = thread.messages.map((message) => message.id).filter(Boolean).join(":");
+  return createHash("sha256")
+    .update(`${thread.id}:${thread.selectedMessageId}:${visibleMessageIds}`)
+    .digest("hex");
 }
 
 function normalizeMessage(message: GmailMessage): SelectedGmailMessage {
@@ -217,7 +250,7 @@ export function threadForPrompt(thread: SelectedGmailThread, userEmail?: string 
   return thread.messages
     .map((message, index) => {
       const date = message.date ? ` — ${message.date}` : "";
-      const sender = currentUser && message.fromEmail === currentUser ? `You (${message.from || currentUser})` : message.from || "Unknown";
+      const sender = currentUser && message.fromEmail === currentUser ? "You" : message.from || "Unknown";
       return `Message ${index + 1} from ${sender}${date}:\n${message.body}`;
     })
     .join("\n\n---\n\n")

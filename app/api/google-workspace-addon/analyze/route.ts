@@ -3,6 +3,7 @@ import { callAnthropic } from "@/lib/anthropic";
 import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
 import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { trackBetaEvent } from "@/lib/beta-events";
+import { recordSafeInteractionSummary } from "@/lib/contact-relationship-context";
 import {
   WEB_CREDITS_ENABLED,
   WebCreditLimitError,
@@ -23,7 +24,13 @@ import {
   textWidget,
   workspaceAddOnRoute,
 } from "@/lib/google-workspace-addon";
-import { getSelectedGmailThread, threadForPrompt } from "@/lib/google-workspace-gmail";
+import {
+  getSelectedGmailThread,
+  gmailInteractionDedupeKey,
+  threadForPrompt,
+} from "@/lib/google-workspace-gmail";
+import { loadWorkspaceGmailPersonalization } from "@/lib/google-workspace-personalization";
+import { recordOptInGmailVoicePattern } from "@/lib/google-workspace-voice-pattern";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,6 +48,7 @@ export async function POST(request: NextRequest) {
       const thread = await getSelectedGmailThread(event);
       const latest = thread.messages[thread.messages.length - 1];
       if (!latest?.body) return cardResponse(errorCard("Message unavailable", "Gmail did not provide readable message content."));
+      const personalization = await loadWorkspaceGmailPersonalization(profile, thread);
 
       if (WEB_CREDITS_ENABLED) {
         await assertWebCreditsAvailable(profile.id);
@@ -56,7 +64,9 @@ export async function POST(request: NextRequest) {
         [
           "You are Beckett, a private communication coach.",
           "Analyze only the user-selected Gmail conversation supplied below.",
+          "Messages labeled You were written by the signed-in Beckett user. Always refer to that person as you or your. Never refer to them by name or in the third person.",
           "Do not claim to know a sender's intent as fact. Separate visible evidence from possible interpretations.",
+          "Use messages labeled You as live writing-style evidence when describing the user's communication, but do not overgeneralize from one thread.",
           "Return exactly three concise sections named What's happening, Tone, and What they want.",
           "Use those section names as plain-text headings on their own lines. Do not use Markdown, hashtags, asterisks, or separator lines.",
           "What's happening, Tone, and What they want may each use 1-3 short newline-separated bullets.",
@@ -65,7 +75,13 @@ export async function POST(request: NextRequest) {
         [
           {
             role: "user",
-            content: `Subject: ${latest.subject}\nSelected conversation:\n\n${threadForPrompt(thread, profile.email)}`,
+            content: [
+              personalization.coachingPromptContext,
+              personalization.relationshipContext?.promptContext
+                ? `Confirmed Beckett Contact context:\n${personalization.relationshipContext.promptContext}`
+                : "",
+              `Subject: ${latest.subject}\nSelected conversation:\n\n${threadForPrompt(thread, profile.googleEmail)}`,
+            ].filter(Boolean).join("\n\n"),
           },
         ],
         700,
@@ -79,19 +95,62 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      await trackBetaEvent({
-        userId: profile.id,
-        email: profile.email,
-        eventName: "analysis_completed",
-        source: "google_workspace_addon",
-        metadata: { platform: "gmail", action: "analyze_message", messageCount: thread.messages.length },
-      });
-
       const sections = parseLabeledSections(result, [
         { key: "happening", label: "What's happening" },
         { key: "tone", label: "Tone" },
         { key: "want", label: "What they want" },
       ]);
+
+      if (personalization.relationshipContext) {
+        await recordSafeInteractionSummary({
+          userId: profile.id,
+          contactId: personalization.relationshipContext.contact.id,
+          platform: "gmail",
+          interactionType: "selected_thread_analysis",
+          summary: (sections.happening || result).slice(0, 2_000),
+          toneObserved: (sections.tone || "").slice(0, 1_000) || null,
+          suggestedFollowup: (sections.want || "").slice(0, 1_000) || null,
+          dedupeKey: gmailInteractionDedupeKey(thread),
+          metadata: {
+            source: "google_workspace_addon",
+            gmail_thread_id: thread.id,
+            selected_message_id: thread.selectedMessageId,
+            message_count: thread.messages.length,
+            counterpart_email: personalization.counterpartEmail,
+          },
+        }).catch((error) => {
+          console.error("Google Workspace Gmail interaction summary storage failed", {
+            userId: profile.id,
+            contactId: personalization.relationshipContext?.contact.id,
+            message: error instanceof Error ? error.message : "interaction_summary_failed",
+          });
+        });
+      }
+
+      await recordOptInGmailVoicePattern({
+        userId: profile.id,
+        userEmail: profile.googleEmail,
+        thread,
+      }).catch((error) => {
+        console.error("Google Workspace Gmail voice pattern storage failed", {
+          userId: profile.id,
+          message: error instanceof Error ? error.message : "voice_pattern_failed",
+        });
+      });
+
+      await trackBetaEvent({
+        userId: profile.id,
+        email: profile.email,
+        eventName: "analysis_completed",
+        source: "google_workspace_addon",
+        metadata: {
+          platform: "gmail",
+          action: "analyze_message",
+          messageCount: thread.messages.length,
+          coachingProfileIncluded: Boolean(personalization.coachingPromptContext),
+          contactContextIncluded: Boolean(personalization.relationshipContext),
+        },
+      });
 
       return cardResponse(
         {
