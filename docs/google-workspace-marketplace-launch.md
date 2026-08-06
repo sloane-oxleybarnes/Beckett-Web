@@ -59,7 +59,7 @@ Do not add broad `gmail.readonly`, `gmail.compose`, `gmail.modify`, or `mail.goo
 - [x] Provide a second Google account or documented path for testing cross-email account linking.
 - [x] Show first install and granular authorization.
 - [x] Show the account-required card and successful account connection.
-- [ ] Analyze a selected four-message thread.
+- [x] Analyze a selected four-message thread.
 - [x] Generate all three reply approaches.
 - [ ] Refine replies with an optional user instruction.
 - [x] Create a Gmail draft and demonstrate that Beckett does not send it.
@@ -76,10 +76,14 @@ Do not add broad `gmail.readonly`, `gmail.compose`, `gmail.modify`, or `mail.goo
 - Beckett plan: beta, with onboarding completed and email-style learning left off by default.
 - Confirmed demo contact: `hello@meetbeckett.co` / Sloane Oxley.
 - Saved contact context: direct and collaborative communication, early notice for timeline changes, and a clear shared next step.
-- Predictable inbox scenarios:
-  - `Reviewer Scenario 1 — Launch timeline alignment`
-  - `Reviewer Scenario 2 — Check-in after the client meeting`
-  - `Reviewer Scenario 3 — Request outside the agreed scope`
+- Predictable inbox scenarios created in the reviewer Gmail account on August 6, 2026:
+  - `Reviewer Scenario 1 — Launch timeline alignment` — a four-message thread between Sloane and Jordan. It covers a timeline change made without Jordan's input, an acknowledgment and repair, the concrete Monday/Tuesday handoff dates, and a final inbound request for ownership and decision needs. Use this for the primary analysis, personalized-reply, refinement, and Gmail-draft walkthrough.
+  - `Reviewer Scenario 2 — Check-in after the client meeting` — a concise inbound request to reconcile commitments before sending a client recap. Use this to demonstrate a direct or collaborative response without conflict framing.
+  - `Reviewer Scenario 3 — Request outside the agreed scope` — an inbound request to add live training and a manager guide without moving the launch date. Use this to demonstrate the gentle-limit reply approach and a clear tradeoff.
+
+Search Gmail for `subject:"Reviewer Scenario"` to display the three fixtures together. Keep Scenario 1's final message unanswered before recording so Beckett has a real inbound reply target. The older duplicate Scenario 1 test thread was moved to Trash and can be recovered if needed.
+
+The final Scenario 1 fixture was analyzed successfully in the production add-on on August 6, 2026. Beckett incorporated all four messages, addressed the reviewer in the second person, identified Sloane as the other participant, and correctly stated that the reviewer was the person who needed to respond. This verification did not create or send a reply.
 
 Production smoke test completed on August 6, 2026 against the draft Marketplace listing and production HTTP deployment. Scenario 1 successfully completed selected-message analysis, generated all three reply approaches, included both the coaching profile and confirmed-contact context, and created an editable Gmail reply draft without sending it. The production `beta_events` records showed `coachingProfileIncluded: true`, `contactContextIncluded: true`, and `reply_draft_created`; `interaction_summaries` recorded the selected Gmail thread against the confirmed contact.
 
