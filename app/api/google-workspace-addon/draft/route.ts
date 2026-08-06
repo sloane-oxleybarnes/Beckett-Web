@@ -46,11 +46,9 @@ export async function POST(request: NextRequest) {
       });
 
       return NextResponse.json({
-        renderActions: {
-          hostAppAction: {
-            gmailAction: {
-              openCreatedDraftAction: { draftId, threadServerPermId },
-            },
+        hostAppAction: {
+          gmailAction: {
+            openCreatedDraftAction: { draftId, threadServerPermId },
           },
         },
       });
