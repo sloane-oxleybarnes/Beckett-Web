@@ -39,7 +39,7 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   return workspaceAddOnRoute(request, async (event) => {
     const profile = await resolveWorkspaceAddOnProfile(event);
-    if (!profile) return cardResponse(signInCard(request));
+    if (!profile) return cardResponse(await signInCard(request, event));
     if (!isWorkspaceAddOnPlanEligible(profile.plan)) {
       return cardResponse(errorCard("Plan required", "Your Beckett plan does not currently include Gmail analysis."));
     }

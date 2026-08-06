@@ -1,0 +1,60 @@
+{
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/gmail.addons.execute",
+    "https://www.googleapis.com/auth/gmail.addons.current.message.action",
+    "https://www.googleapis.com/auth/gmail.addons.current.action.compose",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "openid"
+  ],
+  "addOns": {
+    "common": {
+      "name": "Beckett",
+      "logoUrl": "https://www.meetbeckett.co/brand/beckett-icon.png",
+      "layoutProperties": {
+        "primaryColor": "#8B5310",
+        "secondaryColor": "#BA7517"
+      },
+      "addOnWidgetSet": {
+        "usedWidgets": [
+          "STYLED_BUTTONS",
+          "FIXED_FOOTER"
+        ]
+      },
+      "homepageTrigger": {
+        "runFunction": "https://www.meetbeckett.co/api/google-workspace-addon/home"
+      },
+      "universalActions": [
+        {
+          "label": "Open Beckett",
+          "openLink": "https://www.meetbeckett.co/dashboard"
+        },
+        {
+          "label": "Beckett settings",
+          "openLink": "https://www.meetbeckett.co/dashboard/settings"
+        },
+        {
+          "label": "Privacy",
+          "openLink": "https://www.meetbeckett.co/privacy"
+        },
+        {
+          "label": "Get help",
+          "openLink": "mailto:hello@meetbeckett.co"
+        }
+      ],
+      "openLinkUrlPrefixes": [
+        "https://www.meetbeckett.co/"
+      ]
+    },
+    "gmail": {
+      "contextualTriggers": [
+        {
+          "unconditional": {},
+          "onTriggerFunction": "https://www.meetbeckett.co/api/google-workspace-addon/message"
+        }
+      ]
+    },
+    "httpOptions": {
+      "granularOauthPermissionSupport": "OPT_IN"
+    }
+  }
+}

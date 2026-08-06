@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   return workspaceAddOnRoute(request, async (event) => {
     const profile = await resolveWorkspaceAddOnProfile(event);
-    if (!profile) return cardUpdateResponse(signInCard(request));
+    if (!profile) return cardUpdateResponse(await signInCard(request, event));
 
     const enabled = event.commonEventObject?.parameters?.enabled === "true";
     const { error } = await supabaseAdmin
