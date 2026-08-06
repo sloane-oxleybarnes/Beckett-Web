@@ -14,7 +14,6 @@ import {
   beckettCardHeader,
   brandedSectionHeader,
   cardResponse,
-  decoratedTextWidget,
   endpointUrl,
   errorCard,
   formatCardRichText,
@@ -59,11 +58,9 @@ export async function POST(request: NextRequest) {
           "You are Beckett, a private communication coach.",
           "Analyze only the user-selected Gmail conversation supplied below.",
           "Do not claim to know a sender's intent as fact. Separate visible evidence from possible interpretations.",
-          "Return exactly four concise sections named What's happening, Tone, What they want, and Suggested responses.",
+          "Return exactly three concise sections named What's happening, Tone, and What they want.",
           "Use those section names as plain-text headings on their own lines. Do not use Markdown, hashtags, asterisks, or separator lines.",
           "What's happening, Tone, and What they want may each use 1-3 short newline-separated bullets.",
-          "Inside Suggested responses, return exactly three options named Direct and clear, Warm and collaborative, and Sets a gentle limit.",
-          "Put each option name on its own line followed by one ready-to-send reply of no more than 35 words.",
           beckettBoundaryPrompt(),
         ].join("\n\n"),
         [
@@ -72,7 +69,7 @@ export async function POST(request: NextRequest) {
             content: `Subject: ${latest.subject}\nSelected conversation:\n\n${threadForPrompt(thread)}`,
           },
         ],
-        850,
+        700,
       );
 
       if (WEB_CREDITS_ENABLED) {
@@ -95,12 +92,6 @@ export async function POST(request: NextRequest) {
         { key: "happening", label: "What's happening" },
         { key: "tone", label: "Tone" },
         { key: "want", label: "What they want" },
-        { key: "responses", label: "Suggested responses" },
-      ]);
-      const responses = parseLabeledSections(sections.responses, [
-        { key: "direct", label: "Direct and clear" },
-        { key: "warm", label: "Warm and collaborative" },
-        { key: "boundary", label: "Sets a gentle limit" },
       ]);
 
       return cardResponse(
@@ -119,14 +110,6 @@ export async function POST(request: NextRequest) {
             {
               header: brandedSectionHeader("What they want"),
               widgets: [textWidget(formatCardRichText(sections.want || "No explicit next step is visible in the selected conversation."), 9)],
-            },
-            {
-              header: brandedSectionHeader("Suggested responses"),
-              widgets: [
-                decoratedTextWidget("Direct and clear", formatCardRichText(responses.direct || "Reply clearly and directly to the visible request.")),
-                decoratedTextWidget("Warm and collaborative", formatCardRichText(responses.warm || "Acknowledge the message warmly, then confirm the next step.")),
-                decoratedTextWidget("Sets a gentle limit", formatCardRichText(responses.boundary || "State what you can do and offer a realistic next step.")),
-              ],
             },
           ],
           fixedFooter: actionFixedFooter(
