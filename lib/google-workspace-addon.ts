@@ -238,6 +238,18 @@ export function textWidget(text: string, maxLines?: number) {
   return { textParagraph: { text, ...(maxLines ? { maxLines } : {}) } };
 }
 
+export function textInputWidget(name: string, label: string, hintText: string, characterLimit = 1_000) {
+  return {
+    textInput: {
+      name,
+      label,
+      hintText,
+      type: "MULTIPLE_LINE",
+      validation: { characterLimit, inputType: "TEXT" },
+    },
+  };
+}
+
 export function decoratedTextWidget(topLabel: string, text: string) {
   return { decoratedText: { topLabel, text, wrapText: true } };
 }
@@ -255,6 +267,26 @@ export function buttonWidget(text: string, functionUrl: string, parameters?: Rec
               ...(parameters
                 ? { parameters: Object.entries(parameters).map(([key, value]) => ({ key, value })) }
                 : {}),
+            },
+          },
+        },
+      ],
+    },
+  };
+}
+
+export function formSubmitButtonWidget(text: string, functionUrl: string, requiredWidgets: string[]) {
+  return {
+    buttonList: {
+      buttons: [
+        {
+          text,
+          color: BECKETT_BUTTON_COLOR,
+          onClick: {
+            action: {
+              function: functionUrl,
+              loadIndicator: "SPINNER",
+              requiredWidgets,
             },
           },
         },
@@ -291,6 +323,13 @@ export function cardResponse(card: Card, stateChanged = false) {
   return NextResponse.json({
     ...(stateChanged ? { stateChanged: true } : {}),
     renderActions: { action: { navigations: [{ pushCard: card }] } },
+  });
+}
+
+export function cardUpdateResponse(card: Card, stateChanged = false) {
+  return NextResponse.json({
+    ...(stateChanged ? { stateChanged: true } : {}),
+    renderActions: { action: { navigations: [{ updateCard: card }] } },
   });
 }
 

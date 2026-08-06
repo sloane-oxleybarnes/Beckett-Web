@@ -124,6 +124,12 @@ function encodeBase64Url(value: string) {
   return Buffer.from(value, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
+function asThreadServerPermId(value: string) {
+  if (!value || value.startsWith("thread-f:")) return value;
+  if (/^[0-9a-f]+$/i.test(value)) return `thread-f:${BigInt(`0x${value}`).toString(10)}`;
+  return value;
+}
+
 export async function createGmailReplyDraft(
   event: WorkspaceAddOnEvent,
   thread: SelectedGmailThread,
@@ -175,9 +181,11 @@ export async function createGmailReplyDraft(
   if (!response.ok) throw new Error(`gmail_draft_api_error:${response.status}`);
 
   const draft = (await response.json()) as GmailDraft;
-  const draftId = draft.id || "";
-  const threadServerPermId = draft.message?.threadId || thread.id;
-  if (!draftId || !threadServerPermId) throw new Error("gmail_draft_response_invalid");
+  const rawDraftId = draft.id || "";
+  if (!rawDraftId) throw new Error("gmail_draft_response_invalid");
+  const draftId = rawDraftId.startsWith("msg-a:") ? rawDraftId : `msg-a:${rawDraftId}`;
+  const threadServerPermId = asThreadServerPermId(event.gmail?.threadId || draft.message?.threadId || thread.id);
+  if (!threadServerPermId) throw new Error("gmail_draft_response_invalid");
   return { draftId, threadServerPermId };
 }
 
