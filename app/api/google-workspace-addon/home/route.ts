@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
 import {
-  cardResponse,
   endpointUrl,
   isWorkspaceAddOnPlanEligible,
   openLinkButtonWidget,
   resolveWorkspaceAddOnProfile,
   signInCard,
   textWidget,
+  triggerCardResponse,
   workspaceAddOnRoute,
 } from "@/lib/google-workspace-addon";
 
@@ -16,14 +16,14 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   return workspaceAddOnRoute(request, async (event) => {
     const profile = await resolveWorkspaceAddOnProfile(event);
-    if (!profile) return cardResponse(signInCard(request));
+    if (!profile) return triggerCardResponse(signInCard(request));
     if (!isWorkspaceAddOnPlanEligible(profile.plan)) {
-      return cardResponse({
+      return triggerCardResponse({
         header: { title: "Beckett", subtitle: "Plan required" },
         sections: [{ widgets: [textWidget("Your Beckett plan does not currently include Gmail analysis."), openLinkButtonWidget("View Beckett", endpointUrl(request, "/dashboard"))] }],
       });
     }
-    return cardResponse({
+    return triggerCardResponse({
       header: { title: "Beckett for Gmail", subtitle: profile.email || "Connected" },
       sections: [
         {
