@@ -216,6 +216,12 @@ export function cardResponse(card: Card, stateChanged = false) {
   });
 }
 
+export function triggerCardResponse(card: Card) {
+  return NextResponse.json({
+    action: { navigations: [{ pushCard: card }] },
+  });
+}
+
 export function errorCard(title: string, message: string): Card {
   return {
     header: { title: "Beckett", subtitle: title },
