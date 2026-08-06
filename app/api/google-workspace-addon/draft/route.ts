@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const authorizedScopes = event.authorizationEventObject?.authorizedScopes || [];
     if (!authorizedScopes.includes(GMAIL_COMPOSE_SCOPE)) {
       return NextResponse.json({
-        requesting_google_scopes: { scopes: [GMAIL_COMPOSE_SCOPE] },
+        requestingGoogleScopes: { scopes: [GMAIL_COMPOSE_SCOPE] },
       });
     }
 
