@@ -18,7 +18,6 @@ import {
   endpointUrl,
   errorCard,
   formatCardRichText,
-  formatCardText,
   isWorkspaceAddOnPlanEligible,
   parseLabeledSections,
   resolveWorkspaceAddOnProfile,
@@ -110,18 +109,6 @@ export async function POST(request: NextRequest) {
           header: beckettCardHeader("Beckett’s read", latest.subject.slice(0, 120)),
           sections: [
             {
-              header: brandedSectionHeader("Conversation"),
-              collapsible: true,
-              uncollapsibleWidgetsCount: 1,
-              widgets: [
-                decoratedTextWidget("From", formatCardText(latest.from || "Unknown sender", 500)),
-                decoratedTextWidget(
-                  "Context used",
-                  `${thread.messages.length} message${thread.messages.length === 1 ? "" : "s"} from this user-selected conversation`,
-                ),
-              ],
-            },
-            {
               header: brandedSectionHeader("What's happening"),
               widgets: [textWidget(formatCardRichText(sections.happening || result), 9)],
             },
@@ -139,14 +126,6 @@ export async function POST(request: NextRequest) {
                 decoratedTextWidget("Direct and clear", formatCardRichText(responses.direct || "Reply clearly and directly to the visible request.")),
                 decoratedTextWidget("Warm and collaborative", formatCardRichText(responses.warm || "Acknowledge the message warmly, then confirm the next step.")),
                 decoratedTextWidget("Sets a gentle limit", formatCardRichText(responses.boundary || "State what you can do and offer a realistic next step.")),
-              ],
-            },
-            {
-              widgets: [
-                decoratedTextWidget(
-                  "Private by design",
-                  "Only this user-selected conversation was used. Beckett did not send or change any email.",
-                ),
               ],
             },
           ],

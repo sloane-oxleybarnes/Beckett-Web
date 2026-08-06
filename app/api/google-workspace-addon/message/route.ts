@@ -26,15 +26,14 @@ export async function POST(request: NextRequest) {
     }
     return triggerCardResponse({
       name: "beckett-selected-message",
-      header: beckettCardHeader("Analyze this conversation", "Nothing is read until you continue"),
+      header: beckettCardHeader("Beckett", "Email analysis"),
       sections: [
         {
           widgets: [
-            textWidget("Beckett will securely process the selected Gmail message and available thread context to explain the likely read, what it asks, and a possible next move."),
-            buttonWidget("Analyze selected conversation", endpointUrl(request, "/api/google-workspace-addon/analyze")),
+            textWidget("Understand what’s happening, the tone, what they want, and how you could reply."),
+            buttonWidget("Analyze email", endpointUrl(request, "/api/google-workspace-addon/analyze")),
           ],
         },
-        { widgets: [textWidget("Beckett does not send email and does not claim to know another person's intent as fact.")] },
       ],
     });
   });
