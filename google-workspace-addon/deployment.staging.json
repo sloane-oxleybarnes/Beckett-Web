@@ -8,7 +8,7 @@
   ],
   "addOns": {
     "common": {
-      "name": "Beckett",
+      "name": "Beckett Staging",
       "logoUrl": "https://www.meetbeckett.co/brand/beckett-icon.png",
       "layoutProperties": {
         "primaryColor": "#8B5310",
