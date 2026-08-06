@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   return workspaceAddOnRoute(request, async (event) => {
     const profile = await resolveWorkspaceAddOnProfile(event);
-    if (!profile) return triggerCardResponse(signInCard(request));
+    if (!profile) return triggerCardResponse(await signInCard(request, event));
     if (!isWorkspaceAddOnPlanEligible(profile.plan)) {
       return triggerCardResponse({
         header: beckettCardHeader("Beckett", "Plan required"),
