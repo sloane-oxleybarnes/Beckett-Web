@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const thread = await getSelectedGmailThread(event);
-      const { draftId, draftThreadId } = await createGmailReplyDraft(event, thread, profile.email, reply);
+      const { draftId, draftThreadId } = await createGmailReplyDraft(event, thread, profile.googleEmail, reply);
 
       await trackBetaEvent({
         userId: profile.id,

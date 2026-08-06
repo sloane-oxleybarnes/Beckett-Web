@@ -28,6 +28,8 @@ export type WorkspaceAddOnProfile = {
   email: string | null;
   plan: string | null;
   googleSubject: string;
+  googleEmail: string;
+  patternModelEnabled: boolean;
 };
 
 type CardHeader = {
@@ -130,7 +132,7 @@ export async function resolveWorkspaceAddOnProfile(event: WorkspaceAddOnEvent): 
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
-    .select("id,email,plan")
+    .select("id,email,plan,pattern_model_enabled")
     .eq("id", userId)
     .maybeSingle();
   if (!profile) return null;
@@ -150,7 +152,14 @@ export async function resolveWorkspaceAddOnProfile(event: WorkspaceAddOnEvent): 
     );
   }
 
-  return { ...profile, googleSubject };
+  return {
+    id: profile.id,
+    email: profile.email,
+    plan: profile.plan,
+    googleSubject,
+    googleEmail: email,
+    patternModelEnabled: Boolean(profile.pattern_model_enabled),
+  };
 }
 
 export function isWorkspaceAddOnPlanEligible(plan: string | null) {

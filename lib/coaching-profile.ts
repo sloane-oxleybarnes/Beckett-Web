@@ -11,6 +11,7 @@ type CoachingProfileRow = {
   coaching_tone?: string | null;
   neurodivergent_context?: string[] | null;
   neurodivergent_context_other?: string | null;
+  pattern_model_enabled?: boolean | null;
 };
 
 type ToolkitRow = {
@@ -18,6 +19,12 @@ type ToolkitRow = {
   category?: string | null;
   label?: string | null;
   content?: string | null;
+};
+
+type PatternObservationRow = {
+  label?: string | null;
+  evidence_summary?: string | null;
+  coaching_note?: string | null;
 };
 
 const toneLabels = new Map(coachingToneOptions.map((option) => [option.value, option.label]));
@@ -44,7 +51,11 @@ export function formatToolkitItemsForPrompt(items: ToolkitRow[] = [], limit = 5)
     : "";
 }
 
-export function formatCoachingProfileForPrompt(profile?: CoachingProfileRow | null, toolkitItems: ToolkitRow[] = []) {
+export function formatCoachingProfileForPrompt(
+  profile?: CoachingProfileRow | null,
+  toolkitItems: ToolkitRow[] = [],
+  patternObservations: PatternObservationRow[] = [],
+) {
   if (!profile) return formatToolkitItemsForPrompt(toolkitItems);
 
   const lines = [
@@ -70,6 +81,11 @@ export function formatCoachingProfileForPrompt(profile?: CoachingProfileRow | nu
         ].filter(Boolean).join(", ")}.`
       : null,
     formatToolkitItemsForPrompt(toolkitItems),
+    profile.pattern_model_enabled && patternObservations.length
+      ? `Opt-in communication patterns inferred from prior user-selected interactions. Treat these as preferences to preserve, not fixed traits:\n${patternObservations
+          .map((observation) => `- ${observation.label || "Observed style"}: ${observation.coaching_note || observation.evidence_summary || ""}`)
+          .join("\n")}`
+      : null,
   ].filter(Boolean);
 
   return lines.length
@@ -85,7 +101,7 @@ export async function fetchCoachingProfileContext(
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "display_name, first_name, full_name, strengths, workplace_triggers, communication_preferences, coaching_tone, neurodivergent_context, neurodivergent_context_other"
+      "display_name, first_name, full_name, strengths, workplace_triggers, communication_preferences, coaching_tone, neurodivergent_context, neurodivergent_context_other, pattern_model_enabled"
     )
     .eq("id", userId)
     .maybeSingle();
@@ -102,9 +118,26 @@ export async function fetchCoachingProfileContext(
     toolkitItems = data || [];
   }
 
+  let patternObservations: PatternObservationRow[] = [];
+  if ((profile as CoachingProfileRow | null)?.pattern_model_enabled) {
+    const { data } = await supabase
+      .from("user_pattern_observations")
+      .select("label, evidence_summary, coaching_note, updated_at")
+      .eq("user_id", userId)
+      .is("archived_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(3);
+    patternObservations = data || [];
+  }
+
   return {
     profile: profile as CoachingProfileRow | null,
     toolkitItems,
-    promptContext: formatCoachingProfileForPrompt(profile as CoachingProfileRow | null, toolkitItems),
+    patternObservations,
+    promptContext: formatCoachingProfileForPrompt(
+      profile as CoachingProfileRow | null,
+      toolkitItems,
+      patternObservations,
+    ),
   };
 }
