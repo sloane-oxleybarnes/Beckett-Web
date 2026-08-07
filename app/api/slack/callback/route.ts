@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   } = await supabase.auth.getSession();
 
   if (!session) {
-    return NextResponse.redirect(new URL("/auth/login?next=/dashboard/settings", req.url));
+    return NextResponse.redirect(new URL("/auth/login?next=/dashboard/apps", req.url));
   }
 
   const code = req.nextUrl.searchParams.get("code");
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const expectedState = req.cookies.get("beckett_slack_oauth_state")?.value;
 
   if (!code || !state || state !== expectedState) {
-    return NextResponse.redirect(new URL("/dashboard/settings?slack=auth_error", req.url));
+    return NextResponse.redirect(new URL("/dashboard/apps?slack=auth_error", req.url));
   }
 
   const origin = getSlackRedirectOrigin();
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   const slackOAuthWorker = getSlackOAuthWorkerUrl();
 
   if (!slackOAuthWorker) {
-    return NextResponse.redirect(new URL("/dashboard/settings?slack=setup_error", req.url));
+    return NextResponse.redirect(new URL("/dashboard/apps?slack=setup_error", req.url));
   }
 
   const tokenRes = await fetch(slackOAuthWorker, {
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
   };
 
   if (!tokenRes?.ok || !tokenData.ok || !tokenData.authed_user?.access_token) {
-    return NextResponse.redirect(new URL("/dashboard/settings?slack=auth_error", req.url));
+    return NextResponse.redirect(new URL("/dashboard/apps?slack=auth_error", req.url));
   }
 
   const now = new Date().toISOString();
@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  const response = NextResponse.redirect(new URL("/dashboard/settings?slack=connected", req.url));
+  const response = NextResponse.redirect(new URL("/dashboard/apps?slack=connected", req.url));
   response.cookies.delete("beckett_slack_oauth_state");
   return response;
 }

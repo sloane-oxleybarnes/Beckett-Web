@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   const origin = new URL(request.url).origin;
   const redirectUri = getMicrosoftRedirectUri(origin);
   if (!isMicrosoftConfigured(origin)) {
-    return NextResponse.redirect(new URL("/dashboard/settings?microsoft_error=configuration-required#connected-accounts", request.url));
+    return NextResponse.redirect(new URL("/dashboard/apps?microsoft_error=configuration-required", request.url));
   }
 
   const state = randomBytes(32).toString("base64url");

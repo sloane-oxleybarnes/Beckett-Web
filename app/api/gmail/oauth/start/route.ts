@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 const COOKIE_PATH = "/api/gmail/oauth";
 const MAX_AGE_SECONDS = 10 * 60;
 const SETTINGS_PATH = "/dashboard/settings";
+const APPS_PATH = "/dashboard/apps";
 
 function base64Url(value: Buffer) {
   return value.toString("base64url");
@@ -13,7 +14,7 @@ function base64Url(value: Buffer) {
 
 export async function GET(request: NextRequest) {
   const origin = new URL(request.url).origin;
-  const returnTo = request.nextUrl.searchParams.get("next") === SETTINGS_PATH ? SETTINGS_PATH : SETTINGS_PATH;
+  const returnTo = request.nextUrl.searchParams.get("next") === APPS_PATH ? APPS_PATH : SETTINGS_PATH;
   const supabase = createSupabaseServerClient();
   const {
     data: { user },

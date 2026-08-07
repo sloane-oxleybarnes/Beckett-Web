@@ -9,66 +9,6 @@ import {
   communicationPreferenceOptions,
   type CoachingTone,
 } from "@/lib/onboarding";
-import { CHROME_WEB_STORE_URL } from "@/lib/app-links";
-import GoogleCalendarConnection from "@/components/dashboard/GoogleCalendarConnection";
-import MicrosoftCalendarConnection from "@/components/dashboard/MicrosoftCalendarConnection";
-
-function ConnectRow({
-  icon,
-  name,
-  description,
-  onConnect,
-  onDisconnect,
-  connected,
-  detail,
-  disconnecting,
-}: {
-  icon: string;
-  name: string;
-  description: string;
-  onConnect?: () => void;
-  onDisconnect?: () => void;
-  connected?: boolean;
-  detail?: string;
-  disconnecting?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex items-start gap-3">
-        <span className="text-lg mt-0.5">{icon}</span>
-        <div>
-          <p className="text-sm text-ink font-medium">{name}</p>
-          <p className="text-xs text-ink-light">{connected && detail ? detail : description}</p>
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {connected && (
-          <span className="rounded-pill bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
-            Connected
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={() => onConnect?.()}
-          disabled={disconnecting}
-          className="text-xs border border-border rounded-pill px-4 py-1.5 text-ink hover:bg-bg transition-colors"
-        >
-          {connected ? "Reconnect" : "Connect"}
-        </button>
-        {connected && onDisconnect && (
-          <button
-            type="button"
-            onClick={onDisconnect}
-            disabled={disconnecting}
-            className="text-xs border border-red-200 rounded-pill px-4 py-1.5 text-red-700 hover:bg-red-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {disconnecting ? "Disconnecting..." : "Disconnect"}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 const planBadgeColor: Record<string, string> = {
   free: "bg-ink-light/20 text-ink-mid",
@@ -276,7 +216,6 @@ export default function SettingsPage() {
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
-  const [disconnectingProvider, setDisconnectingProvider] = useState<"google" | "slack" | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -313,27 +252,6 @@ export default function SettingsPage() {
   useEffect(() => {
     void loadDiagnostics();
   }, [loadDiagnostics]);
-
-  async function disconnectIntegration(provider: "google" | "slack") {
-    const label = provider === "google" ? "Google (Gmail)" : "Slack";
-    const confirmed = window.confirm(
-      `Disconnect ${label}? Beckett will stop using it for future coaching. Existing Beckett coaching history and contacts will not be deleted.`
-    );
-    if (!confirmed) return;
-
-    setDisconnectingProvider(provider);
-    setDiagnosticsError(null);
-    try {
-      const response = await fetch(`/api/integrations/${provider}`, { method: "DELETE" });
-      const result = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) throw new Error(result?.error || `Could not disconnect ${label}.`);
-      await loadDiagnostics();
-    } catch (error) {
-      setDiagnosticsError(error instanceof Error ? error.message : `Could not disconnect ${label}.`);
-    } finally {
-      setDisconnectingProvider(null);
-    }
-  }
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -628,53 +546,6 @@ export default function SettingsPage() {
         </form>
       </section>
 
-      {/* Connected accounts */}
-      <section className="bg-white rounded-card border border-border p-6 mb-5">
-        <h2
-          className="text-lg text-ink mb-1"
-          style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-        >
-          Connected accounts
-        </h2>
-        <p className="text-sm text-ink-mid mb-5">
-          Connect only the tools you want Beckett to use for coaching. Beckett stores connection
-          status and usage metadata, not full Gmail, Slack, Google Calendar, or Microsoft Calendar history by default.
-        </p>
-        <div className="mb-5 rounded-sm border border-primary/15 bg-primary-light/40 p-3 text-xs leading-relaxed text-ink-mid">
-          Gmail and connected calendars are read-only, and Slack is used only for context. Beckett cannot send email, post to
-          Slack, move meetings, or change anything without you taking the final action. Disconnecting
-          stops future access but does not delete your existing Beckett coaching history or contacts.
-        </div>
-        <div className="space-y-4">
-          {/* Google / Gmail */}
-          <ConnectRow
-            icon="📧"
-            name="Google (Gmail)"
-            description="Read-only email thread context when you ask Beckett for coaching"
-            connected={diagnostics?.integrations.google.connected}
-            detail={diagnostics?.integrations.google.email || "Google account connected"}
-            onConnect={() => { window.location.assign("/api/gmail/oauth/start?next=/dashboard/settings"); }}
-            onDisconnect={() => void disconnectIntegration("google")}
-            disconnecting={disconnectingProvider === "google"}
-          />
-          <GoogleCalendarConnection />
-          <MicrosoftCalendarConnection />
-          {/* Slack */}
-          <ConnectRow
-            icon="💬"
-            name="Slack"
-            description="Recent DM, channel, and thread context when you ask Beckett for coaching"
-            connected={diagnostics?.integrations.slack.connected}
-            detail={diagnostics?.integrations.slack.teamName || "Slack workspace connected"}
-            onConnect={() => {
-              window.location.href = "/api/slack/connect";
-            }}
-            onDisconnect={() => void disconnectIntegration("slack")}
-            disconnecting={disconnectingProvider === "slack"}
-          />
-        </div>
-      </section>
-
       {/* Beta diagnostics */}
       <section className="bg-white rounded-card border border-border p-6 mb-5">
         <div className="flex items-start justify-between gap-4 mb-4">
@@ -779,41 +650,6 @@ export default function SettingsPage() {
             {diagnosticsLoading ? "Checking beta systems..." : "Run a health check to see current status."}
           </div>
         ) : null}
-      </section>
-
-      {/* Extension setup */}
-      <section className="bg-white rounded-card border border-border p-6 mb-5">
-        <h2
-          className="text-lg text-ink mb-1"
-          style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-        >
-          Extension setup
-        </h2>
-        <p className="text-sm text-ink-mid mb-4">
-          Beckett for Chrome connects through a secure login flow in the side panel.
-        </p>
-        <p className="mb-4 text-xs leading-relaxed text-ink-mid">
-          The extension reads the page context needed for coaching in Gmail and Slack. Analysis
-          requests go through Beckett&apos;s backend so beta access, limits, and safety rules can apply.
-        </p>
-        <div className="rounded-sm border border-primary/20 bg-primary-light p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-sm font-medium text-ink">Included in beta access</p>
-              <p className="text-xs text-ink-mid mt-1">
-                Install Beckett from the Chrome Web Store, then use “Log in with Beckett” in the side panel if it is not connected.
-              </p>
-            </div>
-            <a
-              href={CHROME_WEB_STORE_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="shrink-0 rounded-pill bg-primary px-4 py-2 text-center text-xs font-medium text-white transition-colors hover:bg-primary-dark"
-            >
-              Install extension
-            </a>
-          </div>
-        </div>
       </section>
 
       {/* Beta code */}

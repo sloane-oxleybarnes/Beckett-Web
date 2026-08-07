@@ -17,7 +17,8 @@ function completeRedirect(origin: string, status: string, returnTo = "/dashboard
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
-  const returnTo = request.cookies.get("beckett_calendar_next")?.value === "/dashboard/settings" ? "/dashboard/settings" : "/dashboard/calendar";
+  const storedReturnTo = request.cookies.get("beckett_calendar_next")?.value;
+  const returnTo = storedReturnTo === "/dashboard/settings" || storedReturnTo === "/dashboard/apps" ? storedReturnTo : "/dashboard/calendar";
   const error = searchParams.get("error");
   if (error) return completeRedirect(origin, error === "access_denied" ? "cancelled" : "authorization-failed", returnTo);
 

@@ -9,6 +9,7 @@ import {
   hasRequiredBetaConsentSubmission,
   type BetaConsentSubmission,
 } from "@/lib/beta-consent";
+import { isConnectedAppId } from "@/lib/connected-apps";
 
 type OnboardingBody = BetaConsentSubmission & {
   email?: string;
@@ -22,6 +23,7 @@ type OnboardingBody = BetaConsentSubmission & {
   coaching_tone?: CoachingTone;
   neurodivergent_context?: string[];
   neurodivergent_context_other?: string | null;
+  work_apps?: unknown[];
 };
 
 export async function POST(req: NextRequest) {
@@ -77,6 +79,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const workApps = Array.isArray(body.work_apps) ? Array.from(new Set(body.work_apps.filter(isConnectedAppId))) : [];
+  if (workApps.length) {
+    const { error: appError } = await supabaseAdmin.from("user_app_preferences").upsert(
+      workApps.map((appId) => ({ user_id: session.user.id, app_id: appId, added_source: "onboarding", updated_at: now })),
+      { onConflict: "user_id,app_id" },
+    );
+    if (appError) return NextResponse.json({ error: "Your profile was saved, but Your Apps could not be updated." }, { status: 500 });
+  }
+
   const email = body.email || session.user.email || null;
   if (email) {
     await supabaseAdmin
@@ -98,6 +109,7 @@ export async function POST(req: NextRequest) {
       triggersCount: body.workplace_triggers?.length || 0,
       preferencesCount: body.communication_preferences?.length || 0,
       neurodivergentContextCount: body.neurodivergent_context?.length || 0,
+      workApps,
     },
   });
 

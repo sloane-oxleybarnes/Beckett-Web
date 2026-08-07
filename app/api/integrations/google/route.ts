@@ -36,7 +36,7 @@ export async function DELETE() {
     .from("user_integrations")
     .delete()
     .eq("user_id", user.id)
-    .eq("provider", "google");
+    .in("provider", ["google", "google_workspace_addon"]);
   if (deleteError) return NextResponse.json({ error: "Could not disconnect Google." }, { status: 500 });
 
   await trackBetaEvent({ userId: user.id, email: user.email, eventName: "google_disconnected", source: "web_app" });

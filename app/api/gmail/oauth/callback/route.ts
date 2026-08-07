@@ -7,7 +7,7 @@ import { trackBetaEvent } from "@/lib/beta-events";
 
 const COOKIE_PATH = "/api/gmail/oauth";
 
-function completeRedirect(origin: string, status: string, returnTo = "/dashboard/settings") {
+function completeRedirect(origin: string, status: string, returnTo = "/dashboard/apps") {
   const response = NextResponse.redirect(new URL(`${returnTo}?gmail=${encodeURIComponent(status)}`, origin));
   for (const name of ["beckett_gmail_state", "beckett_gmail_verifier", "beckett_gmail_user", "beckett_gmail_next"]) {
     response.cookies.set(name, "", { httpOnly: true, sameSite: "lax", secure: true, path: COOKIE_PATH, maxAge: 0 });
@@ -17,7 +17,8 @@ function completeRedirect(origin: string, status: string, returnTo = "/dashboard
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
-  const returnTo = request.cookies.get("beckett_gmail_next")?.value === "/dashboard/settings" ? "/dashboard/settings" : "/dashboard/settings";
+  const storedReturnTo = request.cookies.get("beckett_gmail_next")?.value;
+  const returnTo = storedReturnTo === "/dashboard/settings" ? "/dashboard/settings" : "/dashboard/apps";
   const error = searchParams.get("error");
   if (error) return completeRedirect(origin, error === "access_denied" ? "cancelled" : "authorization-failed", returnTo);
 

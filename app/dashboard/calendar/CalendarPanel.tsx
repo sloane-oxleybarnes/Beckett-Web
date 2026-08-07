@@ -142,7 +142,7 @@ export default function CalendarPanel() {
           <p className="mb-3 text-3xl">📅</p>
           <h2 className="mb-2 text-lg font-medium text-ink">Connect a calendar</h2>
           <p className="mx-auto mb-6 max-w-md text-sm leading-relaxed text-ink-mid">Connect Google Calendar or Microsoft 365 in Settings. Beckett uses only the calendars you choose there.</p>
-          <button type="button" onClick={() => window.location.assign("/dashboard/settings#connected-accounts")} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">Open Connected accounts</button>
+          <button type="button" onClick={() => window.location.assign("/dashboard/apps")} className="rounded-pill bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark">Open Apps</button>
         </div>
       ) : (
         <>

@@ -201,7 +201,7 @@ export default function OutlookAddinPage() {
   }
 
   function openMicrosoftSettings() {
-    const url = `${window.location.origin}/dashboard/settings#connected-accounts`;
+    const url = `${window.location.origin}/dashboard/apps`;
     if (window.Office?.context?.ui?.openBrowserWindow) window.Office.context.ui.openBrowserWindow(url);
     else window.location.assign(url);
   }

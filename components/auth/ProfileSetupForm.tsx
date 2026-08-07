@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import AddToSlackButton from "@/components/integrations/AddToSlackButton";
 import { createClient } from "@/lib/supabase";
 import { hasCurrentBetaConsent } from "@/lib/beta-consent";
 import {
@@ -15,8 +14,8 @@ import {
   workplaceTriggerOptions,
   type CoachingTone,
 } from "@/lib/onboarding";
-import { CHROME_WEB_STORE_URL } from "@/lib/app-links";
 import { safeInternalPath } from "@/lib/auth-next";
+import { CONNECTED_APPS, type ConnectedAppId } from "@/lib/connected-apps";
 
 const steps = [
   "Before we begin",
@@ -27,8 +26,6 @@ const steps = [
   "Context",
   "Extension",
 ];
-
-const chromeExtensionUrl = process.env.NEXT_PUBLIC_CHROME_EXTENSION_URL || CHROME_WEB_STORE_URL;
 
 function toggleValue(list: string[], value: string, max?: number) {
   if (list.includes(value)) return list.filter((item) => item !== value);
@@ -94,6 +91,7 @@ export default function ProfileSetupForm() {
   const [coachingTone, setCoachingTone] = useState<CoachingTone>("direct_kind");
   const [context, setContext] = useState<string[]>([]);
   const [contextOther, setContextOther] = useState("");
+  const [workApps, setWorkApps] = useState<ConnectedAppId[]>([]);
 
   useEffect(() => {
     async function loadProfile() {
@@ -153,7 +151,7 @@ export default function ProfileSetupForm() {
     return true;
   }, [adultUsEligibilityConfirmed, coachingDisclaimerConfirmed, coachingTone, displayName, firstName, lastName, preferences.length, step, strengths.length, termsAndPrivacyConfirmed, triggers.length]);
 
-  async function completeOnboarding(destination: "dashboard" | "gmail" | "slack" = "dashboard") {
+  async function completeOnboarding() {
     setSaving(true);
     setError("");
     const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
@@ -173,6 +171,7 @@ export default function ProfileSetupForm() {
       terms_accepted: termsAndPrivacyConfirmed,
       privacy_acknowledged: termsAndPrivacyConfirmed,
       coaching_disclaimer_acknowledged: coachingDisclaimerConfirmed,
+      work_apps: workApps,
     };
 
     const res = await fetch("/api/onboarding/complete", {
@@ -202,17 +201,7 @@ export default function ProfileSetupForm() {
       return;
     }
 
-    if (destination === "gmail") {
-      window.location.assign("/api/gmail/oauth/start?next=/dashboard/settings");
-      return;
-    }
-
-    if (destination === "slack") {
-      window.location.href = "/api/slack/connect";
-      return;
-    }
-
-    router.push("/dashboard");
+    router.push(workApps.length ? "/dashboard/apps" : "/dashboard");
     router.refresh();
   }
 
@@ -479,94 +468,23 @@ export default function ProfileSetupForm() {
 
           {step === 6 && (
             <div>
-              <h2 className="text-xl text-ink mb-2 font-serif">Connect your work tools</h2>
+              <h2 className="text-xl text-ink mb-2 font-serif">Which apps do you use?</h2>
               <p className="text-sm text-ink-mid mb-5">
-                Beckett works best when your coach is connected to the places your work conversations happen.
-                You can skip this for now and finish setup from Settings.
+                Choose any that are part of your workday. They will appear in Your Apps, where Beckett will walk you through connecting or installing each one.
               </p>
               <div className="mb-4">
                 <TrustNote>
-                  Connecting a tool lets Beckett use that tool only for coaching you request.
-                  Beckett stores connection status, usage counts, and beta debugging metadata, not
-                  full Gmail or Slack message history by default.
+                  Choosing an app here does not grant access. You will review and approve every connection separately from Your Apps.
                 </TrustNote>
               </div>
-              <div className="mb-4">
-                <TrustNote>
-                  During beta, you get 60 successful coaching actions per day and 500 per month.
-                  Only completed coaching responses use a credit; skill-course activities do not.
-                </TrustNote>
-              </div>
-              <div className="space-y-3">
-                <div className="rounded-sm border border-border bg-bg/60 p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-ink">1. Install Beckett for Chrome</p>
-                      <p className="mt-1 text-xs text-ink-mid">
-                        After installing, open the extension and choose Log in with Beckett.
-                      </p>
-                    </div>
-                    {chromeExtensionUrl ? (
-                      <a
-                        href={chromeExtensionUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="shrink-0 rounded-pill bg-primary px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-primary-dark"
-                      >
-                        Open
-                      </a>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled
-                        className="shrink-0 rounded-pill bg-ink-light/20 px-4 py-2 text-xs font-medium text-ink-mid"
-                      >
-                        Soon
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-sm border border-border bg-bg/60 p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-ink">2. Connect Gmail</p>
-                      <p className="mt-1 text-xs text-ink-mid">
-                        Gives Beckett read-only Gmail access so it can use full email threads when
-                        you ask for coaching. Beckett cannot send emails for you.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => completeOnboarding("gmail")}
-                      disabled={saving}
-                      className="shrink-0 rounded-pill border border-border px-4 py-2 text-xs font-medium text-ink transition-colors hover:border-primary-mid disabled:opacity-50"
-                    >
-                      Connect
-                    </button>
-                  </div>
-                </div>
-
-                <div className="rounded-sm border border-border bg-bg/60 p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-ink">3. Connect Slack</p>
-                      <p className="mt-1 text-xs text-ink-mid">
-                        Lets Beckett use recent Slack DMs, channels, and threads when you ask for
-                        coaching. After connecting, use <code className="font-mono text-ink">/beckett</code> in Slack
-                        Desktop for rewrite, decode, draft, prep, tone, and follow-up help. Beckett
-                        cannot post messages for you.
-                      </p>
-                    </div>
-                    <AddToSlackButton
-                      onClick={() => completeOnboarding("slack")}
-                      disabled={saving}
-                    />
-                  </div>
-                </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {CONNECTED_APPS.map((app) => {
+                  const selected = workApps.includes(app.id);
+                  return <button key={app.id} type="button" aria-pressed={selected} onClick={() => setWorkApps((current) => selected ? current.filter((id) => id !== app.id) : [...current, app.id])} className={`flex items-center gap-3 rounded-sm border p-3 text-left transition-colors ${selected ? "border-primary bg-primary-light" : "border-border bg-white hover:border-primary-mid"}`}><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${app.markClassName}`}>{app.mark}</span><span><span className="block text-sm font-medium text-ink">{app.name}</span><span className="mt-0.5 block text-xs text-ink-mid">{selected ? "Added to Your Apps" : "Select app"}</span></span></button>;
+                })}
               </div>
               <p className="mt-4 text-xs text-ink-light">
-                You can skip any of these for now. Beckett will keep nudging you from Settings until setup is complete.
+                Optional. You can add or remove apps later from the Apps tab.
               </p>
             </div>
           )}
