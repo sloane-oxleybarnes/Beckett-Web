@@ -2,6 +2,7 @@ create table if not exists public.google_workspace_analysis_cache (
   user_id uuid not null references public.profiles(id) on delete cascade,
   thread_id text not null,
   thread_revision text not null,
+  message_ids text[] not null default '{}',
   sections jsonb not null check (jsonb_typeof(sections) = 'object'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
