@@ -11,19 +11,22 @@ import {
   recordSuccessfulWebCredit,
 } from "@/lib/web-credits";
 import {
-  actionFixedFooter,
-  brandedSectionHeader,
-  cardResponse,
-  endpointUrl,
+  cardUpdateResponse,
   errorCard,
-  formatCardRichText,
   isWorkspaceAddOnPlanEligible,
   parseLabeledSections,
   resolveWorkspaceAddOnProfile,
   signInCard,
-  textWidget,
   workspaceAddOnRoute,
 } from "@/lib/google-workspace-addon";
+import {
+  buildWorkspaceAnalysisCard,
+  type WorkspaceAnalysisSections,
+} from "@/lib/google-workspace-analysis-card";
+import {
+  loadWorkspaceAnalysisCache,
+  storeWorkspaceAnalysisCache,
+} from "@/lib/google-workspace-analysis-cache";
 import {
   getSelectedGmailThread,
   gmailInteractionDedupeKey,
@@ -39,15 +42,19 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   return workspaceAddOnRoute(request, async (event) => {
     const profile = await resolveWorkspaceAddOnProfile(event);
-    if (!profile) return cardResponse(await signInCard(request, event));
+    if (!profile) return cardUpdateResponse(await signInCard(request, event));
     if (!isWorkspaceAddOnPlanEligible(profile.plan)) {
-      return cardResponse(errorCard("Plan required", "Your Beckett plan does not currently include Gmail analysis."));
+      return cardUpdateResponse(errorCard("Plan required", "Your Beckett plan does not currently include Gmail analysis."));
     }
 
     try {
       const thread = await getSelectedGmailThread(event);
       const latest = thread.messages[thread.messages.length - 1];
-      if (!latest?.body) return cardResponse(errorCard("Message unavailable", "Gmail did not provide readable message content."));
+      if (!latest?.body) return cardUpdateResponse(errorCard("Message unavailable", "Gmail did not provide readable message content."));
+      const cachedSections = await loadWorkspaceAnalysisCache({ userId: profile.id, thread });
+      if (cachedSections) {
+        return cardUpdateResponse(buildWorkspaceAnalysisCard(request, cachedSections));
+      }
       const personalization = await loadWorkspaceGmailPersonalization(profile, thread);
 
       if (WEB_CREDITS_ENABLED) {
@@ -68,8 +75,8 @@ export async function POST(request: NextRequest) {
           "Do not claim to know a sender's intent as fact. Separate visible evidence from possible interpretations.",
           "Use messages labeled You as live writing-style evidence when describing the user's communication, but do not overgeneralize from one thread.",
           "Return exactly three concise sections named What's happening, Tone, and What they want.",
-          "Use those section names as plain-text headings on their own lines. Do not use Markdown, hashtags, asterisks, or separator lines.",
-          "What's happening, Tone, and What they want may each use 1-3 short newline-separated bullets.",
+          "Use those section names as plain-text headings on their own lines. Do not use hashtags, asterisks, or separator lines.",
+          "Within each section, write one short bottom-line sentence first, followed by 1-3 brief lines beginning with a hyphen that support it.",
           beckettBoundaryPrompt(),
         ].join("\n\n"),
         [
@@ -95,11 +102,24 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      const sections = parseLabeledSections(result, [
+      const parsedSections = parseLabeledSections(result, [
         { key: "happening", label: "What's happening" },
         { key: "tone", label: "Tone" },
         { key: "want", label: "What they want" },
       ]);
+      const sections: WorkspaceAnalysisSections = {
+        happening: parsedSections.happening || result,
+        tone: parsedSections.tone || "The visible wording does not establish a clear emotional tone.",
+        want: parsedSections.want || "No explicit next step is visible in the selected conversation.",
+      };
+
+      await storeWorkspaceAnalysisCache({ userId: profile.id, thread, sections }).catch((error) => {
+        console.error("Google Workspace analysis cache write failed", {
+          userId: profile.id,
+          threadId: thread.id,
+          message: error instanceof Error ? error.message : "analysis_cache_write_failed",
+        });
+      });
 
       if (personalization.relationshipContext) {
         await recordSafeInteractionSummary({
@@ -107,9 +127,9 @@ export async function POST(request: NextRequest) {
           contactId: personalization.relationshipContext.contact.id,
           platform: "gmail",
           interactionType: "selected_thread_analysis",
-          summary: (sections.happening || result).slice(0, 2_000),
-          toneObserved: (sections.tone || "").slice(0, 1_000) || null,
-          suggestedFollowup: (sections.want || "").slice(0, 1_000) || null,
+          summary: sections.happening.slice(0, 2_000),
+          toneObserved: sections.tone.slice(0, 1_000) || null,
+          suggestedFollowup: sections.want.slice(0, 1_000) || null,
           dedupeKey: gmailInteractionDedupeKey(thread),
           metadata: {
             source: "google_workspace_addon",
@@ -152,43 +172,20 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return cardResponse(
-        {
-          name: "beckett-analysis-result",
-          sections: [
-            {
-              header: brandedSectionHeader("What's happening"),
-              widgets: [textWidget(formatCardRichText(sections.happening || result), 9)],
-            },
-            {
-              header: brandedSectionHeader("Tone"),
-              widgets: [textWidget(formatCardRichText(sections.tone || "The visible wording does not establish a clear emotional tone."), 9)],
-            },
-            {
-              header: brandedSectionHeader("What they want"),
-              widgets: [textWidget(formatCardRichText(sections.want || "No explicit next step is visible in the selected conversation."), 9)],
-            },
-          ],
-          fixedFooter: actionFixedFooter(
-            "Help me reply",
-            endpointUrl(request, "/api/google-workspace-addon/reply"),
-          ),
-        },
-        true,
-      );
+      return cardUpdateResponse(buildWorkspaceAnalysisCard(request, sections));
     } catch (error) {
       if (error instanceof AiUsageLimitError) {
-        return cardResponse(errorCard("Daily limit reached", error.message));
+        return cardUpdateResponse(errorCard("Daily limit reached", error.message));
       }
       if (error instanceof WebCreditLimitError) {
-        return cardResponse(errorCard("Credit limit reached", error.message));
+        return cardUpdateResponse(errorCard("Credit limit reached", error.message));
       }
       const message = error instanceof Error ? error.message : "analysis_failed";
       console.error("Google Workspace Gmail analysis failed", { message, userId: profile.id });
       const friendly = message.startsWith("gmail_api_error:403")
         ? "Google did not grant access to this message. Reopen Beckett and approve the requested Gmail permission."
         : "Beckett could not analyze this conversation. Please reopen the email and try again.";
-      return cardResponse(errorCard("Analysis unavailable", friendly));
+      return cardUpdateResponse(errorCard("Analysis unavailable", friendly));
     }
   });
 }
