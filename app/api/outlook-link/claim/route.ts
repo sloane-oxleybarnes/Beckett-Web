@@ -37,18 +37,31 @@ export async function GET(request: NextRequest) {
   if (ownerError || (owner?.user_id && owner.user_id !== user.id)) return NextResponse.redirect(destination(request, "error"));
 
   const now = new Date().toISOString();
-  const { error: integrationError } = await supabaseAdmin.from("user_integrations").upsert({
-    user_id: user.id,
-    provider: "microsoft",
-    access_token: null,
-    external_user_id: link.microsoft_user_id,
-    external_team_id: null,
-    external_team_name: null,
-    metadata: { provider: "microsoft", outlook_sso_linked_at: now },
-    connected_at: now,
-    updated_at: now,
-  }, { onConflict: "user_id,provider" });
-  if (integrationError) return NextResponse.redirect(destination(request, "error"));
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("user_integrations")
+    .select("external_user_id")
+    .eq("user_id", user.id)
+    .eq("provider", "microsoft")
+    .maybeSingle();
+  // Never replace an existing Microsoft connection or its encrypted tokens.
+  // The Outlook identity has to be the same account in that case.
+  if (existingError || (existing?.external_user_id && existing.external_user_id !== link.microsoft_user_id)) {
+    return NextResponse.redirect(destination(request, "error"));
+  }
+  if (!existing) {
+    const { error: integrationError } = await supabaseAdmin.from("user_integrations").insert({
+      user_id: user.id,
+      provider: "microsoft",
+      access_token: null,
+      external_user_id: link.microsoft_user_id,
+      external_team_id: null,
+      external_team_name: null,
+      metadata: { provider: "microsoft", outlook_sso_linked_at: now },
+      connected_at: now,
+      updated_at: now,
+    });
+    if (integrationError) return NextResponse.redirect(destination(request, "error"));
+  }
 
   await supabaseAdmin.from("outlook_sso_link_attempts").update({ user_id: user.id, updated_at: now }).eq("id", attempt);
   return NextResponse.redirect(destination(request, "linked"));
