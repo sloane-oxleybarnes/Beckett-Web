@@ -11,7 +11,10 @@ import {
   workspaceAddOnRoute,
 } from "@/lib/google-workspace-addon";
 import { buildWorkspaceAnalysisCard } from "@/lib/google-workspace-analysis-card";
-import { loadWorkspaceAnalysisCache } from "@/lib/google-workspace-analysis-cache";
+import {
+  loadWorkspaceAnalysisCache,
+  loadWorkspaceAnalysisCacheByThreadId,
+} from "@/lib/google-workspace-analysis-cache";
 import { getSelectedGmailThread } from "@/lib/google-workspace-gmail";
 
 export const runtime = "nodejs";
@@ -26,6 +29,13 @@ export async function POST(request: NextRequest) {
         header: beckettCardHeader("Beckett", "Plan required"),
         sections: [{ widgets: [textWidget("Your Beckett plan does not currently include Gmail analysis.")] }],
       });
+    }
+    const cachedByThread = await loadWorkspaceAnalysisCacheByThreadId({
+      userId: profile.id,
+      threadId: event.gmail?.threadId || "",
+    });
+    if (cachedByThread) {
+      return triggerCardResponse(buildWorkspaceAnalysisCard(request, cachedByThread));
     }
     try {
       const thread = await getSelectedGmailThread(event);
