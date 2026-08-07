@@ -34,8 +34,8 @@ function analysisSection(header: string, value: string, fallback: string) {
     collapsible: true,
     uncollapsibleWidgetsCount: 1,
     widgets: [
-      textWidget(`<b>Bottom line</b><br>${formatCardRichText(bottomLine)}`, 4),
-      textWidget(`<b>Details</b><br>${formatCardRichText(detailText)}`, 9),
+      textWidget(`<b>Bottom line</b><br>${formatCardRichText(bottomLine)}`),
+      textWidget(`<b>Details</b><br>${formatCardRichText(detailText)}`),
     ],
   };
 }
