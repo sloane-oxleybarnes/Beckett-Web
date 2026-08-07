@@ -4,9 +4,18 @@ import Link from "next/link";
 export const metadata = {
   title: "Support - Beckett",
   description:
-    "Get help with Beckett, including the Beckett for Outlook add-in.",
+    "Get help with Beckett for Gmail and Outlook, including setup, account access, analysis, drafts, and privacy.",
   alternates: { canonical: "/support" },
 };
+
+const gmailSteps = [
+  "Install Beckett from the Google Workspace Marketplace and approve the requested Gmail add-on permissions.",
+  "Open a Gmail conversation, then choose Beckett from the right-hand sidebar.",
+  "Sign in to or create your Beckett account. If your Gmail and Beckett addresses differ, review both addresses and confirm the connection.",
+  "Choose Analyze selected conversation. Beckett reads only the conversation you selected after you request analysis.",
+  "Choose Help me reply to see three approaches. You can add an instruction and update the suggestions.",
+  "Choose Use in Gmail draft to create an editable reply draft. Review and send it yourself; Beckett never sends email.",
+];
 
 const outlookSteps = [
   "Open a message or draft in Outlook.",
@@ -18,7 +27,23 @@ const outlookSteps = [
 
 const troubleshooting = [
   {
-    title: "Beckett asks you to sign in",
+    title: "Gmail asks you to connect an account",
+    body: "Open the secure connection link, sign in to Beckett, confirm the Gmail account shown, then return to Gmail and reopen Beckett. If the addresses differ, Beckett asks you to approve the connection explicitly.",
+  },
+  {
+    title: "Analysis is unavailable",
+    body: "Open an individual Gmail conversation before opening Beckett. Beckett does not read the inbox in the background and only analyzes a conversation after you request it.",
+  },
+  {
+    title: "Gmail draft permission is required",
+    body: "Analysis can work without draft access. To use Use in Gmail draft, approve the additional Gmail draft permission when prompted, then try the action again. Beckett creates an editable draft and never sends it.",
+  },
+  {
+    title: "Credit limit reached",
+    body: "Your current Beckett allowance has been used. Check your account or plan in Beckett, then try again after credits are available. Existing Gmail messages and drafts are not changed.",
+  },
+  {
+    title: "Outlook asks you to sign in",
     body: "Use Sign in in a new tab, finish signing in to your approved Beckett account, return to Outlook, and select Refresh sign-in.",
   },
   {
@@ -73,13 +98,33 @@ export default function SupportPage() {
           <a className="text-primary hover:underline" href="mailto:hello@meetbeckett.co">
             hello@meetbeckett.co
           </a>{" "}
-          for account, privacy, security, or Beckett for Outlook support. Please
+          for account, privacy, security, or Beckett for Gmail and Outlook
+          support. Please
           do not include private message content unless our support team asks
           for a redacted example.
         </p>
       </section>
 
       <section className="mx-auto grid w-full max-w-4xl gap-5 px-5 pb-12">
+        <article className="rounded-card border border-border bg-white p-6">
+          <h2
+            className="mb-3 text-2xl"
+            style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
+          >
+            Using Beckett for Gmail
+          </h2>
+          <ol className="space-y-3">
+            {gmailSteps.map((step, index) => (
+              <li key={step} className="flex gap-3 text-sm leading-relaxed text-ink-mid">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-xs font-medium text-primary">
+                  {index + 1}
+                </span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+        </article>
+
         <article className="rounded-card border border-border bg-white p-6">
           <h2
             className="mb-3 text-2xl"
@@ -116,7 +161,9 @@ export default function SupportPage() {
             Privacy and account help
           </h2>
           <p className="text-sm leading-relaxed text-ink-mid">
-            Beckett uses only the Outlook item you explicitly select. Review our{" "}
+            Beckett processes Gmail or Outlook content only after you choose the
+            relevant analysis action. Optional Gmail email-style learning is off by
+            default and can be changed from the Beckett add-on home. Review our{" "}
             <Link className="text-primary hover:underline" href="/privacy">
               Privacy Policy
             </Link>{" "}
