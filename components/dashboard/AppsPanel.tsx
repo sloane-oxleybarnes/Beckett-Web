@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CONNECTED_APPS, type ConnectedAppDefinition, type ConnectedAppId } from "@/lib/connected-apps";
 
@@ -12,8 +13,8 @@ type AppsState = {
 
 function AppMark({ app }: { app: ConnectedAppDefinition }) {
   return (
-    <div className={`flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-bold ${app.markClassName}`} aria-hidden="true">
-      {app.mark}
+    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white" aria-hidden="true">
+      <Image src={app.iconSrc} alt="" width={56} height={56} className="h-14 w-14 object-contain" />
     </div>
   );
 }
@@ -191,4 +192,3 @@ export default function AppsPanel() {
     </div>
   );
 }
-

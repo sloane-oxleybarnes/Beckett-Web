@@ -14,8 +14,7 @@ export type ConnectedAppDefinition = {
   name: string;
   shortName: string;
   description: string;
-  mark: string;
-  markClassName: string;
+  iconSrc: string;
   connectHref: string;
   connectLabel: string;
   steps: string[];
@@ -28,8 +27,7 @@ export const CONNECTED_APPS: ConnectedAppDefinition[] = [
     name: "Gmail",
     shortName: "Gmail",
     description: "Analyze selected email conversations and draft replies.",
-    mark: "M",
-    markClassName: "bg-red-50 text-red-600",
+    iconSrc: "/brand/connected-apps/gmail.png",
     connectHref: "/api/gmail/oauth/start?next=/dashboard/apps",
     connectLabel: "Continue with Google",
     steps: [
@@ -43,8 +41,7 @@ export const CONNECTED_APPS: ConnectedAppDefinition[] = [
     name: "Google Calendar",
     shortName: "Google Calendar",
     description: "Use selected calendars for meeting context and preparation.",
-    mark: "31",
-    markClassName: "bg-blue-50 text-blue-600",
+    iconSrc: "/brand/connected-apps/google-calendar.png",
     connectHref: "/api/calendar/oauth/start?next=/dashboard/apps",
     connectLabel: "Continue with Google",
     steps: [
@@ -58,8 +55,7 @@ export const CONNECTED_APPS: ConnectedAppDefinition[] = [
     name: "Slack",
     shortName: "Slack",
     description: "Ask Beckett for coaching inside your Slack workspace.",
-    mark: "S",
-    markClassName: "bg-fuchsia-50 text-fuchsia-600",
+    iconSrc: "/brand/connected-apps/slack.png",
     connectHref: "/api/slack/connect",
     connectLabel: "Add to Slack",
     steps: [
@@ -73,8 +69,7 @@ export const CONNECTED_APPS: ConnectedAppDefinition[] = [
     name: "Outlook",
     shortName: "Outlook",
     description: "Analyze a selected Outlook message and insert coached wording.",
-    mark: "O",
-    markClassName: "bg-sky-50 text-sky-600",
+    iconSrc: "/brand/connected-apps/outlook.png",
     connectHref: "/api/microsoft/connect",
     connectLabel: "Connect Microsoft 365",
     sharedProvider: "microsoft",
@@ -89,8 +84,7 @@ export const CONNECTED_APPS: ConnectedAppDefinition[] = [
     name: "Microsoft Calendar",
     shortName: "Microsoft Calendar",
     description: "Use selected Microsoft calendars for meeting context.",
-    mark: "31",
-    markClassName: "bg-indigo-50 text-indigo-600",
+    iconSrc: "/brand/connected-apps/microsoft-calendar.png",
     connectHref: "/api/microsoft/connect",
     connectLabel: "Connect Microsoft 365",
     sharedProvider: "microsoft",
@@ -105,8 +99,7 @@ export const CONNECTED_APPS: ConnectedAppDefinition[] = [
     name: "Beckett for Chrome",
     shortName: "Chrome",
     description: "Use Beckett from supported pages in your browser.",
-    mark: "C",
-    markClassName: "bg-emerald-50 text-emerald-600",
+    iconSrc: "/brand/connected-apps/chrome.png",
     connectHref: "https://chromewebstore.google.com/detail/beckett/calejchnmkljjkgchnodpdojmammmddk",
     connectLabel: "Open Chrome Web Store",
     steps: [
@@ -120,4 +113,3 @@ export const CONNECTED_APPS: ConnectedAppDefinition[] = [
 export function isConnectedAppId(value: unknown): value is ConnectedAppId {
   return typeof value === "string" && CONNECTED_APP_IDS.includes(value as ConnectedAppId);
 }
-

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase";
 import { hasCurrentBetaConsent } from "@/lib/beta-consent";
 import {
@@ -480,7 +481,7 @@ export default function ProfileSetupForm() {
               <div className="grid gap-3 sm:grid-cols-2">
                 {CONNECTED_APPS.map((app) => {
                   const selected = workApps.includes(app.id);
-                  return <button key={app.id} type="button" aria-pressed={selected} onClick={() => setWorkApps((current) => selected ? current.filter((id) => id !== app.id) : [...current, app.id])} className={`flex items-center gap-3 rounded-sm border p-3 text-left transition-colors ${selected ? "border-primary bg-primary-light" : "border-border bg-white hover:border-primary-mid"}`}><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${app.markClassName}`}>{app.mark}</span><span><span className="block text-sm font-medium text-ink">{app.name}</span><span className="mt-0.5 block text-xs text-ink-mid">{selected ? "Added to Your Apps" : "Select app"}</span></span></button>;
+                  return <button key={app.id} type="button" aria-pressed={selected} onClick={() => setWorkApps((current) => selected ? current.filter((id) => id !== app.id) : [...current, app.id])} className={`flex items-center gap-3 rounded-sm border p-3 text-left transition-colors ${selected ? "border-primary bg-primary-light" : "border-border bg-white hover:border-primary-mid"}`}><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white"><Image src={app.iconSrc} alt="" width={36} height={36} className="h-9 w-9 object-contain" /></span><span><span className="block text-sm font-medium text-ink">{app.name}</span><span className="mt-0.5 block text-xs text-ink-mid">{selected ? "Added to Your Apps" : "Select app"}</span></span></button>;
                 })}
               </div>
               <p className="mt-4 text-xs text-ink-light">
