@@ -207,8 +207,12 @@ export default function OutlookAddinPage() {
 
   function openMicrosoftSettings() {
     const url = `${window.location.origin}/dashboard/settings#connected-accounts`;
-    if (window.Office?.context?.ui?.openBrowserWindow) window.Office.context.ui.openBrowserWindow(url);
-    else window.location.assign(url);
+    // Outlook on the web can silently ignore openBrowserWindow for an add-in
+    // pane. A direct popup runs in the user's click gesture and is more
+    // reliable there; if the browser blocks it, keep the path recoverable by
+    // taking the pane itself to Settings.
+    const popup = window.open(url, "_blank", "noopener,noreferrer");
+    if (!popup) window.location.assign(url);
   }
 
   return <main className="min-h-screen bg-bg p-5 text-ink">
