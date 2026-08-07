@@ -80,12 +80,16 @@ export async function loadWorkspaceAnalysisCacheByMessageId({
   messageId: string;
 }) {
   if (!messageId) return null;
+  const legacyMessageId = messageId.match(/^msg-f:(\d+)$/);
+  const cacheMessageId = legacyMessageId
+    ? BigInt(legacyMessageId[1]).toString(16)
+    : messageId;
 
   const { data, error } = await supabaseAdmin
     .from("google_workspace_analysis_cache")
     .select("sections")
     .eq("user_id", userId)
-    .contains("message_ids", [messageId])
+    .contains("message_ids", [cacheMessageId])
     .gt("expires_at", new Date().toISOString())
     .maybeSingle();
 
