@@ -43,6 +43,35 @@ export async function loadWorkspaceAnalysisCache({
   return normalizeWorkspaceAnalysisSections(data?.sections);
 }
 
+export async function loadWorkspaceAnalysisCacheByThreadId({
+  userId,
+  threadId,
+}: {
+  userId: string;
+  threadId: string;
+}) {
+  if (!threadId) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("google_workspace_analysis_cache")
+    .select("sections")
+    .eq("user_id", userId)
+    .eq("thread_id", threadId)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+
+  if (error) {
+    console.error("Google Workspace analysis cache thread lookup failed", {
+      userId,
+      threadId,
+      message: error.message,
+    });
+    return null;
+  }
+
+  return normalizeWorkspaceAnalysisSections(data?.sections);
+}
+
 export async function storeWorkspaceAnalysisCache({
   userId,
   thread,
