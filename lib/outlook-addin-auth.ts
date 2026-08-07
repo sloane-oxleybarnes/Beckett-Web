@@ -35,3 +35,27 @@ export async function getOutlookAddinUser(request: NextRequest): Promise<Outlook
     return null;
   }
 }
+
+/**
+ * Determines whether a valid Microsoft token belongs to a Microsoft account
+ * that has not yet been linked to a Beckett profile. The pane uses this to
+ * show a recoverable connection prompt instead of treating the user as signed
+ * out of Microsoft.
+ */
+export async function hasUnlinkedMicrosoftAccount(request: NextRequest): Promise<boolean> {
+  const bearerToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+  if (!bearerToken) return false;
+  try {
+    const profile = await getMicrosoftProfile(bearerToken);
+    if (!profile.id) return false;
+    const { data: integration, error } = await supabaseAdmin
+      .from("user_integrations")
+      .select("user_id")
+      .eq("provider", "microsoft")
+      .eq("external_user_id", profile.id)
+      .maybeSingle();
+    return !error && !integration?.user_id;
+  } catch {
+    return false;
+  }
+}
