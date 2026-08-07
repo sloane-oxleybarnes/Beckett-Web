@@ -3,7 +3,6 @@ import { createServerClient } from '@supabase/ssr'
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/server-admin'
 import { trackBetaEvent } from '@/lib/beta-events'
-import { ensureApprovedBetaPlan, hasApprovedBetaAccess } from '@/lib/beta-access'
 import { encryptGoogleAccessToken } from '@/lib/google-token-security'
 
 function createCallbackClient(request: NextRequest, response: NextResponse) {
@@ -65,31 +64,6 @@ export async function GET(request: NextRequest) {
   if (code) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      if (data.session?.user && !isPasswordAction) {
-        const { data: profile } = await supabaseAdmin
-          .from('profiles')
-          .select('plan')
-          .eq('id', data.session.user.id)
-          .maybeSingle()
-        const approved = await hasApprovedBetaAccess({
-          email: data.session.user.email,
-          plan: profile?.plan,
-        })
-        if (!approved) {
-          await supabase.auth.signOut()
-          successResponse.headers.set(
-            'Location',
-            new URL('/beta?access=approval-required', origin).toString()
-          )
-          return successResponse
-        }
-        await ensureApprovedBetaPlan({
-          userId: data.session.user.id,
-          email: data.session.user.email,
-          plan: profile?.plan,
-        })
-      }
-
       if ((integration === 'google' || integration === 'calendar') && data.session?.user) {
         if (!data.session.provider_token) {
           return NextResponse.redirect(

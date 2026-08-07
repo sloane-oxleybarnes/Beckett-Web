@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import DashboardShell from "@/components/dashboard/DashboardShell";
-import { ensureApprovedBetaPlan, hasApprovedBetaAccess } from "@/lib/beta-access";
 import { hasCurrentBetaConsent } from "@/lib/beta-consent";
 
 export default async function DashboardLayout({
@@ -24,28 +23,12 @@ export default async function DashboardLayout({
     .eq("id", session.user.id)
     .single();
 
-  const approved = await hasApprovedBetaAccess({
-    email: session.user.email,
-    plan: profile?.plan,
-  });
-  if (!approved) {
-    await supabase.auth.signOut();
-    redirect("/beta?access=approval-required");
-  }
-
-  const effectivePlan = await ensureApprovedBetaPlan({
-    userId: session.user.id,
-    email: session.user.email,
-    plan: profile?.plan,
-  });
-  const effectiveProfile = profile ? { ...profile, plan: effectivePlan } : profile;
-
-  if (!effectiveProfile?.first_login_complete || !hasCurrentBetaConsent(effectiveProfile)) {
+  if (!profile?.first_login_complete || !hasCurrentBetaConsent(profile)) {
     redirect("/auth/profile-setup");
   }
 
   return (
-    <DashboardShell profile={effectiveProfile} userEmail={session.user.email || ""}>
+    <DashboardShell profile={profile} userEmail={session.user.email || ""}>
       {children}
     </DashboardShell>
   );

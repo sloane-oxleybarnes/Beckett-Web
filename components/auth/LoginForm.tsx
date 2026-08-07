@@ -168,8 +168,8 @@ export default function LoginPage() {
 
           <p className="text-center text-sm text-ink-light mt-6">
             Don&apos;t have an account?{" "}
-            <Link href="/beta" className="text-primary hover:underline">
-              Request beta access
+            <Link href="/auth/signup" className="text-primary hover:underline">
+              Create a free account
             </Link>
           </p>
         </div>
