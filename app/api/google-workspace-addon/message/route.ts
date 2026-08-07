@@ -13,6 +13,7 @@ import {
 import { buildWorkspaceAnalysisCard } from "@/lib/google-workspace-analysis-card";
 import {
   loadWorkspaceAnalysisCache,
+  loadWorkspaceAnalysisCacheByMessageId,
   loadWorkspaceAnalysisCacheByThreadId,
 } from "@/lib/google-workspace-analysis-cache";
 import { getSelectedGmailThread } from "@/lib/google-workspace-gmail";
@@ -36,6 +37,13 @@ export async function POST(request: NextRequest) {
     });
     if (cachedByThread) {
       return triggerCardResponse(buildWorkspaceAnalysisCard(request, cachedByThread));
+    }
+    const cachedByMessage = await loadWorkspaceAnalysisCacheByMessageId({
+      userId: profile.id,
+      messageId: event.gmail?.messageId || "",
+    });
+    if (cachedByMessage) {
+      return triggerCardResponse(buildWorkspaceAnalysisCard(request, cachedByMessage));
     }
     try {
       const thread = await getSelectedGmailThread(event);

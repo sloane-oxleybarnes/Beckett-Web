@@ -72,6 +72,35 @@ export async function loadWorkspaceAnalysisCacheByThreadId({
   return normalizeWorkspaceAnalysisSections(data?.sections);
 }
 
+export async function loadWorkspaceAnalysisCacheByMessageId({
+  userId,
+  messageId,
+}: {
+  userId: string;
+  messageId: string;
+}) {
+  if (!messageId) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("google_workspace_analysis_cache")
+    .select("sections")
+    .eq("user_id", userId)
+    .contains("message_ids", [messageId])
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+
+  if (error) {
+    console.error("Google Workspace analysis cache message lookup failed", {
+      userId,
+      messageId,
+      message: error.message,
+    });
+    return null;
+  }
+
+  return normalizeWorkspaceAnalysisSections(data?.sections);
+}
+
 export async function storeWorkspaceAnalysisCache({
   userId,
   thread,
@@ -88,6 +117,7 @@ export async function storeWorkspaceAnalysisCache({
       user_id: userId,
       thread_id: thread.id,
       thread_revision: workspaceAnalysisThreadRevision(thread),
+      message_ids: thread.messages.map((message) => message.id).filter(Boolean),
       sections,
       updated_at: now.toISOString(),
       expires_at: expiresAt.toISOString(),

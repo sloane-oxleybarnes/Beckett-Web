@@ -53,6 +53,13 @@ export async function POST(request: NextRequest) {
       if (!latest?.body) return cardUpdateResponse(errorCard("Message unavailable", "Gmail did not provide readable message content."));
       const cachedSections = await loadWorkspaceAnalysisCache({ userId: profile.id, thread });
       if (cachedSections) {
+        await storeWorkspaceAnalysisCache({ userId: profile.id, thread, sections: cachedSections }).catch((error) => {
+          console.error("Google Workspace analysis cache refresh failed", {
+            userId: profile.id,
+            threadId: thread.id,
+            message: error instanceof Error ? error.message : "analysis_cache_refresh_failed",
+          });
+        });
         return cardUpdateResponse(buildWorkspaceAnalysisCard(request, cachedSections));
       }
       const personalization = await loadWorkspaceGmailPersonalization(profile, thread);
