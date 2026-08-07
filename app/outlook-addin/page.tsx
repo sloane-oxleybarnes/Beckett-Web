@@ -51,6 +51,8 @@ export default function OutlookAddinPage() {
   const [outlookAccessToken, setOutlookAccessToken] = useState<string | null>(null);
   const [needsMicrosoftConnection, setNeedsMicrosoftConnection] = useState(false);
   const msalClient = useRef<IPublicClientApplication | null>(null);
+  const outlookLinkAttempt = useRef<string | null>(null);
+  const outlookLinkPoll = useRef<number | null>(null);
 
   async function getMsalClient() {
     if (msalClient.current) return msalClient.current;
@@ -205,14 +207,47 @@ export default function OutlookAddinPage() {
     } catch { setStatus("Copy was blocked by Outlook. Select the response text and copy it manually."); }
   }
 
-  function openMicrosoftSettings() {
-    const url = `${window.location.origin}/api/microsoft/connect`;
+  async function linkMicrosoftAccount() {
+    if (!outlookAccessToken) return setStatus("Connect your Microsoft work account first.");
+    setStatus("Opening Beckett sign-in to link this Outlook account…");
+    const response = await fetch("/api/outlook-link/start", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${outlookAccessToken}` },
+    });
+    const data = await response.json().catch(() => ({})) as { attempt?: string; url?: string; error?: string };
+    if (!response.ok || !data.attempt || !data.url) return setStatus(data.error || "Beckett could not start account linking.");
+    outlookLinkAttempt.current = data.attempt;
+    const url = data.url;
     // Outlook on the web can silently ignore openBrowserWindow for an add-in
     // pane. A direct popup runs in the user's click gesture and is more
     // reliable there; if the browser blocks it, keep the path recoverable by
     // taking the pane itself through the linking flow.
     const popup = window.open(url, "_blank", "noopener,noreferrer");
     if (!popup) window.location.assign(url);
+    if (outlookLinkPoll.current) window.clearInterval(outlookLinkPoll.current);
+    const startedAt = Date.now();
+    outlookLinkPoll.current = window.setInterval(() => {
+      if (!outlookLinkAttempt.current || Date.now() - startedAt > 10 * 60 * 1000) {
+        if (outlookLinkPoll.current) window.clearInterval(outlookLinkPoll.current);
+        outlookLinkPoll.current = null;
+        return;
+      }
+      void fetch(`/api/outlook-link/status?attempt=${encodeURIComponent(outlookLinkAttempt.current)}`, {
+        headers: { Authorization: `Bearer ${outlookAccessToken}` },
+        cache: "no-store",
+      }).then((result) => result.json() as Promise<{ linked?: boolean; expired?: boolean }>).then((result) => {
+        if (result.linked) {
+          if (outlookLinkPoll.current) window.clearInterval(outlookLinkPoll.current);
+          outlookLinkPoll.current = null;
+          setNeedsMicrosoftConnection(false);
+          setStatus("Microsoft work account linked to Beckett. Choose Analyze message.");
+        } else if (result.expired) {
+          if (outlookLinkPoll.current) window.clearInterval(outlookLinkPoll.current);
+          outlookLinkPoll.current = null;
+          setStatus("That account-linking window expired. Choose Link account to try again.");
+        }
+      }).catch(() => undefined);
+    }, 2000);
   }
 
   return <main className="min-h-screen bg-bg p-5 text-ink">
@@ -223,7 +258,7 @@ export default function OutlookAddinPage() {
     {authState === "signed-out" && <div className="mt-4 rounded-card border border-border bg-white p-4"><button type="button" onClick={() => void authenticateWithMicrosoft(true)} className="inline-flex rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">Connect Microsoft account</button></div>}
     <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => void analyzeMessage()} disabled={!officeHost || authState !== "signed-in"} className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50">Analyze message</button><button type="button" onClick={() => void analyzeThread()} disabled={!officeHost || authState !== "signed-in"} className="rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">Analyze full thread</button></div>
     <p className="mt-3 text-xs leading-relaxed text-ink-light">Pin Beckett in Outlook when you want it to stay open and follow the message you select.</p>
-    {needsMicrosoftConnection && <div className="mt-4 rounded-card border border-primary/20 bg-primary-light/30 p-4"><p className="text-sm font-medium text-ink">Link your Microsoft work account</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">Microsoft SSO is working. Link this same work account to your Beckett profile once in Settings, then return here to analyze messages and threads.</p><button type="button" onClick={openMicrosoftSettings} className="mt-3 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-white">Open connected accounts</button></div>}
+    {needsMicrosoftConnection && <div className="mt-4 rounded-card border border-primary/20 bg-primary-light/30 p-4"><p className="text-sm font-medium text-ink">Link your Microsoft work account</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">Finish a one-time Beckett sign-in in the browser window that opens. This pane will recognize the link automatically—no Outlook refresh needed.</p><button type="button" onClick={() => void linkMicrosoftAccount()} className="mt-3 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-white">Link Beckett account</button></div>}
     {item && !result && <div className="mt-5 rounded-card border border-border bg-white p-4"><p className="text-xs uppercase tracking-wide text-ink-light">Selected item</p><h2 className="mt-1 text-base font-medium text-ink">{item.subject}</h2><p className="mt-1 text-xs text-ink-mid">{item.sender || "Unknown sender"}</p></div>}
     {result && <div className="mt-5 space-y-4"><section className="space-y-3 rounded-card border border-border bg-white p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Analysis</p><div><p className="text-xs uppercase tracking-wide text-ink-light">Intent</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.intent}</p></div><div><p className="text-xs uppercase tracking-wide text-ink-light">Tone</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.tone}</p></div><div><p className="text-xs uppercase tracking-wide text-ink-light">What they want</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.want}</p></div></section><section className="space-y-3 rounded-card border border-border bg-white p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Response options</p>{result.responses?.map((response) => <div key={response.tag || response.label} className="border-t border-border pt-3"><p className="text-xs font-medium text-primary">{response.label}</p><p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink">{response.text}</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void copyResponse(response.text || "")} disabled={!response.text} className="rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-50">Copy response</button><button type="button" onClick={() => insertDraft(response.text || "")} disabled={!canInsert || !response.text} className="rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-50">Insert into reply</button></div></div>)}{!canInsert && <p className="text-xs text-ink-light">To insert a response, open a reply or new draft and run Beckett there. Copy is always available.</p>}</section></div>}
   </main>;
