@@ -10,6 +10,9 @@ import {
   triggerCardResponse,
   workspaceAddOnRoute,
 } from "@/lib/google-workspace-addon";
+import { buildWorkspaceAnalysisCard } from "@/lib/google-workspace-analysis-card";
+import { loadWorkspaceAnalysisCache } from "@/lib/google-workspace-analysis-cache";
+import { getSelectedGmailThread } from "@/lib/google-workspace-gmail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +25,18 @@ export async function POST(request: NextRequest) {
       return triggerCardResponse({
         header: beckettCardHeader("Beckett", "Plan required"),
         sections: [{ widgets: [textWidget("Your Beckett plan does not currently include Gmail analysis.")] }],
+      });
+    }
+    try {
+      const thread = await getSelectedGmailThread(event);
+      const cachedSections = await loadWorkspaceAnalysisCache({ userId: profile.id, thread });
+      if (cachedSections) {
+        return triggerCardResponse(buildWorkspaceAnalysisCard(request, cachedSections));
+      }
+    } catch (error) {
+      console.error("Google Workspace cached analysis restore failed", {
+        userId: profile.id,
+        message: error instanceof Error ? error.message : "analysis_restore_failed",
       });
     }
     return triggerCardResponse({

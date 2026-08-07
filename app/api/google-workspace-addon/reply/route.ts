@@ -125,6 +125,8 @@ export async function POST(request: NextRequest) {
         sections: [
             {
               header: brandedSectionHeader("Direct and clear"),
+              collapsible: true,
+              uncollapsibleWidgetsCount: 0,
               widgets: [
                 textWidget(formatCardRichText(sections.direct || result), 10),
                 buttonWidget("Use in Gmail draft", endpointUrl(request, "/api/google-workspace-addon/draft"), {
@@ -134,6 +136,8 @@ export async function POST(request: NextRequest) {
             },
             {
               header: brandedSectionHeader("Warm and collaborative"),
+              collapsible: true,
+              uncollapsibleWidgetsCount: 0,
               widgets: [
                 textWidget(formatCardRichText(sections.warm || "Adapt the direct version with a warmer opening and close."), 10),
                 buttonWidget("Use in Gmail draft", endpointUrl(request, "/api/google-workspace-addon/draft"), {
@@ -143,6 +147,8 @@ export async function POST(request: NextRequest) {
             },
             {
               header: brandedSectionHeader("Sets a gentle limit"),
+              collapsible: true,
+              uncollapsibleWidgetsCount: 0,
               widgets: [
                 textWidget(formatCardRichText(sections.boundary || "State what you can do and offer a realistic next step."), 10),
                 buttonWidget("Use in Gmail draft", endpointUrl(request, "/api/google-workspace-addon/draft"), {
