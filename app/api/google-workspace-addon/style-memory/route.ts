@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
             widgets: [
               textWidget(
                 enabled
-                  ? "Style learning is on. Beckett will save compact writing patterns only from Gmail conversations you choose to analyze."
-                  : "Style learning is off. Beckett will stop saving new Gmail writing-style patterns.",
+                  ? "Style learning is on. Beckett will save compact writing patterns only from Gmail™ conversations you choose to analyze."
+                  : "Style learning is off. Beckett will stop saving new Gmail™ writing-style patterns.",
               ),
               buttonWidget(
                 enabled ? "Turn off style learning" : "Turn on style learning",
