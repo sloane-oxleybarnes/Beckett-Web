@@ -17,7 +17,7 @@ const blankSetup: Setup = {
   relationshipContext: '', personStyle: '', constraints: '', approvedContactContext: '', voicePreference: 'gender_neutral',
 }
 
-export default function AdaptiveConversationSimulator() {
+export default function AdaptiveConversationSimulator({ embedded = false }: { embedded?: boolean }) {
   const [setup, setSetup] = useState<Setup>(blankSetup)
   const [contacts, setContacts] = useState<Contact[]>([])
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([])
@@ -310,8 +310,8 @@ export default function AdaptiveConversationSimulator() {
       <div className="mx-auto max-w-5xl">
         <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">Beckett Labs</p>
-            <h1 className="mt-2 text-4xl" style={{ fontFamily: 'var(--font-dm-serif), Georgia, serif' }}>Adaptive Conversation Simulator</h1>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">{embedded ? 'Practice' : 'Beckett Labs'}</p>
+            <h1 className="mt-2 text-4xl" style={{ fontFamily: 'var(--font-dm-serif), Georgia, serif' }}>{embedded ? 'Practice a conversation' : 'Adaptive Conversation Simulator'}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-mid">Practice one difficult conversation with a simulated person who can hesitate, misunderstand, push back, and change their mind.</p>
           </div>
           {stage !== 'setup' && <button onClick={reset} className="rounded-pill border border-border bg-white px-4 py-2 text-sm text-ink hover:border-primary">New simulation</button>}

@@ -6,9 +6,11 @@ This repository contains Beckett’s existing beta web product and the isolated 
 
 ## Competition feature
 
-The Adaptive Conversation Simulator lives behind the Labs route:
+The Adaptive Conversation Simulator is now Beckett's primary Practice experience:
 
-`/labs/adaptive-conversation`
+`/dashboard/practice`
+
+The original Labs entry point remains available at `/labs/adaptive-conversation` for compatibility with existing links.
 
 The submitted experience supports two practice channels:
 
@@ -26,7 +28,7 @@ The simulator includes:
 - user-controlled transcript history and deletion; and
 - pause/help/finish states while preserving the existing Bedrock coaching experience.
 
-The simulator is isolated from Beckett’s primary Bedrock coaching system and from Slack behavior. The Labs route is the only place where the GPT-5.6 simulator is used.
+The simulator is isolated from Beckett’s primary Bedrock coaching system and from Slack behavior. The Practice and compatibility Labs routes are the only places where the GPT-5.6 simulator is used.
 
 ## How GPT-5.6 is used
 
@@ -46,7 +48,7 @@ The model can be selected with `OPENAI_SIMULATOR_MODEL`; the default is `gpt-5.6
 Codex was used throughout the competition work to:
 
 - plan and refine the shared text/phone conversation contract;
-- implement the isolated Labs routes, session lifecycle, transcript history, debrief, replay, and phone interface;
+- implement the isolated Practice/Labs routes, session lifecycle, transcript history, debrief, replay, and phone interface;
 - iteratively tune persona prompts for natural tone, disagreement, pacing, uncertainty, privacy, and realistic endings;
 - review screenshots and diagnose UI, audio, transcription, deployment, and environment issues;
 - run lint, TypeScript checks, and focused regression checks after changes; and
@@ -72,7 +74,7 @@ OPENAI_SIMULATOR_MODEL=gpt-5.6
 OPENAI_REALTIME_MODEL=gpt-realtime-2.1
 ```
 
-Apply the Supabase migrations in `supabase/migrations/`, including the adaptive conversation migrations, before testing the Labs route. The simulator requires an authenticated user with approved beta access.
+Apply the Supabase migrations in `supabase/migrations/`, including the adaptive conversation migrations, before testing Practice. The simulator requires an authenticated user with approved beta access.
 
 Useful checks:
 
@@ -81,10 +83,10 @@ npm run lint
 npx tsc --noEmit
 ```
 
-Open [http://localhost:3000](http://localhost:3000), sign in, and visit `/labs/adaptive-conversation`.
+Open [http://localhost:3000](http://localhost:3000), sign in, and visit `/dashboard/practice`.
 
 ## Repository and deployment notes
 
 The competition branch is `codex/gpt-5-6-extension`. Preview and production deployments must provide the required environment variables in their respective server-side environments. API keys belong in the deployment secret manager, never in browser code, the README, or the repository.
 
-The repository also contains Beckett’s broader beta and Slack integration. Those systems remain part of the product but are outside the GPT-5.6 Labs feature and should not be modified when evaluating the competition submission.
+The repository also contains Beckett’s broader beta and Slack integration. Those systems remain part of the product but are outside the GPT-5.6 Practice feature and should not be modified when evaluating the competition submission.
