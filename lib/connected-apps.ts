@@ -24,8 +24,8 @@ export type ConnectedAppDefinition = {
 export const CONNECTED_APPS: ConnectedAppDefinition[] = [
   {
     id: "gmail",
-    name: "Gmail",
-    shortName: "Gmail",
+    name: "Gmail™",
+    shortName: "Gmail™",
     description: "Analyze selected email conversations and draft replies.",
     iconSrc: "/brand/connected-apps/gmail.png",
     connectHref: "/api/gmail/oauth/start?next=/dashboard/apps",
@@ -38,8 +38,8 @@ export const CONNECTED_APPS: ConnectedAppDefinition[] = [
   },
   {
     id: "google_calendar",
-    name: "Google Calendar",
-    shortName: "Google Calendar",
+    name: "Google Calendar™",
+    shortName: "Google Calendar™",
     description: "Use selected calendars for meeting context and preparation.",
     iconSrc: "/brand/connected-apps/google-calendar.png",
     connectHref: "/api/calendar/oauth/start?next=/dashboard/apps",
