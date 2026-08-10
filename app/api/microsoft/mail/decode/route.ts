@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { callAnthropic } from "@/lib/anthropic";
 import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
 import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
-import { getOutlookAddinUser } from "@/lib/outlook-addin-auth";
+import { getOutlookAddinUser, hasUnlinkedMicrosoftAccount } from "@/lib/outlook-addin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,15 @@ function parseAnalysis(text: string) {
 
 export async function POST(request: NextRequest) {
   const user = await getOutlookAddinUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  if (!user) {
+    const needsMicrosoftConnection = await hasUnlinkedMicrosoftAccount(request);
+    return NextResponse.json(
+      needsMicrosoftConnection
+        ? { error: "Link this Microsoft work account to your Beckett profile to analyze messages.", needsMicrosoftConnection: true }
+        : { error: "Unauthorized." },
+      { status: needsMicrosoftConnection ? 403 : 401 },
+    );
+  }
   const body = (await request.json().catch(() => null)) as { content?: unknown; subject?: unknown; sender?: unknown; thread?: unknown } | null;
   const content = typeof body?.content === "string" ? body.content.trim().slice(0, 12_000) : "";
   const thread = Array.isArray(body?.thread)

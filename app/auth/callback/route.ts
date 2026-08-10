@@ -3,10 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/server-admin'
 import { trackBetaEvent } from '@/lib/beta-events'
-import { ensureApprovedBetaPlan, hasApprovedBetaAccess } from '@/lib/beta-access'
 import { encryptGoogleAccessToken } from '@/lib/google-token-security'
-import { hasCurrentBetaConsent } from '@/lib/beta-consent'
-import { profileSetupPath, safeInternalPath } from '@/lib/auth-next'
 
 function createCallbackClient(request: NextRequest, response: NextResponse) {
   return createServerClient(
@@ -40,7 +37,12 @@ export async function GET(request: NextRequest) {
   // Do not apply normal beta-login gating before a user can reset their password.
   const isPasswordAction =
     type === 'recovery' || type === 'invite' || requestedNext === '/auth/set-password'
-  const next = safeInternalPath(requestedNext) || (isPasswordAction ? '/auth/set-password' : '/dashboard')
+  const next =
+    requestedNext?.startsWith('/')
+      ? requestedNext
+      : isPasswordAction
+        ? '/auth/set-password'
+        : '/dashboard'
   const integration = searchParams.get('integration')
   const errorParam = searchParams.get('error')
   const errorDesc  = searchParams.get('error_description')
@@ -62,36 +64,6 @@ export async function GET(request: NextRequest) {
   if (code) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      if (data.session?.user && !isPasswordAction) {
-        const { data: profile } = await supabaseAdmin
-          .from('profiles')
-          .select('plan, first_login_complete, adult_us_eligibility_confirmed_at, adult_us_eligibility_version, terms_accepted_at, terms_version, privacy_acknowledged_at, privacy_version, coaching_disclaimer_acknowledged_at, coaching_disclaimer_version')
-          .eq('id', data.session.user.id)
-          .maybeSingle()
-        const approved = await hasApprovedBetaAccess({
-          email: data.session.user.email,
-          plan: profile?.plan,
-        })
-        if (!approved) {
-          await supabase.auth.signOut()
-          successResponse.headers.set(
-            'Location',
-            new URL('/beta?access=approval-required', origin).toString()
-          )
-          return successResponse
-        }
-        await ensureApprovedBetaPlan({
-          userId: data.session.user.id,
-          email: data.session.user.email,
-          plan: profile?.plan,
-        })
-
-        const onboardingComplete = Boolean(profile?.first_login_complete && hasCurrentBetaConsent(profile))
-        if (!onboardingComplete && !next.startsWith('/auth/profile-setup')) {
-          successResponse.headers.set('Location', new URL(profileSetupPath(next), origin).toString())
-        }
-      }
-
       if ((integration === 'google' || integration === 'calendar') && data.session?.user) {
         if (!data.session.provider_token) {
           return NextResponse.redirect(

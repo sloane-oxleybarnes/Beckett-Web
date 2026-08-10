@@ -5,9 +5,8 @@ import { createClient } from "@/lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { hasCurrentBetaConsent } from "@/lib/beta-consent";
-import { safeInternalPath } from "@/lib/auth-next";
 
-export default function LoginPage({ inviteOnly = true }: { inviteOnly?: boolean }) {
+export default function LoginPage() {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -15,7 +14,8 @@ export default function LoginPage({ inviteOnly = true }: { inviteOnly?: boolean 
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const safeNext = safeInternalPath(searchParams.get("next"));
+  const next = searchParams.get("next");
+  const safeNext = next?.startsWith("/") ? next : null;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -168,11 +168,8 @@ export default function LoginPage({ inviteOnly = true }: { inviteOnly?: boolean 
 
           <p className="text-center text-sm text-ink-light mt-6">
             Don&apos;t have an account?{" "}
-            <Link
-              href={inviteOnly ? "/beta" : `/auth/signup${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""}`}
-              className="text-primary hover:underline"
-            >
-              {inviteOnly ? "Request beta access" : "Create a free account"}
+            <Link href="/auth/signup" className="text-primary hover:underline">
+              Create a free account
             </Link>
           </p>
         </div>

@@ -13,7 +13,14 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const supabase = createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.redirect(new URL("/auth/login", request.url));
+  if (!user) {
+    // Preserve the one-time Microsoft linking action through Beckett sign-in.
+    // Without this, a successful login lands on the dashboard and never
+    // creates the Microsoft identity record that the Outlook add-in needs.
+    const login = new URL("/auth/login", request.url);
+    login.searchParams.set("next", "/api/microsoft/connect");
+    return NextResponse.redirect(login);
+  }
 
   const origin = new URL(request.url).origin;
   const redirectUri = getMicrosoftRedirectUri(origin);

@@ -13,6 +13,7 @@ type OfficeItem = {
     getAsync?: (coercion: string, callback: (result: OfficeResult) => void) => void;
     setSelectedDataAsync?: (value: string, options: { coercionType: string }, callback: (result: OfficeResult) => void) => void;
   };
+  displayReplyFormAsync?: (formData: string | { htmlBody: string }, callback: (result: OfficeResult) => void) => void;
 };
 type OfficeApi = {
   context?: {
@@ -47,10 +48,13 @@ export default function OutlookAddinPage() {
   const [status, setStatus] = useState("Select a message or draft in Outlook, then choose Analyze message.");
   const [officeHost, setOfficeHost] = useState<string | null>(null);
   const [canInsert, setCanInsert] = useState(false);
+  const [canOpenReply, setCanOpenReply] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [outlookAccessToken, setOutlookAccessToken] = useState<string | null>(null);
   const [needsMicrosoftConnection, setNeedsMicrosoftConnection] = useState(false);
   const msalClient = useRef<IPublicClientApplication | null>(null);
+  const outlookLinkAttempt = useRef<string | null>(null);
+  const outlookLinkPoll = useRef<number | null>(null);
 
   async function getMsalClient() {
     if (msalClient.current) return msalClient.current;
@@ -99,6 +103,7 @@ export default function OutlookAddinPage() {
     setItem(null);
     setResult(null);
     setCanInsert(false);
+    setCanOpenReply(false);
     setNeedsMicrosoftConnection(false);
     setStatus("Message changed. Choose Analyze message for this item.");
   }
@@ -134,6 +139,7 @@ export default function OutlookAddinPage() {
     const selected = { subject: subject || "(no subject)", sender: from?.emailAddress || from?.displayName || "", body, itemId };
     setItem(selected);
     setCanInsert(Boolean(current.body?.setSelectedDataAsync));
+    setCanOpenReply(Boolean(current.displayReplyFormAsync));
     return selected;
   }
 
@@ -146,6 +152,11 @@ export default function OutlookAddinPage() {
     });
     const data = await response.json().catch(() => ({}));
     if (response.status === 401) { setAuthState("signed-out"); setStatus("Sign in to Beckett to analyze this message."); return; }
+    if (response.status === 403 && data.needsMicrosoftConnection) {
+      setNeedsMicrosoftConnection(true);
+      setStatus(data.error || "Link this Microsoft work account to your Beckett profile to analyze messages.");
+      return;
+    }
     if (!response.ok) { setStatus(data.error || "Could not analyze this message."); return; }
     setResult(data.result && typeof data.result === "object" ? data.result as Analysis : null);
     setStatus("");
@@ -184,13 +195,27 @@ export default function OutlookAddinPage() {
     } catch (error) { setStatus(error instanceof Error ? error.message : "Beckett could not load this conversation."); }
   }
 
+  function escapeHtml(text: string) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
   function insertDraft(text: string) {
     const office = window.Office;
     const current = office?.context?.mailbox?.item;
-    if (!office || !current?.body?.setSelectedDataAsync || !text) return setStatus("Open a reply or new draft, then use Insert into reply.");
-    current.body.setSelectedDataAsync(text, { coercionType: office.CoercionType.Text }, (response) => {
-      setStatus(response?.status === office.AsyncResultStatus.Succeeded ? "Inserted into the draft. Review it before sending." : "Outlook could not insert this reply. Use Copy response instead.");
-    });
+    if (!office || !current || !text) return setStatus("Open a message or reply before adding this response.");
+    if (current.body?.setSelectedDataAsync) {
+      current.body.setSelectedDataAsync(text, { coercionType: office.CoercionType.Text }, (response) => {
+        setStatus(response?.status === office.AsyncResultStatus.Succeeded ? "Inserted into the draft. Review it before sending." : "Outlook could not insert this reply. Use Copy response instead.");
+      });
+      return;
+    }
+    if (current.displayReplyFormAsync) {
+      current.displayReplyFormAsync({ htmlBody: escapeHtml(text).replace(/\n/g, "<br>") }, (response) => {
+        setStatus(response?.status === office.AsyncResultStatus.Succeeded ? "Opened a reply with Beckett’s response. Review it before sending." : "Outlook could not open a reply. Use Copy response instead.");
+      });
+      return;
+    }
+    setStatus("Outlook could not open a reply here. Use Copy response instead.");
   }
 
   async function copyResponse(text: string) {
@@ -200,10 +225,47 @@ export default function OutlookAddinPage() {
     } catch { setStatus("Copy was blocked by Outlook. Select the response text and copy it manually."); }
   }
 
-  function openMicrosoftSettings() {
-    const url = `${window.location.origin}/dashboard/apps`;
-    if (window.Office?.context?.ui?.openBrowserWindow) window.Office.context.ui.openBrowserWindow(url);
-    else window.location.assign(url);
+  async function linkMicrosoftAccount() {
+    if (!outlookAccessToken) return setStatus("Connect your Microsoft work account first.");
+    setStatus("Opening Beckett sign-in to link this Outlook account…");
+    const response = await fetch("/api/outlook-link/start", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${outlookAccessToken}` },
+    });
+    const data = await response.json().catch(() => ({})) as { attempt?: string; url?: string; error?: string };
+    if (!response.ok || !data.attempt || !data.url) return setStatus(data.error || "Beckett could not start account linking.");
+    outlookLinkAttempt.current = data.attempt;
+    const url = data.url;
+    // Outlook on the web can silently ignore openBrowserWindow for an add-in
+    // pane. A direct popup runs in the user's click gesture and is more
+    // reliable there; if the browser blocks it, keep the path recoverable by
+    // taking the pane itself through the linking flow.
+    const popup = window.open(url, "_blank", "noopener,noreferrer");
+    if (!popup) window.location.assign(url);
+    if (outlookLinkPoll.current) window.clearInterval(outlookLinkPoll.current);
+    const startedAt = Date.now();
+    outlookLinkPoll.current = window.setInterval(() => {
+      if (!outlookLinkAttempt.current || Date.now() - startedAt > 10 * 60 * 1000) {
+        if (outlookLinkPoll.current) window.clearInterval(outlookLinkPoll.current);
+        outlookLinkPoll.current = null;
+        return;
+      }
+      void fetch(`/api/outlook-link/status?attempt=${encodeURIComponent(outlookLinkAttempt.current)}`, {
+        headers: { Authorization: `Bearer ${outlookAccessToken}` },
+        cache: "no-store",
+      }).then((result) => result.json() as Promise<{ linked?: boolean; expired?: boolean }>).then((result) => {
+        if (result.linked) {
+          if (outlookLinkPoll.current) window.clearInterval(outlookLinkPoll.current);
+          outlookLinkPoll.current = null;
+          setNeedsMicrosoftConnection(false);
+          setStatus("Microsoft work account linked to Beckett. Choose Analyze message.");
+        } else if (result.expired) {
+          if (outlookLinkPoll.current) window.clearInterval(outlookLinkPoll.current);
+          outlookLinkPoll.current = null;
+          setStatus("That account-linking window expired. Choose Link account to try again.");
+        }
+      }).catch(() => undefined);
+    }, 2000);
   }
 
   return <main className="min-h-screen bg-bg p-5 text-ink">
@@ -214,8 +276,8 @@ export default function OutlookAddinPage() {
     {authState === "signed-out" && <div className="mt-4 rounded-card border border-border bg-white p-4"><button type="button" onClick={() => void authenticateWithMicrosoft(true)} className="inline-flex rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">Connect Microsoft account</button></div>}
     <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => void analyzeMessage()} disabled={!officeHost || authState !== "signed-in"} className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50">Analyze message</button><button type="button" onClick={() => void analyzeThread()} disabled={!officeHost || authState !== "signed-in"} className="rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">Analyze full thread</button></div>
     <p className="mt-3 text-xs leading-relaxed text-ink-light">Pin Beckett in Outlook when you want it to stay open and follow the message you select.</p>
-    {needsMicrosoftConnection && <div className="mt-4 rounded-card border border-primary/20 bg-primary-light/30 p-4"><p className="text-sm font-medium text-ink">Connect Microsoft 365 to analyze full threads</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">Beckett will request read-only access to the Outlook messages in the conversation you choose.</p><button type="button" onClick={openMicrosoftSettings} className="mt-3 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-white">Open connected accounts</button></div>}
+    {needsMicrosoftConnection && <div className="mt-4 rounded-card border border-primary/20 bg-primary-light/30 p-4"><p className="text-sm font-medium text-ink">Link your Microsoft work account</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">Finish a one-time Beckett sign-in in the browser window that opens. This pane will recognize the link automatically—no Outlook refresh needed.</p><button type="button" onClick={() => void linkMicrosoftAccount()} className="mt-3 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-white">Link Beckett account</button></div>}
     {item && !result && <div className="mt-5 rounded-card border border-border bg-white p-4"><p className="text-xs uppercase tracking-wide text-ink-light">Selected item</p><h2 className="mt-1 text-base font-medium text-ink">{item.subject}</h2><p className="mt-1 text-xs text-ink-mid">{item.sender || "Unknown sender"}</p></div>}
-    {result && <div className="mt-5 space-y-4"><section className="space-y-3 rounded-card border border-border bg-white p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Analysis</p><div><p className="text-xs uppercase tracking-wide text-ink-light">Intent</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.intent}</p></div><div><p className="text-xs uppercase tracking-wide text-ink-light">Tone</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.tone}</p></div><div><p className="text-xs uppercase tracking-wide text-ink-light">What they want</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.want}</p></div></section><section className="space-y-3 rounded-card border border-border bg-white p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Response options</p>{result.responses?.map((response) => <div key={response.tag || response.label} className="border-t border-border pt-3"><p className="text-xs font-medium text-primary">{response.label}</p><p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink">{response.text}</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void copyResponse(response.text || "")} disabled={!response.text} className="rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-50">Copy response</button><button type="button" onClick={() => insertDraft(response.text || "")} disabled={!canInsert || !response.text} className="rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-50">Insert into reply</button></div></div>)}{!canInsert && <p className="text-xs text-ink-light">To insert a response, open a reply or new draft and run Beckett there. Copy is always available.</p>}</section></div>}
+    {result && <div className="mt-5 space-y-4"><section className="space-y-3 rounded-card border border-border bg-white p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Analysis</p><div><p className="text-xs uppercase tracking-wide text-ink-light">Intent</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.intent}</p></div><div><p className="text-xs uppercase tracking-wide text-ink-light">Tone</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.tone}</p></div><div><p className="text-xs uppercase tracking-wide text-ink-light">What they want</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.want}</p></div></section><section className="space-y-3 rounded-card border border-border bg-white p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Response options</p>{result.responses?.map((response) => <div key={response.tag || response.label} className="border-t border-border pt-3"><p className="text-xs font-medium text-primary">{response.label}</p><p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink">{response.text}</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void copyResponse(response.text || "")} disabled={!response.text} className="rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-50">Copy response</button><button type="button" onClick={() => insertDraft(response.text || "")} disabled={(!canInsert && !canOpenReply) || !response.text} className="rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-50">{canInsert ? "Insert into reply" : "Open reply with response"}</button></div></div>)}{!canInsert && !canOpenReply && <p className="text-xs text-ink-light">Outlook does not support replies from this view. Copy is always available.</p>}</section></div>}
   </main>;
 }

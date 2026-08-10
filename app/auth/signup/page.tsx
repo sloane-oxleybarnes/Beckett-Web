@@ -1,6 +1,4 @@
 import dynamic from "next/dynamic";
-import { redirect } from "next/navigation";
-import { isBetaInviteOnly } from "@/lib/beta-access";
 
 const SignupForm = dynamic(() => import("@/components/auth/SignupForm"), {
   ssr: false,
@@ -12,6 +10,5 @@ const SignupForm = dynamic(() => import("@/components/auth/SignupForm"), {
 });
 
 export default function SignupPage() {
-  if (isBetaInviteOnly()) redirect("/beta");
   return <SignupForm />;
 }
