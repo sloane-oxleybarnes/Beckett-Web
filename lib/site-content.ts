@@ -85,7 +85,7 @@ export const SITE_CONTENT_FIELDS = [
     label: "Beta page subheadline",
     group: "Beta page",
     defaultValue:
-      "We're building Beckett with a small group of neurodivergent adults who want clearer support for workplace communication in Gmail, Slack, practice, and skill modules. Beta access is free - no credit card, no commitment.",
+      "We're building Beckett with a small group of neurodivergent adults who want clearer support for workplace communication in Gmail™, Slack, practice, and skill modules. Beta access is free - no credit card, no commitment.",
     inputType: "textarea",
   },
   {
@@ -132,7 +132,7 @@ export const SITE_CONTENT_FIELDS = [
     label: "Integrations page subheadline",
     group: "Integrations page",
     defaultValue:
-      "Beckett brings neurodivergent-aware coaching into Gmail, Slack, and Chrome for beta, with meeting tools planned after the core flows are stable.",
+      "Beckett brings neurodivergent-aware coaching into Gmail™, Slack, and Chrome for beta, with meeting tools planned after the core flows are stable.",
     inputType: "textarea",
   },
   {

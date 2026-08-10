@@ -66,6 +66,9 @@ export default function Footer() {
             &copy; {new Date().getFullYear()} Beckett Labs Inc. All rights reserved.
           </p>
         </div>
+        <p className="mt-6 text-center text-xs text-ink-light">
+          Gmail™, Google Calendar™, Google Meet™, and Google Workspace™ are trademarks of Google LLC.
+        </p>
       </div>
     </footer>
   );

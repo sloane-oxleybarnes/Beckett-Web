@@ -84,16 +84,16 @@ export default function GoogleCalendarConnection() {
   }
 
   async function disconnect() {
-    if (!window.confirm("Disconnect Google Calendar? Beckett will stop reading upcoming events.")) return;
+    if (!window.confirm("Disconnect Google Calendar™? Beckett will stop reading upcoming events.")) return;
     setDisconnecting(true);
     setError(null);
     try {
       const response = await fetch("/api/integrations/google_calendar", { method: "DELETE" });
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) throw new Error(data?.error || "Could not disconnect Google Calendar.");
+      if (!response.ok) throw new Error(data?.error || "Could not disconnect Google Calendar™.");
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not disconnect Google Calendar.");
+      setError(requestError instanceof Error ? requestError.message : "Could not disconnect Google Calendar™.");
     } finally {
       setDisconnecting(false);
     }
@@ -105,7 +105,7 @@ export default function GoogleCalendarConnection() {
     <div className="flex items-start gap-3">
       <span className="mt-0.5 text-lg">📅</span>
       <div className="min-w-0">
-        <p className="text-sm font-medium text-ink">Google Calendar</p>
+        <p className="text-sm font-medium text-ink">Google Calendar™</p>
         <p className="text-xs text-ink-light">Read-only upcoming-meeting context from the calendars you choose.</p>
       </div>
     </div>

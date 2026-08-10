@@ -986,7 +986,7 @@ export default function PracticePage() {
           <p className="text-xs font-medium uppercase tracking-wide text-primary">Beta feature</p>
           <h2 className="mt-2 text-xl font-medium text-ink">Standalone Practice is not included on the Free plan.</h2>
           <p className="mt-2 text-sm leading-relaxed text-ink-mid">
-            Free accounts can still use Beckett in Slack, Gmail, and Chrome within their coaching-credit limits,
+            Free accounts can still use Beckett in Slack, Gmail™, and Chrome within their coaching-credit limits,
             and can unlock two skill courses each month. Full standalone Practice is included during beta.
           </p>
           <Link href="/beta" className="mt-5 inline-block rounded-pill bg-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-dark">
@@ -1435,7 +1435,7 @@ export default function PracticePage() {
         return (
           <div className="mb-3 flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
             <div className="border-b border-border bg-gray-50 px-5 py-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Gmail practice</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Gmail™ practice</p>
               <p className="mt-1 truncate text-sm font-medium text-ink">{emailThreadSubject}</p>
             </div>
             <div className="flex-1 overflow-y-auto bg-gray-50">

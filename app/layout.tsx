@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Beckett - Neurodivergent Workplace Communication Coach",
     description:
-      "Decode Gmail and Slack, draft clearer replies, and practice difficult workplace conversations with Beckett.",
+      "Decode Gmail™ and Slack, draft clearer replies, and practice difficult workplace conversations with Beckett.",
     url: "/",
     siteName: "Beckett",
     images: [
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Beckett - Neurodivergent Workplace Communication Coach",
     description:
-      "Workplace communication coaching for neurodivergent professionals in Gmail, Slack, and practice sessions.",
+      "Workplace communication coaching for neurodivergent professionals in Gmail™, Slack, and practice sessions.",
     images: ["/brand/beckett-og.png"],
   },
 };

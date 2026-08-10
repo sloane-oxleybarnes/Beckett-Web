@@ -9,23 +9,23 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Integrations",
   description:
-    "Beckett beta works in Gmail, Slack, and Chrome so neurodivergent professionals can get workplace communication coaching where work happens.",
+    "Beckett beta works in Gmail™, Slack, and Chrome so neurodivergent professionals can get workplace communication coaching where work happens.",
   alternates: {
     canonical: "/integrations",
   },
 };
 
 const live = [
-  { name: "Gmail", icon: "📧", description: "Decode and draft in any Gmail thread." },
+  { name: "Gmail™", icon: "📧", description: "Decode and draft in any Gmail thread." },
   { name: "Slack", icon: "💬", description: "Inline support in channels, DMs, and threads." },
-  { name: "Google Calendar", icon: "📅", description: "Read selected calendars, show a week view, and offer attendee-aware meeting prep." },
+  { name: "Google Calendar™", icon: "📅", description: "Read selected calendars, show a week view, and offer attendee-aware meeting prep." },
   { name: "Chrome extension", icon: "🧩", description: "Brings Beckett into the browser tools beta users are testing now." },
 ];
 
 const slackCommands = ["respond", "rewrite", "decode", "prep", "practice"];
 
 const comingSoon = [
-  { name: "Google Meet", icon: "🎥" },
+  { name: "Google Meet™", icon: "🎥" },
   { name: "Zoom", icon: "📹" },
   { name: "Microsoft Teams", icon: "🏢" },
   { name: "Outlook", icon: "📨" },

@@ -234,7 +234,7 @@ export default function ProfileSetupForm() {
             Set up your Beckett coach
           </h1>
           <p className="text-sm text-ink-mid">
-            Beckett beta is workplace-first. Your answers help your coach support Gmail,
+            Beckett beta is workplace-first. Your answers help your coach support Gmail™,
             Slack, practice conversations, and workplace skill modules.
           </p>
         </div>

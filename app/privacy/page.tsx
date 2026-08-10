@@ -6,7 +6,7 @@ const sections = [
   {
     title: "What Beckett reads",
     body: [
-      "During beta, Beckett can use Gmail, Google Calendar, Microsoft 365 Calendar, Outlook, Slack, and Chrome extension context only when you connect those tools and ask Beckett for coaching, or when you turn on an analysis setting yourself.",
+      "During beta, Beckett can use Gmail™, Google Calendar™, Microsoft 365 Calendar, Outlook, Slack, and Chrome extension context only when you connect those tools and ask Beckett for coaching, or when you turn on an analysis setting yourself.",
       "In the Gmail add-on, Beckett uses add-on-specific access to the open message or available thread context after you choose an analysis action. If you separately connect Gmail in the Beckett web app, Beckett uses the read-only access you approve for the feature you request.",
       "For Slack, Beckett uses connected workspace context and may search relevant Slack history across authorized channels, DMs, group DMs, and private channels when you ask for coaching.",
       "For Google Calendar, Beckett uses read-only access to list the calendars you choose and to read upcoming event titles, timing, and attendees from those calendars. This lets Beckett show your day and offer meeting context. Beckett does not create, edit, cancel, or respond to calendar events during beta.",
@@ -61,7 +61,7 @@ const sections = [
       "Beckett does not use or transfer user data to determine creditworthiness or for lending purposes.",
       "Beckett does not collect payment card information through the Chrome extension during beta.",
       "Beckett does not collect health information, precise location, or general web browsing history for its Chrome extension.",
-      "Beckett does not connect to LinkedIn, Zoom, or Google Meet during beta.",
+      "Beckett does not connect to LinkedIn, Zoom, or Google Meet™ during beta.",
       "Beckett does not ask for or store your personal Anthropic API key.",
     ],
   },
@@ -117,7 +117,7 @@ const sections = [
 export const metadata = {
   title: "Privacy and Trust - Beckett",
   description:
-    "How Beckett handles Gmail, Microsoft 365, Outlook, Slack, extension context, beta feedback, deletion, and coaching boundaries.",
+    "How Beckett handles Gmail™, Microsoft 365, Outlook, Slack, extension context, beta feedback, deletion, and coaching boundaries.",
   alternates: {
     canonical: "/privacy",
   },
@@ -204,6 +204,9 @@ export default function PrivacyPage() {
           </ul>
         </article>
       </section>
+      <p className="mx-auto w-full max-w-4xl px-5 pb-12 text-center text-xs text-ink-light">
+        Gmail™, Google Calendar™, Google Meet™, and Google Workspace™ are trademarks of Google LLC.
+      </p>
     </main>
   );
 }

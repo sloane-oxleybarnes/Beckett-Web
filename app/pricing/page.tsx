@@ -8,7 +8,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Beta Pricing",
   description:
-    "Beckett beta access is free for early users testing workplace communication coaching, Gmail, Slack, practice, and skill modules.",
+    "Beckett beta access is free for early users testing workplace communication coaching, Gmail™, Slack, practice, and skill modules.",
   alternates: {
     canonical: "/pricing",
   },
@@ -26,7 +26,7 @@ const plans = [
     features: [
       "60 successful coaching actions per day",
       "500 successful coaching actions per month",
-      "Slack, Gmail, and Chrome coaching",
+      "Slack, Gmail™, and Chrome coaching",
       "Full standalone conversation Practice",
       "All available skill courses",
       "Course activities do not use coaching credits",

@@ -7,7 +7,7 @@ import { isWorkspaceAddOnLinkToken } from "@/lib/google-workspace-addon-link-tok
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export const metadata: Metadata = {
-  title: "Connect Gmail to Beckett",
+  title: "Connect Gmail™ to Beckett",
   robots: { index: false, follow: false },
 };
 
@@ -36,7 +36,7 @@ export default async function GoogleWorkspaceAddonConnectPage({
       <div className="mx-auto w-full max-w-xl">
         <Link href="/" className="mb-8 block text-center text-2xl text-ink font-serif">Beckett</Link>
         <section className="rounded-card border border-border bg-white p-6 shadow-sm sm:p-8">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-primary">Gmail add-on</p>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-primary">Gmail™ add-on</p>
           <h1 className="mb-3 text-2xl text-ink font-serif">Connect your Beckett account</h1>
           <p className="mb-6 text-sm leading-relaxed text-ink-mid">
             Confirm which Beckett profile this verified Google account should use for coaching in Gmail.

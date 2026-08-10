@@ -42,7 +42,7 @@ export default function GoogleWorkspaceAddonConnectForm({
       <div className="rounded-card border border-primary/20 bg-primary-light p-5">
         <h2 className="mb-2 text-lg text-ink">Accounts connected</h2>
         <p className="text-sm leading-relaxed text-ink-mid">
-          Return to Gmail, close and reopen Beckett, and then analyze the email you choose.
+          Return to Gmail™, close and reopen Beckett, and then analyze the email you choose.
         </p>
       </div>
     );
@@ -80,7 +80,7 @@ export default function GoogleWorkspaceAddonConnectForm({
         {status === "saving" ? "Connecting…" : "Connect these accounts"}
       </button>
       <p className="text-center text-xs leading-relaxed text-ink-light">
-        Beckett will not read or send email from this page. Gmail content is only processed after you use an action inside the add-on.
+        Beckett will not read or send email from this page. Gmail™ content is only processed after you use an action inside the add-on.
       </p>
     </div>
   );

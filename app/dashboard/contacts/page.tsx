@@ -858,7 +858,7 @@ export default function ContactsPage() {
               <div className="mb-3">
                 <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Identifiers</p>
                 <p className="mt-1 text-xs text-ink-light">
-                  Confirmed identifiers can connect real Gmail, Slack, or phone context. Slack display names remain suggestions.
+                  Confirmed identifiers can connect real Gmail™, Slack, or phone context. Slack display names remain suggestions.
                 </p>
               </div>
               {selectedContact.contact_identifiers?.length ? (

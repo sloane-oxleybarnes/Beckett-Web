@@ -15,7 +15,7 @@ export type BetaMissionFeedbackRating = "helpful" | "not_helpful" | null;
 
 export type BetaMissionDefinition = {
   key: BetaMissionKey;
-  category: "Set up" | "Gmail" | "Slack" | "Practice" | "Skills";
+  category: "Set up" | "Gmail™" | "Slack" | "Practice" | "Skills";
   title: string;
   description: string;
   actionLabel: string;
@@ -62,7 +62,7 @@ export const BETA_MISSION_DEFINITIONS: Record<BetaMissionKey, BetaMissionDefinit
   },
   analyze_with_extension: {
     key: "analyze_with_extension",
-    category: "Gmail",
+    category: "Gmail™",
     title: "Try Beckett on a real message",
     description: "Use the extension to decode, respond to, or rewrite one message. Remove private details if needed.",
     actionLabel: "Check connections",
@@ -70,10 +70,10 @@ export const BETA_MISSION_DEFINITIONS: Record<BetaMissionKey, BetaMissionDefinit
   },
   connect_gmail: {
     key: "connect_gmail",
-    category: "Gmail",
-    title: "Connect Gmail",
+    category: "Gmail™",
+    title: "Connect Gmail™",
     description: "Connect Gmail so Beckett can use the email context you choose to share.",
-    actionLabel: "Connect Gmail",
+    actionLabel: "Connect Gmail™",
     href: "/dashboard/settings",
   },
   connect_slack: {

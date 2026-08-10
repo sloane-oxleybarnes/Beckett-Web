@@ -8,7 +8,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Beta Access",
   description:
-    "Request free beta access to Beckett, a workplace communication coach for neurodivergent professionals using Gmail, Slack, practice, and skills.",
+    "Request free beta access to Beckett, a workplace communication coach for neurodivergent professionals using Gmail™, Slack, practice, and skills.",
   alternates: {
     canonical: "/beta",
   },
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 const betaPerks = [
   "Generous beta access to every currently available feature",
   "60 successful coaching actions per day and 500 per month",
-  "Slack, Gmail, Chrome, Practice, and all available skill courses",
+  "Slack, Gmail™, Chrome, Practice, and all available skill courses",
   "First look at new features before anyone else",
   "Direct line to the team — your feedback shapes what we build",
 ];

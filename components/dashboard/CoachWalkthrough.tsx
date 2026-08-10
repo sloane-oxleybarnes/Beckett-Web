@@ -51,7 +51,7 @@ const walkthroughSteps: WalkthroughStep[] = [
     eyebrow: "Connections",
     title: "Connect the tools Beckett can coach in.",
     body:
-      "Beckett currently integrates with Chrome extension, Gmail, and Slack. Connect all of these features to use Beckett in all of your work settings.",
+      "Beckett currently integrates with Chrome extension, Gmail™, and Slack. Connect all of these features to use Beckett in all of your work settings.",
     target: '[data-tour="beta-setup"]',
     slackConnect: true,
   },

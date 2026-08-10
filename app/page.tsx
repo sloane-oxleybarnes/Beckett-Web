@@ -81,7 +81,7 @@ export default function HomePage() {
       n: "02",
       title: "Message decoder",
       personal: "What did they actually mean? In beta, Beckett helps you practice decoding personal messages and dating signals. Mobile text, DM, and dating-app overlays are coming soon.",
-      professional: "Beckett helps separate what a Gmail or Slack message clearly says from uncertain tone, possible interpretations, and useful next steps.",
+      professional: "Beckett helps separate what a Gmail™ or Slack message clearly says from uncertain tone, possible interpretations, and useful next steps.",
       action: "Decode this message →",
     },
     {
@@ -401,9 +401,9 @@ export default function HomePage() {
             <p className="sec-sub">Beckett connects the parts of the workday that create pressure: planning, messages, meetings, practice, and practical skills.</p>
             <div className="plat-grid">
               {[
-                { icon: "pi-gmail", letter: "G", name: "Gmail Decode", desc: "Bring a specific thread to clarify the ask and draft a response in your own voice. Read-only; Beckett cannot send." },
+                { icon: "pi-gmail", letter: "G", name: "Gmail™ Decode", desc: "Bring a specific thread to clarify the ask and draft a response in your own voice. Read-only; Beckett cannot send." },
                 { icon: "pi-slack", letter: "S", name: "Slack", desc: "Provides private decoding, response help, rewriting, preparation, and practice inside Slack." },
-                { icon: "pi-meet", letter: "C", name: "Google Calendar", desc: "Choose calendars, view your week, and prepare for meetings with other attendees. Beckett never edits events." },
+                { icon: "pi-meet", letter: "C", name: "Google Calendar™", desc: "Choose calendars, view your week, and prepare for meetings with other attendees. Beckett never edits events." },
                 { icon: "pi-zoom", letter: "M", name: "Practice + Skills", desc: "Rehearse high-stakes conversations and build practical strategies you can carry into the day." },
               ].map((p) => (
                 <div key={p.name} className="plat-card">
@@ -505,6 +505,7 @@ export default function HomePage() {
           <Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={118} height={30} />
         </div>
         <div className="f-copy">© 2026 Beckett. For brains that work differently.</div>
+        <div className="f-copy f-trademark">Gmail™, Google Calendar™, Google Meet™, and Google Workspace™ are trademarks of Google LLC.</div>
         <nav aria-label="Footer navigation" className="f-links">
           <a href="/features">Features</a>
           <a href="/pricing">Pricing</a>

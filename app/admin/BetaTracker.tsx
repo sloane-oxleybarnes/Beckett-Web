@@ -98,7 +98,7 @@ export default function AdminBetaTracker({
         <Metric label="Users" value={rows.length} />
         <Metric label="Signed in" value={signedIn} />
         <Metric label="Extension" value={extension} />
-        <Metric label="Gmail / Slack" value={`${gmail} / ${slack}`} />
+        <Metric label="Gmail™ / Slack" value={`${gmail} / ${slack}`} />
         <Metric label="Feedback" value={feedback} />
         <Metric label="Active" value={active} />
         <Metric label="Missions done" value={missionCompletions} />
@@ -142,7 +142,7 @@ export default function AdminBetaTracker({
                   <td className="px-4 py-4">
                     <div className="flex flex-wrap gap-1.5">
                       <Check ok={Boolean(row.extensionConnectedAt)} label="extension" />
-                      <Check ok={Boolean(row.gmailConnectedAt)} label="Gmail" />
+                      <Check ok={Boolean(row.gmailConnectedAt)} label="Gmail™" />
                       <Check ok={Boolean(row.slackConnectedAt)} label="Slack" />
                     </div>
                   </td>

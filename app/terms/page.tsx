@@ -33,7 +33,7 @@ const sections = [
   {
     title: "Connected services",
     body: [
-      "If you connect Gmail, Slack, Chrome, or another service, you authorize Beckett to use the access you approve only to provide the requested features. Your use of those services remains subject to their own terms and policies.",
+      "If you connect Gmail™, Slack, Chrome, or another service, you authorize Beckett to use the access you approve only to provide the requested features. Your use of those services remains subject to their own terms and policies.",
       "You may disconnect integrations from Beckett or the connected provider. Some features will stop working after disconnection.",
     ],
   },
@@ -119,6 +119,9 @@ export default function TermsPage() {
           </p>
         </article>
       </section>
+      <p className="mx-auto w-full max-w-4xl px-5 pb-12 text-center text-xs text-ink-light">
+        Gmail™, Google Calendar™, Google Meet™, and Google Workspace™ are trademarks of Google LLC.
+      </p>
     </main>
   );
 }

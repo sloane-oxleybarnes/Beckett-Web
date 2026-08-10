@@ -4,12 +4,12 @@ import Link from "next/link";
 export const metadata = {
   title: "Support - Beckett",
   description:
-    "Get help with Beckett for Gmail and Outlook, including setup, account access, analysis, drafts, and privacy.",
+    "Get help with Beckett for Gmail™ and Outlook, including setup, account access, analysis, drafts, and privacy.",
   alternates: { canonical: "/support" },
 };
 
 const gmailSteps = [
-  "Install Beckett from the Google Workspace Marketplace and approve the requested Gmail add-on permissions.",
+  "Install Beckett from the Google Workspace™ Marketplace and approve the requested Gmail™ add-on permissions.",
   "Open a Gmail conversation, then choose Beckett from the right-hand sidebar.",
   "Sign in to or create your Beckett account. If your Gmail and Beckett addresses differ, review both addresses and confirm the connection.",
   "Choose Analyze selected conversation. Beckett reads only the conversation you selected after you request analysis.",
@@ -98,7 +98,7 @@ export default function SupportPage() {
           <a className="text-primary hover:underline" href="mailto:hello@meetbeckett.co">
             hello@meetbeckett.co
           </a>{" "}
-          for account, privacy, security, or Beckett for Gmail and Outlook
+          for account, privacy, security, or Beckett for Gmail™ and Outlook
           support. Please
           do not include private message content unless our support team asks
           for a redacted example.
@@ -111,7 +111,7 @@ export default function SupportPage() {
             className="mb-3 text-2xl"
             style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
           >
-            Using Beckett for Gmail
+            Using Beckett for Gmail™
           </h2>
           <ol className="space-y-3">
             {gmailSteps.map((step, index) => (
@@ -176,6 +176,9 @@ export default function SupportPage() {
           </p>
         </article>
       </section>
+      <p className="mx-auto w-full max-w-4xl px-5 pb-12 text-center text-xs text-ink-light">
+        Gmail™, Google Calendar™, Google Meet™, and Google Workspace™ are trademarks of Google LLC.
+      </p>
     </main>
   );
 }

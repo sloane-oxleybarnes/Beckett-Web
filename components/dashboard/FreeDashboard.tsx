@@ -11,7 +11,7 @@ const gettingStarted = [
     href: CHROME_WEB_STORE_URL,
     proOnly: false,
   },
-  { label: "Connect Gmail", done: false, href: "#", proOnly: false },
+  { label: "Connect Gmail™", done: false, href: "#", proOnly: false },
   { label: "Connect Slack", done: false, href: "#", proOnly: false },
   { label: "Connect LinkedIn", done: false, href: "#", proOnly: true },
   { label: "Enable meeting guidance", done: false, href: "#", proOnly: true },
