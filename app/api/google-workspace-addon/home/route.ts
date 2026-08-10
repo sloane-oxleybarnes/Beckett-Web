@@ -16,8 +16,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  return workspaceAddOnRoute(request, async (event) => {
-    const profile = await resolveWorkspaceAddOnProfile(event);
+  return workspaceAddOnRoute(request, async (event, diagnostics) => {
+    const profile = await resolveWorkspaceAddOnProfile(event, diagnostics);
     if (!profile) return triggerCardResponse(await signInCard(request, event));
     if (!isWorkspaceAddOnPlanEligible(profile.plan)) {
       return triggerCardResponse({

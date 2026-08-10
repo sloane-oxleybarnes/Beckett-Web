@@ -2,6 +2,13 @@ import { OAuth2Client, type TokenPayload } from "google-auth-library";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { WEB_CREDITS_ENABLED } from "@/lib/web-credits";
+import {
+  workspaceAddOnErrorCode,
+  workspaceAddOnErrorStatus,
+  workspaceAddOnLogRecord,
+  workspaceAddOnRequestId,
+  type WorkspaceAddOnVerificationStage,
+} from "@/lib/google-workspace-addon-diagnostics";
 
 export type WorkspaceAddOnEvent = {
   authorizationEventObject?: {
@@ -30,6 +37,13 @@ export type WorkspaceAddOnProfile = {
   googleSubject: string;
   googleEmail: string;
   patternModelEnabled: boolean;
+};
+
+export type WorkspaceAddOnDiagnostics = {
+  requestId: string;
+  route: string;
+  stage: WorkspaceAddOnVerificationStage;
+  setStage: (stage: WorkspaceAddOnVerificationStage) => void;
 };
 
 type CardHeader = {
@@ -107,7 +121,16 @@ export async function verifyWorkspaceAddOnUser(event: WorkspaceAddOnEvent): Prom
   return payload;
 }
 
-export async function resolveWorkspaceAddOnProfile(event: WorkspaceAddOnEvent): Promise<WorkspaceAddOnProfile | null> {
+export async function resolveWorkspaceAddOnProfile(
+  event: WorkspaceAddOnEvent,
+  diagnostics?: WorkspaceAddOnDiagnostics,
+): Promise<WorkspaceAddOnProfile | null> {
+  diagnostics?.setStage("account_resolution");
+  const resolved = <T,>(value: T) => {
+    diagnostics?.setStage("handler");
+    return value;
+  };
+
   const user = await verifyWorkspaceAddOnUser(event);
   const googleSubject = user.sub;
   const email = user.email!.trim().toLowerCase();
@@ -128,14 +151,14 @@ export async function resolveWorkspaceAddOnProfile(event: WorkspaceAddOnEvent): 
       .maybeSingle();
     userId = profileByEmail?.id || null;
   }
-  if (!userId) return null;
+  if (!userId) return resolved(null);
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
     .select("id,email,plan,pattern_model_enabled")
     .eq("id", userId)
     .maybeSingle();
-  if (!profile) return null;
+  if (!profile) return resolved(null);
 
   if (!mappedIntegration) {
     const now = new Date().toISOString();
@@ -152,14 +175,14 @@ export async function resolveWorkspaceAddOnProfile(event: WorkspaceAddOnEvent): 
     );
   }
 
-  return {
+  return resolved({
     id: profile.id,
     email: profile.email,
     plan: profile.plan,
     googleSubject,
     googleEmail: email,
     patternModelEnabled: Boolean(profile.pattern_model_enabled),
-  };
+  });
 }
 
 export function isWorkspaceAddOnPlanEligible(plan: string | null) {
@@ -385,19 +408,54 @@ export async function signInCard(request: NextRequest, event: WorkspaceAddOnEven
 
 export async function workspaceAddOnRoute(
   request: NextRequest,
-  handler: (event: WorkspaceAddOnEvent) => Promise<NextResponse>,
+  handler: (event: WorkspaceAddOnEvent, diagnostics: WorkspaceAddOnDiagnostics) => Promise<NextResponse>,
 ) {
+  const requestId = workspaceAddOnRequestId(request.headers.get("x-request-id"));
+  const route = request.nextUrl.pathname;
+  let stage: WorkspaceAddOnVerificationStage = "event_parse";
+  const diagnostics: WorkspaceAddOnDiagnostics = {
+    requestId,
+    route,
+    stage,
+    setStage(nextStage) {
+      stage = nextStage;
+      diagnostics.stage = nextStage;
+    },
+  };
   try {
     const event = await readWorkspaceAddOnEvent(request);
+    diagnostics.setStage("system_token_verification");
     await verifyWorkspaceAddOnRequest(request, event);
-    return await handler(event);
+    diagnostics.setStage("handler");
+    const response = await handler(event, diagnostics);
+    diagnostics.setStage("response");
+    response.headers.set("x-beckett-request-id", requestId);
+    console.info("Google Workspace add-on request completed", workspaceAddOnLogRecord({
+      route,
+      requestId,
+      stage: diagnostics.stage,
+      status: response.status,
+      responseType: "render_action",
+      event: "request_completed",
+    }));
+    return response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "workspace_addon_error";
-    const configurationError = /not configured/.test(message);
-    console.error("Google Workspace add-on request failed", { message });
-    return NextResponse.json(
-      { error: configurationError ? message : "unauthorized_addon_request" },
-      { status: configurationError ? 503 : 401 },
+    const errorCode = workspaceAddOnErrorCode(error);
+    const status = workspaceAddOnErrorStatus(errorCode, diagnostics.stage);
+    console.error("Google Workspace add-on request failed", workspaceAddOnLogRecord({
+      route,
+      requestId,
+      stage: diagnostics.stage,
+      status,
+      responseType: "json_error",
+      event: "request_failed",
+      errorCode,
+    }));
+    const response = NextResponse.json(
+      { error: status === 503 ? "addon_configuration_error" : status === 401 ? "unauthorized_addon_request" : "workspace_addon_error", requestId },
+      { status },
     );
+    response.headers.set("x-beckett-request-id", requestId);
+    return response;
   }
 }

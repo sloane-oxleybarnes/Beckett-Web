@@ -34,8 +34,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
-  return workspaceAddOnRoute(request, async (event) => {
-    const profile = await resolveWorkspaceAddOnProfile(event);
+  return workspaceAddOnRoute(request, async (event, diagnostics) => {
+    const profile = await resolveWorkspaceAddOnProfile(event, diagnostics);
     if (!profile) return cardResponse(await signInCard(request, event));
     if (!isWorkspaceAddOnPlanEligible(profile.plan)) {
       return cardResponse(errorCard("Plan required", "Your Beckett plan does not currently include Gmail reply coaching."));
