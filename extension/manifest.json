@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Beckett",
   "version": "3.0.10",
-  "description": "Workplace communication coaching for Gmail and Slack.",
+  "description": "Workplace communication coaching for Gmail.",
   "permissions": [
     "storage",
     "identity",
@@ -13,11 +13,8 @@
   ],
   "host_permissions": [
     "https://mail.google.com/*",
-    "https://app.slack.com/*",
     "https://meetbeckett.co/*",
-    "https://www.meetbeckett.co/*",
-    "https://gmail.googleapis.com/*",
-    "https://slack.com/api/*"
+    "https://www.meetbeckett.co/*"
   ],
   "background": {
     "service_worker": "background/service_worker.js",
@@ -27,11 +24,6 @@
     {
       "matches": ["https://mail.google.com/*"],
       "js": ["content/gmail.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["https://app.slack.com/*"],
-      "js": ["content/slack.js"],
       "run_at": "document_idle"
     }
   ],
@@ -44,14 +36,5 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
-  },
-  "oauth2": {
-    "client_id": "1004765607311-lqekocq274gdv36m38uehon8m212t2bk.apps.googleusercontent.com",
-    "scopes": [
-      "openid",
-      "profile",
-      "email",
-      "https://www.googleapis.com/auth/gmail.readonly"
-    ]
   }
 }

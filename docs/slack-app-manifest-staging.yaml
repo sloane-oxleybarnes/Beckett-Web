@@ -24,7 +24,7 @@ features:
   slash_commands:
     - command: /beckett
       description: Respond, rewrite, decode, prep, or practice workplace conversations.
-      url: https://www.meetbeckett.co/api/slack/commands
+      url: https://beckett-git-staging-sloane-s-projects1.vercel.app/api/slack/commands
       should_escape: false
   shortcuts:
     - name: Beckett - Decode
@@ -37,7 +37,7 @@ features:
       description: Draft clear private response options for this message.
 oauth_config:
   redirect_urls:
-    - https://www.meetbeckett.co/api/slack/callback
+    - https://beckett-git-staging-sloane-s-projects1.vercel.app/api/slack/callback
   scopes:
     bot:
       - commands
@@ -45,28 +45,19 @@ oauth_config:
       - assistant:write
       - im:history
       - im:write
-    user:
-      - channels:history
-      - groups:history
-      - im:history
-      - mpim:history
       - users:read
-      - search:read
-      - search:read.public
-      - search:read.private
-      - search:read.im
-      - search:read.mpim
-      - search:read.users
 settings:
   event_subscriptions:
-    request_url: https://www.meetbeckett.co/api/slack/events
+    request_url: https://beckett-git-staging-sloane-s-projects1.vercel.app/api/slack/events
     bot_events:
       - app_home_opened
       - app_context_changed
       - message.im
+      - app_uninstalled
+      - tokens_revoked
   interactivity:
     is_enabled: true
-    request_url: https://www.meetbeckett.co/api/slack/interactions
+    request_url: https://beckett-git-staging-sloane-s-projects1.vercel.app/api/slack/interactions
   org_deploy_enabled: false
   socket_mode_enabled: false
-  token_rotation_enabled: false
+  token_rotation_enabled: true

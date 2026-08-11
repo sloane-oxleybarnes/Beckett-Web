@@ -1,6 +1,32 @@
 import { supabaseAdmin } from "@/lib/server-admin";
-import { buildBeckettPayload, slackApiPost, SlackBlock, SlackConnectedUser } from "@/lib/slack-app";
+import {
+  buildBeckettPayload,
+  fetchSlackConversationContext,
+  fetchSlackThreadSnapshot,
+  slackApiPost,
+  SlackBlock,
+  SlackConnectedUser,
+} from "@/lib/slack-app";
+import {
+  rehydrateSlackGuestPrepFromTurns,
+  withoutLatestSlackUserTurn,
+  type SlackThreadTurn,
+} from "@/lib/slack-thread-rehydration";
 import { shouldScheduleSlackInactivityStartCard } from "@/lib/slack-inactivity-policy";
+import {
+  findSlackZeroCopyFlowSession,
+  findSlackZeroCopyFlowSessionByThreadReference,
+  listSlackZeroCopyBotMessages,
+  listSlackZeroCopyFlowSessions,
+  loadSlackZeroCopyFlowSession,
+  markSlackZeroCopyBotMessageDeleted,
+  normalizeSlackZeroCopyFlowType,
+  recordSlackZeroCopyBotMessage,
+  updateSlackZeroCopyFlowSession,
+  upsertSlackZeroCopyFlowSession,
+  type SlackZeroCopyFlowSession,
+} from "@/lib/slack-zero-copy-store";
+import { getWebCreditSummary } from "@/lib/web-credits";
 
 export const SLACK_HISTORY_CONTINUE_ACTION_ID = "beckett_history_continue";
 export const SLACK_HISTORY_ARCHIVE_ACTION_ID = "beckett_history_archive";
@@ -54,27 +80,49 @@ export type SlackGuestSelectedMessageState = {
 
 export const SLACK_GUEST_PREP_PRACTICE_ACTION_ID = "beckett_guest_prep_practice";
 
+export function rehydrateSlackGuestPrepState(
+  threadTs: string,
+  turns: SlackThreadTurn[],
+  currentStep: SlackGuestPrepState["step"] = "person"
+): SlackGuestPrepState {
+  return rehydrateSlackGuestPrepFromTurns(threadTs, turns, currentStep);
+}
+
 export async function loadSlackGuestPrepState({
   teamId,
   slackUserId,
   threadTs,
+  channelId,
+  accessToken,
+  latestUserText,
 }: {
   teamId: string;
   slackUserId: string;
   threadTs: string;
+  channelId?: string | null;
+  accessToken?: string | null;
+  latestUserText?: string | null;
 }) {
-  const { data, error } = await supabaseAdmin
-    .from("slack_guest_usage_events")
-    .select("metadata")
-    .eq("slack_team_id", teamId)
-    .eq("slack_user_id", slackUserId)
-    .eq("action", "guided_prep_state")
-    .contains("metadata", { threadTs })
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return (data?.metadata || null) as SlackGuestPrepState | null;
+  const zeroCopy = await findSlackZeroCopyFlowSessionByThreadReference({ teamId, slackUserId, threadTs });
+  if (zeroCopy?.flow_type === "prep") {
+    if (accessToken && (channelId || zeroCopy.slack_channel_id)) {
+      const snapshot = await fetchSlackThreadSnapshot({
+        accessToken,
+        channelId: channelId || zeroCopy.slack_channel_id,
+        threadTs,
+        currentSlackUserId: slackUserId,
+      });
+      if (snapshot.status === "available") {
+        return rehydrateSlackGuestPrepState(
+          threadTs,
+          withoutLatestSlackUserTurn(snapshot.turns, latestUserText),
+          (zeroCopy.current_step || "person") as SlackGuestPrepState["step"]
+        );
+      }
+    }
+    return { threadTs, step: (zeroCopy.current_step || "person") as SlackGuestPrepState["step"] };
+  }
+  return null;
 }
 
 export async function saveSlackGuestPrepState({
@@ -86,38 +134,51 @@ export async function saveSlackGuestPrepState({
   slackUserId: string;
   state: SlackGuestPrepState;
 }) {
-  const { error } = await supabaseAdmin.from("slack_guest_usage_events").insert({
-    slack_team_id: teamId,
-    slack_user_id: slackUserId,
-    source: "slack_guest",
-    action: "guided_prep_state",
-    token_estimate: 0,
-    metadata: state,
+  await upsertSlackZeroCopyFlowSession({
+    slackTeamId: teamId,
+    slackUserId,
+    slackThreadTs: state.threadTs,
+    flowType: "prep",
+    currentStep: state.step,
+    status: "active",
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   });
-  if (error) throw error;
 }
 
 export async function loadSlackGuestPracticeState({
   teamId,
   slackUserId,
   threadTs,
+  accessToken,
 }: {
   teamId: string;
   slackUserId: string;
   threadTs: string;
+  accessToken?: string | null;
 }) {
-  const { data, error } = await supabaseAdmin
-    .from("slack_guest_usage_events")
-    .select("metadata")
-    .eq("slack_team_id", teamId)
-    .eq("slack_user_id", slackUserId)
-    .eq("action", "guided_practice_state")
-    .contains("metadata", { threadTs })
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return (data?.metadata || null) as SlackGuestPracticeState | null;
+  const zeroCopy = await findSlackZeroCopyFlowSessionByThreadReference({ teamId, slackUserId, threadTs });
+  if (zeroCopy?.flow_type === "practice") {
+    const prep = zeroCopy.slack_source_thread_ts && accessToken
+      ? await loadSlackGuestPrepState({
+          teamId,
+          slackUserId,
+          threadTs: zeroCopy.slack_source_thread_ts,
+          accessToken,
+        })
+      : null;
+    if (prep?.person && prep.location && prep.outcome && prep.concern) {
+      return {
+        threadTs,
+        prepThreadTs: zeroCopy.slack_source_thread_ts || "",
+        person: prep.person,
+        location: prep.location,
+        outcome: prep.outcome,
+        concern: prep.concern,
+      } satisfies SlackGuestPracticeState;
+    }
+    return null;
+  }
+  return null;
 }
 
 export async function saveSlackGuestPracticeState({
@@ -129,38 +190,50 @@ export async function saveSlackGuestPracticeState({
   slackUserId: string;
   state: SlackGuestPracticeState;
 }) {
-  const { error } = await supabaseAdmin.from("slack_guest_usage_events").insert({
-    slack_team_id: teamId,
-    slack_user_id: slackUserId,
-    source: "slack_guest",
-    action: "guided_practice_state",
-    token_estimate: 0,
-    metadata: state,
+  await upsertSlackZeroCopyFlowSession({
+    slackTeamId: teamId,
+    slackUserId,
+    slackThreadTs: state.threadTs,
+    slackSourceThreadTs: state.prepThreadTs,
+    flowType: "practice",
+    currentStep: "active",
+    status: "active",
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   });
-  if (error) throw error;
 }
 
 export async function loadSlackGuestSelectedMessageState({
   teamId,
   slackUserId,
   threadTs,
+  accessToken,
 }: {
   teamId: string;
   slackUserId: string;
   threadTs: string;
-}) {
-  const { data, error } = await supabaseAdmin
-    .from("slack_guest_usage_events")
-    .select("metadata")
-    .eq("slack_team_id", teamId)
-    .eq("slack_user_id", slackUserId)
-    .eq("action", "selected_message_state")
-    .contains("metadata", { threadTs })
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return (data?.metadata || null) as SlackGuestSelectedMessageState | null;
+  accessToken?: string | null;
+}): Promise<SlackGuestSelectedMessageState | null> {
+  const zeroCopy = await findSlackZeroCopyFlowSessionByThreadReference({ teamId, slackUserId, threadTs });
+  if (zeroCopy && (zeroCopy.flow_type === "decode" || zeroCopy.flow_type === "respond")) {
+    if (!accessToken || !zeroCopy.slack_source_channel_id) return null;
+    const context = await fetchSlackConversationContext({
+      accessToken,
+      channelId: zeroCopy.slack_source_channel_id,
+      messageTs: zeroCopy.slack_source_message_ts,
+      threadTs: zeroCopy.slack_source_thread_ts,
+    });
+    if (context.status !== "available" || !context.text) return null;
+    return {
+      threadTs,
+      intent: zeroCopy.flow_type,
+      author: "the selected-message author",
+      message: context.text,
+      sourceChannelId: zeroCopy.slack_source_channel_id,
+      sourceMessageTs: zeroCopy.slack_source_message_ts || undefined,
+      sourceThreadTs: zeroCopy.slack_source_thread_ts || undefined,
+    } satisfies SlackGuestSelectedMessageState;
+  }
+  return null;
 }
 
 export async function saveSlackGuestSelectedMessageState({
@@ -172,15 +245,18 @@ export async function saveSlackGuestSelectedMessageState({
   slackUserId: string;
   state: SlackGuestSelectedMessageState;
 }) {
-  const { error } = await supabaseAdmin.from("slack_guest_usage_events").insert({
-    slack_team_id: teamId,
-    slack_user_id: slackUserId,
-    source: "slack_guest",
-    action: "selected_message_state",
-    token_estimate: 0,
-    metadata: state,
+  await upsertSlackZeroCopyFlowSession({
+    slackTeamId: teamId,
+    slackUserId,
+    slackThreadTs: state.threadTs,
+    slackSourceChannelId: state.sourceChannelId || null,
+    slackSourceThreadTs: state.sourceThreadTs || null,
+    slackSourceMessageTs: state.sourceMessageTs || null,
+    flowType: state.intent,
+    currentStep: "selected_message",
+    status: "active",
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   });
-  if (error) throw error;
 }
 
 export type SlackCoachingThread = {
@@ -213,6 +289,8 @@ export type SlackCoachingMessage = {
   created_at: string;
 };
 
+// Legacy content shape retained only for a separately approved migration/purge operation.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type SlackCoachingBotMessage = {
   id: string;
   coaching_thread_id: string;
@@ -245,12 +323,6 @@ function truncate(value: string | null | undefined, length: number) {
   return `${text.slice(0, length - 3).trim()}...`;
 }
 
-function truncateMessageContent(value: string | null | undefined, length: number) {
-  const text = (value || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-  if (text.length <= length) return text;
-  return `${text.slice(0, length - 3).trim()}...`;
-}
-
 function flowLabel(flowType: SlackHistoryFlowType) {
   switch (flowType) {
     case "respond":
@@ -268,6 +340,43 @@ function flowLabel(flowType: SlackHistoryFlowType) {
     case "message":
       return "Message coaching";
   }
+}
+
+function zeroCopyFlowToHistoryType(flowType: SlackZeroCopyFlowSession["flow_type"]): SlackHistoryFlowType {
+  return flowType === "general" ? "message" : flowType;
+}
+
+function zeroCopyFlowToCoachingThread(flow: SlackZeroCopyFlowSession): SlackCoachingThread {
+  const flowType = zeroCopyFlowToHistoryType(flow.flow_type);
+  return {
+    id: flow.id,
+    user_id: flow.beckett_user_id || "",
+    slack_team_id: flow.slack_team_id,
+    slack_user_id: flow.slack_user_id,
+    slack_channel_id: flow.slack_channel_id,
+    thread_ts: flow.slack_thread_ts,
+    source_channel_id: flow.slack_source_channel_id,
+    source_channel_name: null,
+    flow_type: flowType,
+    title: flowLabel(flowType),
+    summary: null,
+    prompt_snippet: null,
+    status: flow.status,
+    created_at: flow.created_at,
+    updated_at: flow.updated_at,
+    archived_at: flow.archived_at,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function sanitizeLegacyCoachingThread(thread: SlackCoachingThread): SlackCoachingThread {
+  return {
+    ...thread,
+    source_channel_name: null,
+    title: flowLabel(thread.flow_type),
+    summary: null,
+    prompt_snippet: null,
+  };
 }
 
 export function slackHistoryTitle(flowType: SlackHistoryFlowType, sourceLabel?: string | null) {
@@ -299,27 +408,18 @@ export function summarizeSlackCoachingResponse(response: string, fallback: strin
 }
 
 export async function createSlackCoachingThread(input: UpsertThreadInput) {
-  const { data, error } = await supabaseAdmin
-    .from("slack_coaching_threads")
-    .insert({
-      user_id: input.user.id,
-      slack_team_id: input.teamId,
-      slack_user_id: input.slackUserId,
-      slack_channel_id: input.slackChannelId || null,
-      thread_ts: input.threadTs || null,
-      source_channel_id: input.sourceChannelId || null,
-      source_channel_name: input.sourceChannelName || null,
-      flow_type: input.flowType,
-      title: input.title,
-      summary: input.summary || null,
-      prompt_snippet: truncate(input.promptSnippet, 240) || null,
-      status: input.status || "active",
-    })
-    .select("*")
-    .single();
-
-  if (error) throw error;
-  return data as SlackCoachingThread;
+  const flowType = normalizeSlackZeroCopyFlowType(input.flowType);
+  const data = await upsertSlackZeroCopyFlowSession({
+    slackTeamId: input.teamId,
+    slackUserId: input.slackUserId,
+    beckettUserId: input.user.id,
+    slackChannelId: input.slackChannelId || null,
+    slackThreadTs: input.threadTs || null,
+    slackSourceChannelId: input.sourceChannelId || null,
+    flowType,
+    status: input.status || "active",
+  });
+  return zeroCopyFlowToCoachingThread(data);
 }
 
 export async function updateSlackCoachingThread(
@@ -327,18 +427,18 @@ export async function updateSlackCoachingThread(
   patch: Partial<Pick<SlackCoachingThread, "slack_channel_id" | "thread_ts" | "summary" | "status" | "title">>
 ) {
   if (!threadId) return null;
-  const { data, error } = await supabaseAdmin
-    .from("slack_coaching_threads")
-    .update({
-      ...patch,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", threadId)
-    .select("*")
-    .maybeSingle();
-
-  if (error) throw error;
-  return data as SlackCoachingThread | null;
+  const zeroCopy = await loadSlackZeroCopyFlowSession(threadId);
+  if (zeroCopy) {
+    const updated = await updateSlackZeroCopyFlowSession(threadId, {
+      ...(patch.slack_channel_id !== undefined ? { slackChannelId: patch.slack_channel_id } : {}),
+      ...(patch.thread_ts !== undefined ? { slackThreadTs: patch.thread_ts } : {}),
+      ...(patch.status !== undefined
+        ? { status: patch.status === "archived" ? "archived" : patch.status === "completed" ? "completed" : "active" }
+        : {}),
+    });
+    return updated ? zeroCopyFlowToCoachingThread(updated) : null;
+  }
+  return null;
 }
 
 export async function appendSlackCoachingMessage({
@@ -356,24 +456,13 @@ export async function appendSlackCoachingMessage({
   role: SlackCoachingMessage["role"];
   content?: string | null;
 }) {
-  const cleanContent = truncateMessageContent(content, 4000);
-  if (!threadId || !cleanContent) return null;
-
-  const { data, error } = await supabaseAdmin
-    .from("slack_coaching_messages")
-    .insert({
-      coaching_thread_id: threadId,
-      user_id: user.id,
-      slack_team_id: teamId,
-      slack_user_id: slackUserId,
-      role,
-      content: cleanContent,
-    })
-    .select("*")
-    .single();
-
-  if (error) throw error;
-  return data as SlackCoachingMessage;
+  void threadId;
+  void user;
+  void teamId;
+  void slackUserId;
+  void role;
+  void content;
+  return null;
 }
 
 export async function recordSlackCoachingBotMessage({
@@ -390,23 +479,17 @@ export async function recordSlackCoachingBotMessage({
   kind?: string | null;
 }) {
   if (!threadId || !userId || !channelId || !messageTs) return null;
-  const { data, error } = await supabaseAdmin
-    .from("slack_coaching_bot_messages")
-    .upsert(
-      {
-        coaching_thread_id: threadId,
-        user_id: userId,
-        slack_channel_id: channelId,
-        slack_message_ts: messageTs,
-        kind: kind || null,
-      },
-      { onConflict: "coaching_thread_id,slack_channel_id,slack_message_ts" }
-    )
-    .select("*")
-    .single();
-
-  if (error) throw error;
-  return data as SlackCoachingBotMessage;
+  const zeroCopy = await loadSlackZeroCopyFlowSession(threadId, userId);
+  if (zeroCopy) {
+    return recordSlackZeroCopyBotMessage({
+      flowSessionId: threadId,
+      beckettUserId: userId,
+      channelId,
+      messageTs,
+      kind,
+    });
+  }
+  return null;
 }
 
 export async function cleanupSlackCoachingBotMessages({
@@ -419,38 +502,28 @@ export async function cleanupSlackCoachingBotMessages({
   userId: string;
 }) {
   if (!botAccessToken) return;
-  const { data, error } = await supabaseAdmin
-    .from("slack_coaching_bot_messages")
-    .select("*")
-    .eq("coaching_thread_id", threadId)
-    .eq("user_id", userId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-  const messages = (data || []) as SlackCoachingBotMessage[];
-  for (const message of messages) {
-    // Slack only permits third-party apps to delete messages posted by the same bot.
-    // User-authored messages and some older/untracked app messages may remain visible.
-    const result = await slackApiPost(botAccessToken, "chat.delete", {
-      channel: message.slack_channel_id,
-      ts: message.slack_message_ts,
-    }).catch(() => null);
-    if (result?.ok) {
-      await supabaseAdmin
-        .from("slack_coaching_bot_messages")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", message.id)
-        .eq("user_id", userId);
-    } else if (result && !result.ok) {
-      console.info("Slack bot message cleanup skipped", {
-        threadId,
-        channelId: message.slack_channel_id,
-        messageTs: message.slack_message_ts,
-        error: result.error || "unknown_error",
-      });
+  const zeroCopy = await loadSlackZeroCopyFlowSession(threadId, userId);
+  if (zeroCopy) {
+    const messages = await listSlackZeroCopyBotMessages(threadId, userId);
+    for (const message of messages) {
+      const result = await slackApiPost(botAccessToken, "chat.delete", {
+        channel: message.slack_channel_id,
+        ts: message.slack_message_ts,
+      }).catch(() => null);
+      if (result?.ok) {
+        await markSlackZeroCopyBotMessageDeleted(message.id);
+      } else if (result && !result.ok) {
+        console.info("Slack bot message cleanup skipped", {
+          threadId,
+          channelId: message.slack_channel_id,
+          messageTs: message.slack_message_ts,
+          error: result.error || "unknown_error",
+        });
+      }
     }
+    return;
   }
+  return;
 }
 
 export async function loadSlackCoachingMessages({
@@ -461,17 +534,11 @@ export async function loadSlackCoachingMessages({
   threadId: string;
   userId: string;
   limit?: number;
-}) {
-  const { data, error } = await supabaseAdmin
-    .from("slack_coaching_messages")
-    .select("*")
-    .eq("coaching_thread_id", threadId)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (error) throw error;
-  return ((data || []) as SlackCoachingMessage[]).reverse();
+}): Promise<SlackCoachingMessage[]> {
+  void threadId;
+  void userId;
+  void limit;
+  return [];
 }
 
 export function formatSlackCoachingMessages(messages: SlackCoachingMessage[], maxLength = 1800) {
@@ -497,20 +564,11 @@ export async function findSlackCoachingThreadBySlackThread({
   threadTs: string;
 }) {
   if (!threadTs) return null;
-  const { data, error } = await supabaseAdmin
-    .from("slack_coaching_threads")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("slack_team_id", teamId)
-    .eq("slack_user_id", slackUserId)
-    .eq("slack_channel_id", channelId)
-    .eq("thread_ts", threadTs)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data as SlackCoachingThread | null;
+  const zeroCopy = await findSlackZeroCopyFlowSession({ teamId, slackUserId, channelId, threadTs });
+  if (zeroCopy && (!zeroCopy.beckett_user_id || zeroCopy.beckett_user_id === userId)) {
+    return zeroCopyFlowToCoachingThread(zeroCopy);
+  }
+  return null;
 }
 
 export async function completeActiveSlackSessionsForThread({
@@ -520,29 +578,21 @@ export async function completeActiveSlackSessionsForThread({
   threadId: string;
   userId: string;
 }) {
-  const { error } = await supabaseAdmin
+  const zeroCopyResult = await supabaseAdmin
     .from("slack_agent_sessions")
     .update({
       status: "completed",
       updated_at: new Date().toISOString(),
     })
-    .eq("coaching_thread_id", threadId)
+    .eq("zero_copy_flow_session_id", threadId)
     .eq("user_id", userId)
     .eq("status", "active");
-
-  if (error) throw error;
+  if (zeroCopyResult.error) throw zeroCopyResult.error;
 }
 
 export async function listRecentSlackCoachingThreads(userId: string, limit = 8) {
-  const { data, error } = await supabaseAdmin
-    .from("slack_coaching_threads")
-    .select("*")
-    .eq("user_id", userId)
-    .order("updated_at", { ascending: false })
-    .limit(limit);
-
-  if (error) throw error;
-  return (data || []) as SlackCoachingThread[];
+  const zeroCopy = await listSlackZeroCopyFlowSessions(userId, limit);
+  return zeroCopy.map(zeroCopyFlowToCoachingThread);
 }
 
 export async function archiveSlackCoachingThread({
@@ -552,18 +602,14 @@ export async function archiveSlackCoachingThread({
   threadId: string;
   userId: string;
 }) {
-  const { error } = await supabaseAdmin
-    .from("slack_coaching_threads")
-    .update({
-      archived_at: new Date().toISOString(),
-      status: "archived",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", threadId)
-    .eq("user_id", userId);
-
-  if (error) throw error;
-  await completeActiveSlackSessionsForThread({ threadId, userId });
+  const zeroCopy = await loadSlackZeroCopyFlowSession(threadId, userId);
+  if (zeroCopy) {
+    const now = new Date().toISOString();
+    await updateSlackZeroCopyFlowSession(threadId, { status: "archived", archivedAt: now });
+    await completeActiveSlackSessionsForThread({ threadId, userId });
+    return;
+  }
+  return;
 }
 
 export async function loadSlackCoachingThread({
@@ -573,15 +619,9 @@ export async function loadSlackCoachingThread({
   threadId: string;
   userId: string;
 }) {
-  const { data, error } = await supabaseAdmin
-    .from("slack_coaching_threads")
-    .select("*")
-    .eq("id", threadId)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data as SlackCoachingThread | null;
+  const zeroCopy = await loadSlackZeroCopyFlowSession(threadId, userId);
+  if (zeroCopy) return zeroCopyFlowToCoachingThread(zeroCopy);
+  return null;
 }
 
 function relativeTime(value: string) {
@@ -595,7 +635,6 @@ function relativeTime(value: string) {
 }
 
 function historyCard(thread: SlackCoachingThread): SlackBlock[] {
-  const summary = oneSentenceSummary(thread.summary, thread.prompt_snippet || "Open this coaching thread to keep working with Beckett.");
   const status = thread.archived_at ? "archived" : thread.status;
   const elements: Record<string, unknown>[] = [
     {
@@ -621,7 +660,7 @@ function historyCard(thread: SlackCoachingThread): SlackBlock[] {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*${thread.title}*\n${summary}\n_${flowLabel(thread.flow_type)} · ${status} · ${relativeTime(thread.updated_at)}_`,
+        text: `*${flowLabel(thread.flow_type)} · ${relativeTime(thread.updated_at)}*\n_${status}_`,
       },
     },
     {
@@ -632,12 +671,13 @@ function historyCard(thread: SlackCoachingThread): SlackBlock[] {
   ];
 }
 
-export function buildSlackHomeBlocks(threads: SlackCoachingThread[], notice?: string | null): SlackBlock[] {
+export function buildSlackHomeBlocks(threads: SlackCoachingThread[], notice?: string | null, creditLine?: string | null): SlackBlock[] {
   const blocks: SlackBlock[] = [
     {
       type: "header",
       text: { type: "plain_text", text: "Beckett History" },
     },
+    ...(creditLine ? [{ type: "section", text: { type: "mrkdwn", text: creditLine } }] : []),
     {
       type: "section",
       text: {
@@ -671,10 +711,11 @@ export function buildSlackHomeBlocks(threads: SlackCoachingThread[], notice?: st
   }
 
   for (const thread of threads) blocks.push(...historyCard(thread));
+  blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: "<https://www.meetbeckett.co/dashboard/settings|Manage plan> · <https://www.meetbeckett.co/pricing|Upgrade> · <https://www.meetbeckett.co/privacy|Privacy> · <https://www.meetbeckett.co/support|Support>" }] });
   return blocks.slice(0, 90);
 }
 
-export function buildSlackConnectHomeBlocks(settingsUrl: string): SlackBlock[] {
+export function buildSlackConnectHomeBlocks(linkUrl: string, creditLine = "5 free coaching credits per day") : SlackBlock[] {
   return [
     {
       type: "header",
@@ -684,7 +725,7 @@ export function buildSlackConnectHomeBlocks(settingsUrl: string): SlackBlock[] {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "Connect Slack from Beckett Settings to see your coaching history here.",
+        text: `*${creditLine}*\nUse Beckett immediately. Link an account only if you want to share your Beckett subscription and daily allowance.`,
       },
     },
     { type: "divider" },
@@ -692,7 +733,7 @@ export function buildSlackConnectHomeBlocks(settingsUrl: string): SlackBlock[] {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "Messages is where you work with Beckett. Home stores your recent and archived coaching conversations.",
+        text: "Messages is where you work with Beckett. Home keeps only generic flow references; Slack remains the transcript system of record.",
       },
     },
     {
@@ -700,12 +741,13 @@ export function buildSlackConnectHomeBlocks(settingsUrl: string): SlackBlock[] {
       elements: [
         {
           type: "button",
-          text: { type: "plain_text", text: "Open Beckett Settings" },
+          text: { type: "plain_text", text: "Link Beckett account" },
           action_id: SLACK_HISTORY_SETTINGS_ACTION_ID,
-          url: settingsUrl,
+          url: linkUrl,
         },
       ],
     },
+    { type: "context", elements: [{ type: "mrkdwn", text: "<https://www.meetbeckett.co/pricing|Plans> · <https://www.meetbeckett.co/privacy|Privacy> · <https://www.meetbeckett.co/support|Support>" }] },
   ];
 }
 
@@ -730,12 +772,16 @@ export async function publishSlackHome({
       message: error instanceof Error ? error.message : String(error),
     });
   }
+  const credits = await getWebCreditSummary(userId).catch(() => null);
+  const creditLine = credits?.enabled
+    ? `*${credits.daily.remaining} coaching credits remaining today* · ${credits.plan} plan · resets daily at 00:00 UTC`
+    : null;
 
   return slackApiPost(botAccessToken, "views.publish", {
     user_id: slackUserId,
     view: {
       type: "home",
-      blocks: buildSlackHomeBlocks(threads, notice),
+      blocks: buildSlackHomeBlocks(threads, notice, creditLine),
     },
   });
 }
@@ -1005,17 +1051,19 @@ export async function publishSlackConnectHome({
   botAccessToken,
   slackUserId,
   settingsUrl,
+  creditLine,
 }: {
   botAccessToken: string | null;
   slackUserId: string;
   settingsUrl: string;
+  creditLine?: string;
 }) {
   if (!botAccessToken) return { ok: false, error: "missing_bot_token" };
   return slackApiPost(botAccessToken, "views.publish", {
     user_id: slackUserId,
     view: {
       type: "home",
-      blocks: buildSlackConnectHomeBlocks(settingsUrl),
+      blocks: buildSlackConnectHomeBlocks(settingsUrl, creditLine),
     },
   });
 }
@@ -1036,8 +1084,12 @@ export async function publishSlackHomeResult(input: {
   return result;
 }
 
-export function buildSlackHistoryContinuePayload(thread: SlackCoachingThread, messages: SlackCoachingMessage[] = []) {
-  const transcript = formatSlackCoachingMessages(messages, 1800);
+export function buildSlackHistoryContinuePayload(
+  thread: SlackCoachingThread,
+  messages: SlackCoachingMessage[] = [],
+  liveTranscript?: string | null
+) {
+  const transcript = liveTranscript || formatSlackCoachingMessages(messages, 1800);
   const payload = buildBeckettPayload({
     title: "Beckett",
     subtitle: "",

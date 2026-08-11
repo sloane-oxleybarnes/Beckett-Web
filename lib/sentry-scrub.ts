@@ -1,12 +1,18 @@
 import type { EventHint } from "@sentry/nextjs";
+import { scrubSlackTelemetry, SLACK_ZERO_COPY_FILTERED } from "./slack-zero-copy";
 
 type ScrubbableEvent = {
   request?: {
+    url?: string;
     headers?: Record<string, unknown>;
     data?: unknown;
   };
   extra?: unknown;
   contexts?: unknown;
+  breadcrumbs?: unknown;
+  exception?: unknown;
+  tags?: Record<string, unknown>;
+  transaction?: string;
 };
 
 const SENSITIVE_KEYS = [
@@ -43,6 +49,13 @@ function scrubValue(value: unknown): unknown {
   );
 }
 
+function isSlackEvent(event: ScrubbableEvent) {
+  const requestUrl = String(event.request?.url || "");
+  const integrationTag = String(event.tags?.integration || event.tags?.provider || "").toLowerCase();
+  const transaction = String(event.transaction || "").toLowerCase();
+  return requestUrl.includes("/api/slack/") || integrationTag === "slack" || transaction.includes("/api/slack/");
+}
+
 export function scrubSentryEvent<T extends ScrubbableEvent>(event: T, _hint?: EventHint): T {
   void _hint;
   if (event.request?.headers) {
@@ -60,6 +73,18 @@ export function scrubSentryEvent<T extends ScrubbableEvent>(event: T, _hint?: Ev
 
   if (event.contexts) {
     event.contexts = scrubValue(event.contexts);
+  }
+
+  if (event.breadcrumbs) {
+    event.breadcrumbs = scrubValue(event.breadcrumbs);
+  }
+
+  if (isSlackEvent(event)) {
+    if (event.request?.data) event.request.data = SLACK_ZERO_COPY_FILTERED;
+    if (event.extra) event.extra = scrubSlackTelemetry(event.extra);
+    if (event.contexts) event.contexts = scrubSlackTelemetry(event.contexts);
+    if (event.breadcrumbs) event.breadcrumbs = SLACK_ZERO_COPY_FILTERED;
+    if (event.exception) event.exception = SLACK_ZERO_COPY_FILTERED;
   }
 
   return event;
