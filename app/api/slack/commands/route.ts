@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { createHash } from "crypto";
 import {
   buildGuestSlashCoachingPrompt,
   extractGuestPrepOutcomeAndConcern,
@@ -7,6 +7,7 @@ import {
 } from "@/lib/slack-guest-routing";
 import { buildSlackPracticeUrl } from "@/lib/slack-practice-link";
 import { buildSlackCommandExcerpt } from "@/lib/slack-command-copy";
+import { verifySlackRequest } from "@/lib/slack-verification";
 
 export const runtime = "nodejs";
 
@@ -96,52 +97,6 @@ function helpPayload(command = "/beckett") {
       },
     ],
   };
-}
-
-function safeCompare(value: string, expected: string) {
-  const valueBuffer = Buffer.from(value, "utf8");
-  const expectedBuffer = Buffer.from(expected, "utf8");
-  return valueBuffer.length === expectedBuffer.length && timingSafeEqual(valueBuffer, expectedBuffer);
-}
-
-function verifySlackCommandRequest(req: NextRequest, rawBody: string) {
-  const signingSecrets = [
-    process.env.SLACK_SIGNING_SECRET,
-    process.env.SLACK_STAGING_SIGNING_SECRET,
-    process.env.SLACK_PRODUCTION_SIGNING_SECRET,
-  ]
-    .flatMap((value) => String(value || "").split(","))
-    .map((value) => value.trim())
-    .filter(Boolean);
-  if (!signingSecrets.length) {
-    return { ok: false as const, status: 500, message: "Slack signing secret is not configured." };
-  }
-
-  const timestamp = req.headers.get("x-slack-request-timestamp");
-  const signature = req.headers.get("x-slack-signature");
-  const timestampNumber = Number(timestamp);
-  if (!timestamp || !signature || !Number.isFinite(timestampNumber)) {
-    return { ok: false as const, status: 401, message: "Missing Slack signature." };
-  }
-
-  if (Math.abs(Date.now() / 1000 - timestampNumber) > 60 * 5) {
-    return { ok: false as const, status: 401, message: "Slack request is too old." };
-  }
-
-  const signedPayload = `v0:${timestamp}:${rawBody}`;
-  const verified = signingSecrets.some((signingSecret) => {
-    const expectedSignature = `v0=${createHmac("sha256", signingSecret).update(signedPayload).digest("hex")}`;
-    return safeCompare(signature, expectedSignature);
-  });
-  if (!verified) {
-    return {
-      ok: false as const,
-      status: 401,
-      message: `Invalid Slack signature. Checked ${signingSecrets.length} configured signing secret${signingSecrets.length === 1 ? "" : "s"}.`,
-    };
-  }
-
-  return { ok: true as const };
 }
 
 function scheduleCommandBackgroundTask(label: string, task: Promise<void>) {
@@ -604,7 +559,7 @@ async function startSidebarFlow({
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
-  const verification = verifySlackCommandRequest(req, rawBody);
+  const verification = verifySlackRequest(req, rawBody);
   if (!verification.ok) {
     const payload = parseSlashCommand(rawBody);
     console.error("Slack slash command verification failed", {

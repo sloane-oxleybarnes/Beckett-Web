@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getAuthenticatedContext } from "@/lib/server-auth";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { getSlackOAuthWorkerUrl, getSlackRedirectOrigin } from "@/lib/slack-oauth";
 import { linkSlackUser, saveSlackInstallation } from "@/lib/slack-installation";
@@ -17,9 +17,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/slack/installed?error=auth", req.url));
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (state.purpose === "connect" && (!session || session.user.id !== state.userId)) {
+  const { user } = await getAuthenticatedContext();
+  if (state.purpose === "connect" && (!user || user.id !== state.userId)) {
     return NextResponse.redirect(new URL("/auth/login?next=/dashboard/settings", req.url));
   }
 
@@ -49,18 +48,18 @@ export async function GET(req: NextRequest) {
   await saveSlackInstallation({
     teamId: token.team.id,
     enterpriseId: token.enterprise?.id,
-    installerUserId: session?.user.id || null,
+    installerUserId: user?.id || null,
     botAccessToken: token.access_token,
     botRefreshToken: token.refresh_token,
     expiresIn: token.expires_in,
     botScopes: scopes(token.scope),
   });
 
-  if (session?.user.id && token.authed_user?.id) {
-    await linkSlackUser({ teamId: token.team.id, slackUserId: token.authed_user.id, beckettUserId: session.user.id });
+  if (user?.id && token.authed_user?.id) {
+    await linkSlackUser({ teamId: token.team.id, slackUserId: token.authed_user.id, beckettUserId: user.id });
     await trackBetaEvent({
-      userId: session.user.id,
-      email: session.user.email,
+      userId: user.id,
+      email: user.email,
       eventName: "slack_connected",
       source: "web_app",
       metadata: { teamId: token.team.id },

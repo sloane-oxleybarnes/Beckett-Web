@@ -1,5 +1,5 @@
-import { createHmac, timingSafeEqual } from "crypto";
-import { NextRequest, NextResponse } from "next/server";
+import { createHmac } from "crypto";
+import { NextResponse } from "next/server";
 import { callAnthropic } from "@/lib/anthropic";
 import { AiUsageLimitError } from "@/lib/ai-usage";
 import { trackBetaEvent } from "@/lib/beta-events";
@@ -113,9 +113,7 @@ export type SlackConnectedUser = {
   slackUserId: string;
 };
 
-type SlackVerificationResult =
-  | { ok: true }
-  | { ok: false; status: number; message: string };
+export { verifySlackRequest } from "@/lib/slack-verification";
 
 type VercelRequestContext = {
   get?: () =>
@@ -252,41 +250,6 @@ async function noteSlackContextValidation(userId: string, failureReason: SlackCo
     })
     .eq("user_id", userId)
     .eq("provider", "slack");
-}
-
-function safeCompare(value: string, expected: string) {
-  const valueBuffer = Buffer.from(value, "utf8");
-  const expectedBuffer = Buffer.from(expected, "utf8");
-  return valueBuffer.length === expectedBuffer.length && timingSafeEqual(valueBuffer, expectedBuffer);
-}
-
-export function verifySlackRequest(req: NextRequest, rawBody: string): SlackVerificationResult {
-  const signingSecret = process.env.SLACK_SIGNING_SECRET?.trim();
-  if (!signingSecret) {
-    return { ok: false, status: 500, message: "Slack signing secret is not configured." };
-  }
-
-  const timestamp = req.headers.get("x-slack-request-timestamp");
-  const signature = req.headers.get("x-slack-signature");
-  const timestampNumber = Number(timestamp);
-
-  if (!timestamp || !signature || !Number.isFinite(timestampNumber)) {
-    return { ok: false, status: 401, message: "Missing Slack signature." };
-  }
-
-  const ageInSeconds = Math.abs(Date.now() / 1000 - timestampNumber);
-  if (ageInSeconds > 60 * 5) {
-    return { ok: false, status: 401, message: "Slack request is too old." };
-  }
-
-  const base = `v0:${timestamp}:${rawBody}`;
-  const expectedSignature = `v0=${createHmac("sha256", signingSecret).update(base).digest("hex")}`;
-
-  if (!safeCompare(signature, expectedSignature)) {
-    return { ok: false, status: 401, message: "Invalid Slack signature." };
-  }
-
-  return { ok: true };
 }
 
 function buildSlackMessagePayload(text: string, options: SlackMessageOptions = {}) {
