@@ -51,7 +51,7 @@ const walkthroughSteps: WalkthroughStep[] = [
     eyebrow: "Connections",
     title: "Connect the tools Beckett can coach in.",
     body:
-      "Beckett currently integrates with Chrome extension, Gmail, and Slack. Connect all of these features to use Beckett in all of your work settings.",
+      "Choose and manage native Gmail™, Calendar, Slack, Outlook, Microsoft Calendar, and Chrome connections from Your Apps.",
     target: '[data-tour="beta-setup"]',
     slackConnect: true,
   },
@@ -66,7 +66,7 @@ const walkthroughSteps: WalkthroughStep[] = [
     eyebrow: "Settings",
     title: "You stay in control.",
     body:
-      "Settings is where account details, connected tools, coaching preferences, and deletion requests live. Nothing here is locked away from you.",
+      "Settings is where account details, coaching preferences, diagnostics, and deletion requests live. Connections are managed from Your Apps.",
     target: '[data-tour="nav-settings"]',
   },
 ];

@@ -37,6 +37,11 @@ export type SelectedGmailThread = {
   selectedMessageId: string;
 };
 
+export type GmailCounterpart = {
+  email: string;
+  name: string;
+};
+
 function decodeBase64Url(value: string) {
   return Buffer.from(value.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
 }
@@ -91,21 +96,40 @@ function emailsFromAddressList(value: string) {
   );
 }
 
-export function gmailParticipantEmails(thread: SelectedGmailThread, userEmail?: string | null) {
+function displayNameFromAddress(value: string, email: string) {
+  const beforeAddress = value.includes("<") ? value.slice(0, value.indexOf("<")) : "";
+  const cleaned = beforeAddress.trim().replace(/^['"]|['"]$/g, "").slice(0, 120);
+  return cleaned || email;
+}
+
+function namedAddresses(value: string) {
+  const entries = value.split(/,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/);
+  return entries.flatMap((entry) => {
+    const email = emailFromAddress(entry);
+    return email ? [{ email, name: displayNameFromAddress(entry, email) }] : [];
+  });
+}
+
+export function gmailCounterparts(thread: SelectedGmailThread, userEmail?: string | null) {
   const currentUser = userEmail?.trim().toLowerCase() || "";
-  const seen = new Set<string>();
-  const emails: string[] = [];
+  const counterparts = new Map<string, GmailCounterpart>();
 
   for (const message of thread.messages) {
-    for (const email of [message.fromEmail, ...emailsFromAddressList(message.to)]) {
-      const normalized = email.trim().toLowerCase();
-      if (!normalized || normalized === currentUser || seen.has(normalized)) continue;
-      seen.add(normalized);
-      emails.push(normalized);
+    for (const participant of [
+      ...(message.fromEmail ? [{ email: message.fromEmail, name: displayNameFromAddress(message.from, message.fromEmail) }] : []),
+      ...namedAddresses(message.to),
+    ]) {
+      if (!participant.email || participant.email === currentUser) continue;
+      const existing = counterparts.get(participant.email);
+      if (!existing || existing.name === existing.email) counterparts.set(participant.email, participant);
     }
   }
 
-  return emails;
+  return Array.from(counterparts.values());
+}
+
+export function gmailParticipantEmails(thread: SelectedGmailThread, userEmail?: string | null) {
+  return gmailCounterparts(thread, userEmail).map((counterpart) => counterpart.email);
 }
 
 export function gmailPrimaryCounterpartEmail(thread: SelectedGmailThread, userEmail?: string | null) {

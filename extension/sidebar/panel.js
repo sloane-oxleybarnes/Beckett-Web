@@ -61,11 +61,11 @@ async function setEmptyStateForCurrentTab() {
     );
     const url = tab?.url || '';
     const msgEl = $('emptyStateMsg');
-    if (url.includes('mail.google.com')) {
-      msgEl.innerHTML = 'Open an email to get started.';
+    if (url.includes('app.slack.com')) {
+      msgEl.innerHTML = 'Open a conversation to get started.';
       if (state.beckettToken) $('analyzeBtn').style.display = '';
     } else {
-      msgEl.innerHTML = 'Beckett works on Gmail.<br>Navigate there to get started.';
+      msgEl.innerHTML = 'This page is not supported by the Chrome extension.<br>Use the native Gmail add-on for email.';
       // Hide the analyze button entirely on non-supported pages
       $('analyzeBtn').style.display = 'none';
     }
@@ -180,8 +180,19 @@ async function connectBeckettFromPanel() {
 
 $('connectBeckettBtn').onclick = connectBeckettFromPanel;
 
-$('gmailReconnectBtn').onclick = () => {
-  chrome.runtime.sendMessage({ type: 'OPEN_SETTINGS' });
+$('slackReconnectBtn').onclick = async () => {
+  const btn = $('slackReconnectBtn');
+  btn.disabled = true;
+  btn.textContent = 'Connecting...';
+  const res = await msg('CONNECT_SLACK');
+  btn.disabled = false;
+  btn.textContent = 'Reconnect Slack';
+  if (res.error) {
+    showError($('errorBox'), `Slack reconnect failed: ${res.error}`);
+    return;
+  }
+  $('errorBox').hidden = true;
+  btn.hidden = true;
 };
 
 // ── Voice calibration badge ───────────────────────────────────
@@ -262,7 +273,7 @@ function clearResults() {
   $('askAnswerCard').hidden = true;
   $('contactStrip').hidden = true;
   $('analysisMeta').hidden = true;
-  $('gmailReconnectCard').hidden = true;
+  $('slackReconnectBtn').hidden = true;
 }
 
 function showResults(data, isSafePerson) {
@@ -295,16 +306,13 @@ function showResults(data, isSafePerson) {
 function renderAnalysisMetadata(metadata) {
   const card = $('analysisMeta');
   const text = $('analysisMetaText');
-  const gmailReconnectCard = $('gmailReconnectCard');
+  const reconnect = $('slackReconnectBtn');
   if (!metadata) {
     card.hidden = true;
-    gmailReconnectCard.hidden = true;
     return;
   }
 
-  const sourceLabel = metadata.source === 'gmail_api'
-      ? 'Gmail full-thread API'
-      : 'Page context';
+  const sourceLabel = metadata.source === 'slack_dom' ? 'Slack page context' : 'Page context';
   const count = Number(metadata.threadCount || 0);
   const details = [
     sourceLabel,
@@ -312,59 +320,15 @@ function renderAnalysisMetadata(metadata) {
     metadata.channelName ? `#${metadata.channelName}` : metadata.channelType || null,
   ].filter(Boolean);
 
-  if (metadata.platform === 'gmail' && metadata.source !== 'gmail_api' && metadata.gmailEnrichmentReason) {
-    details.push(gmailReasonLabel(metadata.gmailEnrichmentReason));
+  if (metadata.platform === 'slack' && metadata.slackConnected === false) {
+    details.push('Slack not connected locally');
+    reconnect.hidden = false;
+  } else {
+    reconnect.hidden = true;
   }
-
-  renderGmailReconnectPrompt(metadata);
 
   text.textContent = details.join(' · ');
   card.hidden = false;
-}
-
-function renderGmailReconnectPrompt(metadata) {
-  const card = $('gmailReconnectCard');
-  const title = $('gmailReconnectTitle');
-  const text = $('gmailReconnectText');
-  const reason = metadata?.gmailEnrichmentReason;
-
-  if (metadata?.platform !== 'gmail' || metadata.source === 'gmail_api' || !reason) {
-    card.hidden = true;
-    return;
-  }
-
-  if (reason === 'google_not_connected') {
-    title.textContent = 'Connect Gmail for full threads';
-    text.textContent = 'Beckett can analyze the visible message now, but it needs your Gmail connection in the web app to read the full thread.';
-    card.hidden = false;
-    return;
-  }
-
-  if (reason === 'gmail_token_expired') {
-    title.textContent = 'Reconnect Gmail for full threads';
-    text.textContent = 'Your Gmail connection needs to be refreshed before Beckett can include earlier messages in this thread.';
-    card.hidden = false;
-    return;
-  }
-
-  if (reason === 'beckett_not_connected') {
-    title.textContent = 'Log in to Beckett first';
-    text.textContent = 'Connect your Beckett account, then reconnect Gmail from Settings so full-thread analysis can work.';
-    card.hidden = false;
-    return;
-  }
-
-  card.hidden = true;
-}
-
-function gmailReasonLabel(reason) {
-  if (reason === 'google_not_connected') return 'Gmail connection unavailable';
-  if (reason === 'gmail_token_expired') return 'Reconnect Gmail for full threads';
-  if (reason === 'thread_not_found') return 'Full thread not found';
-  if (reason === 'beckett_not_connected') return 'Beckett login unavailable';
-  if (reason?.startsWith('gmail_api_error')) return `Gmail API error (${reason})`;
-  if (reason?.startsWith('gmail_backend_error')) return `Gmail backend error (${reason})`;
-  return `Full thread unavailable (${reason || 'unknown'})`;
 }
 
 // ── Contacts lookup ───────────────────────────────────────────
@@ -374,7 +338,7 @@ async function lookupContact() {
   const identifier = state.currentSenderEmail || state.currentSender;
   if (!identifier) return;
 
-  const platform = 'email';
+  const platform = state.currentSenderEmail ? 'email' : 'slack';
   const strip = $('contactStrip');
   const label = $('contactStripLabel');
   const addBtn = $('contactStripAdd');
@@ -422,7 +386,8 @@ async function addContact(name, platform, identifier) {
 
   try {
     const body = { name };
-    body.email = identifier;
+    if (platform === 'email') body.email = identifier;
+    else if (platform === 'slack') body.slack_handle = identifier;
 
     const res = await fetch(`${BECKETT_API}/contacts`, {
       method: 'POST',
@@ -701,6 +666,10 @@ chrome.runtime.onMessage.addListener((message) => {
         $('analyzeBtn').style.display = '';
       } else {
         renderAuthState();
+      }
+      // Auto-analyze on Slack when a new incoming message is detected
+      if (state.beckettToken && message.context?.autoAnalyze && message.context?.platform === 'slack') {
+        $('analyzeBtn').click();
       }
       break;
 

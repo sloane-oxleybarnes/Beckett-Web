@@ -56,7 +56,7 @@ async function getAutomaticallyCompletedMissions(supabase: SupabaseClient, userI
   const completed = new Set<BetaMissionKey>();
   if (profileHasDetails) completed.add("complete_profile");
   if (profile?.extension_connected_at) completed.add("connect_extension");
-  if (providers.has("google")) completed.add("connect_gmail");
+  if (providers.has("google_workspace_addon")) completed.add("connect_gmail");
   if (providers.has("slack")) completed.add("connect_slack");
   if (usage.some((row) => row.source === "extension")) completed.add("analyze_with_extension");
   if (usage.some((row) => row.source === "slack_desktop")) completed.add("try_slack_coaching");
