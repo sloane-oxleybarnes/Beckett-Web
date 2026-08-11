@@ -161,36 +161,52 @@ function SkillModuleCard({
 export default function SkillsPage() {
   const [completedCourseIds, setCompletedCourseIds] = useState<Set<string>>(new Set())
   const [progressCourseIds, setProgressCourseIds] = useState<Set<string>>(new Set())
-  const [sections, setSections] = useState(SECTIONS)
+  const [sections, setSections] = useState<typeof SECTIONS>([])
+  const [catalogLoading, setCatalogLoading] = useState(true)
   const supabase = createClient()
 
   useEffect(() => {
     async function loadCourseStatus() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const [{ data: completions }, { data: progressRows }] = await Promise.all([
-        supabase.from('course_completions').select('course_id').eq('user_id', user.id),
-        supabase.from('course_progress').select('course_id').eq('user_id', user.id),
-      ])
-      if (completions) setCompletedCourseIds(new Set(completions.map((r: { course_id: string }) => r.course_id)))
-      if (progressRows) setProgressCourseIds(new Set(progressRows.map((r: { course_id: string }) => r.course_id)))
-      const catalogRes = await fetch('/api/courses/catalog')
-      if (catalogRes.ok) {
-        const catalogData = await catalogRes.json().catch(() => ({})) as { courses?: CourseCatalogItem[] }
-        if (catalogData.courses?.length) {
-          setSections([
-            {
-              label: 'Professional',
-              description: 'Foundational workplace courses we are building for beta.',
-              cards: catalogData.courses.filter((course) => course.section === 'Professional'),
-            },
-            {
-              label: 'Personal',
-              description: 'A small look at where Beckett will go beyond work later.',
-              cards: catalogData.courses.filter((course) => course.section === 'Personal'),
-            },
-          ].filter((section) => section.cards.length > 0))
+      try {
+        const [catalogRes, { data: { user } }] = await Promise.all([
+          fetch('/api/courses/catalog'),
+          supabase.auth.getUser(),
+        ])
+
+        if (catalogRes.ok) {
+          const catalogData = await catalogRes.json().catch(() => ({})) as { courses?: CourseCatalogItem[] }
+          if (catalogData.courses?.length) {
+            setSections([
+              {
+                label: 'Professional',
+                description: 'Foundational workplace courses we are building for beta.',
+                cards: catalogData.courses.filter((course) => course.section === 'Professional'),
+              },
+              {
+                label: 'Personal',
+                description: 'A small look at where Beckett will go beyond work later.',
+                cards: catalogData.courses.filter((course) => course.section === 'Personal'),
+              },
+            ].filter((section) => section.cards.length > 0))
+          } else {
+            setSections(SECTIONS)
+          }
+        } else {
+          setSections(SECTIONS)
         }
+
+        if (user) {
+          const [{ data: completions }, { data: progressRows }] = await Promise.all([
+            supabase.from('course_completions').select('course_id').eq('user_id', user.id),
+            supabase.from('course_progress').select('course_id').eq('user_id', user.id),
+          ])
+          if (completions) setCompletedCourseIds(new Set(completions.map((r: { course_id: string }) => r.course_id)))
+          if (progressRows) setProgressCourseIds(new Set(progressRows.map((r: { course_id: string }) => r.course_id)))
+        }
+      } catch {
+        setSections(SECTIONS)
+      } finally {
+        setCatalogLoading(false)
       }
     }
     loadCourseStatus()
@@ -206,7 +222,15 @@ export default function SkillsPage() {
         Beckett coaches you through real situations, then gives you space to practice before you try it live.
       </p>
 
-      {sections.map(section => (
+      {catalogLoading && (
+        <div className="grid gap-4" aria-label="Loading skills and courses" aria-busy="true">
+          {[0, 1, 2].map((item) => (
+            <div key={item} className="h-32 animate-pulse rounded-card border border-border bg-white" />
+          ))}
+        </div>
+      )}
+
+      {!catalogLoading && sections.map(section => (
         <section key={section.label} className="mb-10">
           <div className="mb-4">
             <h2 className="text-xs font-medium uppercase tracking-wide text-ink-light">{section.label}</h2>
