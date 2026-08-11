@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { getAuthenticatedContext } from '@/lib/server-auth'
 import { callAnthropic } from '@/lib/anthropic'
-import { AiUsageLimitError, recordAiUsage } from '@/lib/ai-usage'
+import { AiUsageLimitError } from '@/lib/ai-usage'
+import { withAiMetering } from '@/lib/ai-metering'
 import { trackBetaEvent } from '@/lib/beta-events'
 import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
 import * as Sentry from '@sentry/nextjs'
-import {
-  WEB_CREDITS_ENABLED,
-  WebCreditLimitError,
-  assertWebCreditsAvailable,
-  recordSuccessfulWebCredit,
-} from '@/lib/web-credits'
+import { extractJsonObject } from '@/lib/ai-json'
+import { WebCreditLimitError } from '@/lib/web-credits'
 
 const METERED_PRACTICE_ACTIONS = new Set([
   'turn',
@@ -33,21 +30,15 @@ function lengthInstruction(messageCount: number) {
   return 'Keep your response to 1-2 sentences. Be concise and realistic — real conversations don\'t monologue.'
 }
 
-function extractJsonObject(text: string) {
-  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
-  return cleaned.startsWith('{') ? cleaned : cleaned.match(/\{[\s\S]*\}/)?.[0] || cleaned
-}
-
 export async function POST(req: NextRequest) {
   try {
-  const supabase = createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { supabase, user } = await getAuthenticatedContext()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('plan')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
   const plan = profile?.plan || 'free'
@@ -84,28 +75,16 @@ export async function POST(req: NextRequest) {
     messages: { role: 'user' | 'assistant'; content: string }[],
     maxTokens: number
   ) => {
-    if (METERED_PRACTICE_ACTIONS.has(action)) {
-      if (WEB_CREDITS_ENABLED) {
-        await assertWebCreditsAvailable(session.user.id)
-      } else {
-        await recordAiUsage(session.user.id, {
-          source: 'dashboard',
-          action: `practice_${action}`,
-          metadata: { mode: mode || null },
-        })
-      }
-    }
-    const result = await callAnthropic(system, messages, maxTokens)
-    if (WEB_CREDITS_ENABLED && METERED_PRACTICE_ACTIONS.has(action)) {
-      await recordSuccessfulWebCredit(session.user.id, {
-        source: 'dashboard',
-        action: `practice_${action}`,
-        metadata: { mode: mode || null },
-      })
-    }
+    const result = await withAiMetering({
+      userId: user.id,
+      source: 'dashboard',
+      action: `practice_${action}`,
+      metadata: { mode: mode || null },
+      metered: METERED_PRACTICE_ACTIONS.has(action),
+    }, () => callAnthropic(system, messages, maxTokens))
     await trackBetaEvent({
-      userId: session.user.id,
-      email: session.user.email,
+      userId: user.id,
+      email: user.email,
       eventName: 'analysis_completed',
       source: 'practice',
       metadata: { action: `practice_${action}`, mode: mode || null },

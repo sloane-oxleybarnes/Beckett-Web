@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { callAnthropic, type AnthropicMessage } from '@/lib/anthropic'
-import { AiUsageLimitError, recordAiUsage } from '@/lib/ai-usage'
+import { AiUsageLimitError, getAiUsageSummary } from '@/lib/ai-usage'
+import { withAiMetering } from '@/lib/ai-metering'
 import { getExtensionProfile } from '@/lib/extension-auth'
 import { trackBetaEvent } from '@/lib/beta-events'
 import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
+import { parseJsonObject } from '@/lib/ai-json'
 import {
   WEB_CREDITS_ENABLED,
   WebCreditLimitError,
-  assertWebCreditsAvailable,
   getWebCreditSummary,
-  recordSuccessfulWebCredit,
 } from '@/lib/web-credits'
 
 type ExtensionAiAction =
@@ -36,17 +36,6 @@ function clampMaxTokens(value?: number) {
   return Math.max(100, Math.min(Math.floor(value), 1800))
 }
 
-function extractJson(text: string) {
-  const trimmed = text.trim()
-  try {
-    return JSON.parse(trimmed)
-  } catch {
-    const match = trimmed.match(/\{[\s\S]*\}/)
-    if (!match) throw new Error('AI response was not valid JSON.')
-    return JSON.parse(match[0])
-  }
-}
-
 export async function POST(req: NextRequest) {
   const profile = await getExtensionProfile(req)
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -70,33 +59,22 @@ export async function POST(req: NextRequest) {
 
     if (!messages.length) return NextResponse.json({ error: 'prompt or messages required' }, { status: 400 })
 
-    const usage = WEB_CREDITS_ENABLED
-      ? await assertWebCreditsAvailable(profile.id)
-      : await recordAiUsage(profile.id, {
-          source: 'extension',
-          action,
-          metadata: {
-            responseFormat,
-            ...metadata,
-          },
-        })
-
     const systemWithBoundaries = system
       ? system.includes('Relationship-at-work guidance')
         ? system
         : `${system}\n\n${beckettBoundaryPrompt()}`
       : beckettBoundaryPrompt()
-    const text = await callAnthropic(systemWithBoundaries, messages, clampMaxTokens(body.maxTokens))
+    const text = await withAiMetering({
+      userId: profile.id,
+      source: 'extension',
+      action,
+      metadata: { responseFormat, ...metadata },
+    }, () => callAnthropic(systemWithBoundaries, messages, clampMaxTokens(body.maxTokens)))
     const cleaned = text.trim()
 
-    if (WEB_CREDITS_ENABLED) {
-      await recordSuccessfulWebCredit(profile.id, {
-        source: 'extension',
-        action,
-        metadata: { responseFormat },
-      })
-    }
-    const currentUsage = WEB_CREDITS_ENABLED ? await getWebCreditSummary(profile.id) : usage
+    const currentUsage = WEB_CREDITS_ENABLED
+      ? await getWebCreditSummary(profile.id)
+      : await getAiUsageSummary(profile.id)
 
     await trackBetaEvent({
       userId: profile.id,
@@ -112,7 +90,7 @@ export async function POST(req: NextRequest) {
     })
 
     if (responseFormat === 'json') {
-      return NextResponse.json({ result: extractJson(cleaned), usage: currentUsage })
+      return NextResponse.json({ result: parseJsonObject(cleaned), usage: currentUsage })
     }
 
     return NextResponse.json({ text: cleaned, usage: currentUsage })
