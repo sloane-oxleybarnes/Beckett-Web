@@ -10,7 +10,7 @@ This is the Slack-only hackathon path for using Beckett inside Slack Desktop. It
 - Signed Slack request verification with `SLACK_SIGNING_SECRET`
 - Beckett account matching through the existing `user_integrations` Slack connection
 - Minimal private acknowledgements in Slack command/message surfaces, with the real coaching routed into Beckett's private Slack assistant conversation when available
-- Active context plus relevant live Slack search across authorized public channels, private channels, DMs, and group DMs after the user reconnects with the latest scopes
+- User-selected content and the exact private Beckett thread, retrieved only for the active request and discarded after the response
 - Tool-style agent layer for `analyze_slack_thread`, `draft_slack_reply`, `coach_for_clarity`, `prep_difficult_conversation`, `summarize_relationship_context`, and `explain_tone_without_over_inference`
 - Sidebar-only guided flows for `/beckett respond`, `/beckett rewrite`, `/beckett decode`, `/beckett prep`, and `/beckett practice`; no pop-up modal intake in the hackathon demo
 - Slack Messages native suggested prompts for Beckett starter actions
@@ -18,24 +18,12 @@ This is the Slack-only hackathon path for using Beckett inside Slack Desktop. It
 
 ## Staging Setup
 
-1. Create a separate Slack app named `Beckett Staging`.
-2. Use the manifest in `docs/slack-app-manifest-staging.yaml`.
-3. Use the public production URL for Slack app callbacks so Slack can reach Beckett without Vercel preview protection:
-   - `https://www.meetbeckett.co`
-4. In Vercel Preview environment variables for the `staging` branch, add:
-   - `SLACK_SIGNING_SECRET`
-   - `SLACK_OAUTH_WORKER_URL`
-5. Deploy a separate staging copy of `extension/workers/slack-oauth.js` with the staging Slack app's `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET`.
-6. In Slack app settings, confirm these URLs:
-   - Slash command request URL: `https://www.meetbeckett.co/api/slack/commands`
-   - Interactivity request URL: `https://www.meetbeckett.co/api/slack/interactions`
-   - Event subscriptions request URL: `https://www.meetbeckett.co/api/slack/events`
-   - OAuth redirect URL: `https://www.meetbeckett.co/api/slack/callback`
-7. In Slack app settings, enable **Agents** and App Home's **Home tab**. Use the Agent messaging experience when prompted.
-8. Install or reinstall the Slack app into the test workspace.
-9. Sign into Beckett staging and connect Slack from Settings so the Slack user ID maps to a Beckett user.
-10. After changing scopes, reinstall/reconnect Slack from Beckett Settings so the bot receives `assistant:write`, `im:write`, and `im:history`, and the user receives `groups:history`, `mpim:history`, the RTS `search:read.*` scopes, and legacy `search:read` for the sandbox fallback.
-11. Run the latest Supabase migration so Slack Home can store privacy-safe coaching history metadata.
+Use the exact sequence in `docs/slack-staging-deployment.md`. The staging manifest is already pinned to:
+
+- `https://beckett-git-staging-sloane-s-projects1.vercel.app`
+- bot-only scopes: `commands`, `chat:write`, `assistant:write`, `im:history`, `im:write`, and `users:read`
+
+The staging release requires the two Slack migrations, a separate staging OAuth Worker, all required Vercel secrets, and a reinstall of the staging Slack app. Account linking is optional; unlinked Slack users receive the guest allowance, while linked users share the credits from their Beckett subscription.
 
 ## Slack-Only Hackathon Test Plan
 
@@ -130,7 +118,7 @@ Expected:
    - Expected: Beckett asks who you are talking to if missing.
    - Expected: Beckett asks the desired outcome.
    - Expected: Beckett asks likely pushback/concerns.
-   - Expected: Beckett searches relevant Slack history for possible evidence and asks you to confirm by number.
+   - Expected: Beckett uses only the content supplied in the private Beckett thread and asks for any missing evidence one focused question at a time.
 3. Confirm evidence.
    - Expected: Output includes conversation goal, talking points, opening sentence, likely pushback, practice prompt, and follow-up draft.
 
@@ -152,7 +140,7 @@ Expected:
 2. Ask: `Help me prepare to ask my manager for a raise`.
    - Expected: Beckett behaves like a coach, not a single-wall-of-text chatbot.
    - Expected: Beckett can ask focused follow-up questions one at a time when more context is needed.
-   - Expected: Beckett looks for relevant Slack history before asking the user to manually provide evidence.
+   - Expected: Beckett rehydrates only the exact private Beckett thread and asks the user for any additional evidence it needs.
 3. Confirm evidence behavior:
    - Expected: Beckett says it found possible supporting evidence from Slack context, not guaranteed accomplishments.
    - Expected: Beckett asks the user to confirm what to include.
@@ -160,24 +148,22 @@ Expected:
 4. Continue the prep flow.
    - Expected: Beckett produces an opening line, talking points, likely pushback, and follow-up draft.
 
-### 6. Broader Slack Context
+### 6. Zero-Copy Slack Context
 
-1. Test from a channel related to the manager or project.
-   - Expected: Beckett uses active context plus relevant prior Slack history when available.
-2. Test from an unrelated channel.
-   - Expected: Beckett can still search relevant authorized Slack history based on the user's request.
-3. Test a person/topic with little or no history.
-   - Expected: Beckett says it does not have enough prior context and coaches from the prompt instead of inventing evidence.
-4. Test after reconnecting Slack with the latest scopes.
-   - Expected: Beckett can search authorized public channels, private channels, DMs, and group DMs.
-5. Test with missing/denied scopes.
-   - Expected: Beckett falls back gracefully and says broader Slack context was unavailable.
+1. Start from a message shortcut.
+   - Expected: Beckett uses the selected message transiently and does not copy it into Beckett storage.
+2. Continue in the private Beckett DM thread.
+   - Expected: Beckett re-reads that exact Slack-owned thread for the active request and then discards the reconstructed transcript.
+3. Ask about a person or project that is not present in the selected message or Beckett thread.
+   - Expected: Beckett asks for context instead of searching the workspace or inventing evidence.
+4. Inspect the database after the flows.
+   - Expected: only opaque IDs, flow state, installation credentials, and content-free credit/usage metadata exist; no prompts, messages, responses, titles, or summaries are stored.
 
 ### 7. Privacy + Guardrail Checks
 
 1. Confirm Beckett responses are private/ephemeral by default.
 2. Confirm Beckett does not post into the channel automatically.
-3. Confirm Beckett does not store raw Slack search results or full Slack history by default.
+3. Confirm Beckett does not store Slack messages, prompts, generated responses, thread transcripts, content-derived titles, or summaries.
 4. Confirm Beckett does not infer diagnosis or hidden intent.
 5. Confirm Beckett never says someone reacted, agreed, felt comfortable, was annoyed, or pushed back unless visible in retrieved Slack context.
 6. Confirm no Chrome extension, Gmail, courses, website dashboard, or beta-signup features are shown in the hackathon demo.
@@ -203,7 +189,7 @@ Expected:
 5. The user runs `/beckett prep I need to talk to my manager about workload in my 1:1`.
 6. Beckett starts a private sidebar walkthrough.
 7. Beckett asks one focused question at a time.
-8. Beckett uses selected/current Slack context first and uses Real-Time Search (`assistant.search.context`) as an enhancer when Slack enables it for the sandbox/app. If RTS is unavailable, request Slack to enable Real-Time Search API / `assistant.search.context` for the hackathon sandbox and keep the demo on selected/current conversation context.
+8. Beckett stays within the selected message and exact private Slack thread. If more evidence is needed, the user supplies it in Slack.
 
 Closing line: Beckett helps neurodivergent workers communicate clearly inside the tools where work already happens.
 
@@ -213,4 +199,4 @@ Closing line: Beckett helps neurodivergent workers communicate clearly inside th
 - Keep the hackathon submission Slack-only. Do not include Chrome extension, Gmail, courses, beta signup, or web dashboard flows in the demo.
 - Slack requires command and shortcut requests to be acknowledged quickly. These endpoints keep responses concise, but a future queue/background job would make longer AI responses more resilient.
 - Slack Agent/Split View features require the **Agents** feature to be enabled in Slack app settings and may require reinstalling the app after the manifest adds agent scopes/events.
-- Broader Slack history depends on Real-Time Search availability. If `assistant.search.info` or `assistant.search.context` returns `feature_not_enabled`, the app should still answer from selected/current context and should not claim RTS as working in the submission.
+- The zero-copy launch intentionally excludes Real-Time Search, workspace-wide history scopes, and user OAuth tokens. Requesting broader access later requires a new privacy and scope review, Slack re-review, and customer reauthorization.

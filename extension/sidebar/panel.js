@@ -64,11 +64,8 @@ async function setEmptyStateForCurrentTab() {
     if (url.includes('mail.google.com')) {
       msgEl.innerHTML = 'Open an email to get started.';
       if (state.beckettToken) $('analyzeBtn').style.display = '';
-    } else if (url.includes('app.slack.com')) {
-      msgEl.innerHTML = 'Open a conversation to get started.';
-      if (state.beckettToken) $('analyzeBtn').style.display = '';
     } else {
-      msgEl.innerHTML = 'Beckett works on Gmail and Slack.<br>Navigate to one of those to get started.';
+      msgEl.innerHTML = 'Beckett works on Gmail.<br>Navigate there to get started.';
       // Hide the analyze button entirely on non-supported pages
       $('analyzeBtn').style.display = 'none';
     }
@@ -183,21 +180,6 @@ async function connectBeckettFromPanel() {
 
 $('connectBeckettBtn').onclick = connectBeckettFromPanel;
 
-$('slackReconnectBtn').onclick = async () => {
-  const btn = $('slackReconnectBtn');
-  btn.disabled = true;
-  btn.textContent = 'Connecting...';
-  const res = await msg('CONNECT_SLACK');
-  btn.disabled = false;
-  btn.textContent = 'Reconnect Slack';
-  if (res.error) {
-    showError($('errorBox'), `Slack reconnect failed: ${res.error}`);
-    return;
-  }
-  $('errorBox').hidden = true;
-  btn.hidden = true;
-};
-
 $('gmailReconnectBtn').onclick = () => {
   chrome.runtime.sendMessage({ type: 'OPEN_SETTINGS' });
 };
@@ -280,7 +262,6 @@ function clearResults() {
   $('askAnswerCard').hidden = true;
   $('contactStrip').hidden = true;
   $('analysisMeta').hidden = true;
-  $('slackReconnectBtn').hidden = true;
   $('gmailReconnectCard').hidden = true;
 }
 
@@ -314,7 +295,6 @@ function showResults(data, isSafePerson) {
 function renderAnalysisMetadata(metadata) {
   const card = $('analysisMeta');
   const text = $('analysisMetaText');
-  const reconnect = $('slackReconnectBtn');
   const gmailReconnectCard = $('gmailReconnectCard');
   if (!metadata) {
     card.hidden = true;
@@ -322,9 +302,7 @@ function renderAnalysisMetadata(metadata) {
     return;
   }
 
-  const sourceLabel = metadata.source === 'slack_dom'
-    ? 'Slack page context'
-    : metadata.source === 'gmail_api'
+  const sourceLabel = metadata.source === 'gmail_api'
       ? 'Gmail full-thread API'
       : 'Page context';
   const count = Number(metadata.threadCount || 0);
@@ -339,13 +317,6 @@ function renderAnalysisMetadata(metadata) {
   }
 
   renderGmailReconnectPrompt(metadata);
-
-  if (metadata.platform === 'slack' && metadata.slackConnected === false) {
-    details.push('Slack not connected locally');
-    reconnect.hidden = false;
-  } else {
-    reconnect.hidden = true;
-  }
 
   text.textContent = details.join(' · ');
   card.hidden = false;
@@ -403,7 +374,7 @@ async function lookupContact() {
   const identifier = state.currentSenderEmail || state.currentSender;
   if (!identifier) return;
 
-  const platform = state.currentSenderEmail ? 'email' : 'slack';
+  const platform = 'email';
   const strip = $('contactStrip');
   const label = $('contactStripLabel');
   const addBtn = $('contactStripAdd');
@@ -451,8 +422,7 @@ async function addContact(name, platform, identifier) {
 
   try {
     const body = { name };
-    if (platform === 'email') body.email = identifier;
-    else if (platform === 'slack') body.slack_handle = identifier;
+    body.email = identifier;
 
     const res = await fetch(`${BECKETT_API}/contacts`, {
       method: 'POST',
@@ -731,10 +701,6 @@ chrome.runtime.onMessage.addListener((message) => {
         $('analyzeBtn').style.display = '';
       } else {
         renderAuthState();
-      }
-      // Auto-analyze on Slack when a new incoming message is detected
-      if (state.beckettToken && message.context?.autoAnalyze && message.context?.platform === 'slack') {
-        $('analyzeBtn').click();
       }
       break;
 

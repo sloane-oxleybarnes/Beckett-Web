@@ -1,6 +1,6 @@
 import { normalizePublicUrl } from "@/lib/deployment-env";
 
-const DEFAULT_SLACK_OAUTH_WORKER_URL = "https://lumen-slack.sloane-oxleyhase.workers.dev";
+const DEFAULT_SLACK_OAUTH_WORKER_URL = "https://beckett-slack.sloane-oxleyhase.workers.dev";
 const DEFAULT_SLACK_REDIRECT_ORIGIN = "https://www.meetbeckett.co";
 
 export function getSlackOAuthWorkerUrl() {

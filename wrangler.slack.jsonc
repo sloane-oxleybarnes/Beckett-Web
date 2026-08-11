@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "beckett-slack",
+  "main": "workers/slack-oauth.js",
+  "compatibility_date": "2026-08-11",
+  "workers_dev": true,
+  "secrets": {
+    "required": [
+      "SLACK_CLIENT_ID",
+      "SLACK_CLIENT_SECRET"
+    ]
+  },
+  "vars": {
+    "ALLOWED_ORIGINS": "https://meetbeckett.co,https://www.meetbeckett.co",
+    "SLACK_REDIRECT_URIS": "https://www.meetbeckett.co/api/slack/callback"
+  },
+  "env": {
+    "staging": {
+      "name": "beckett-slack-oauth-staging",
+      "secrets": {
+        "required": [
+          "SLACK_CLIENT_ID",
+          "SLACK_CLIENT_SECRET"
+        ]
+      },
+      "vars": {
+        "ALLOWED_ORIGINS": "https://beckett-git-staging-sloane-s-projects1.vercel.app",
+        "SLACK_REDIRECT_URIS": "https://beckett-git-staging-sloane-s-projects1.vercel.app/api/slack/callback"
+      }
+    },
+    "production": {
+      "name": "beckett-slack",
+      "secrets": {
+        "required": [
+          "SLACK_CLIENT_ID",
+          "SLACK_CLIENT_SECRET"
+        ]
+      },
+      "vars": {
+        "ALLOWED_ORIGINS": "https://meetbeckett.co,https://www.meetbeckett.co",
+        "SLACK_REDIRECT_URIS": "https://www.meetbeckett.co/api/slack/callback"
+      }
+    }
+  }
+}

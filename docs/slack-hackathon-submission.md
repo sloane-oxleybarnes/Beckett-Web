@@ -13,7 +13,7 @@ Beckett for Slack prepares neurodivergent workers for the conversations that mat
 
 Beckett for Slack is a private workplace communication coach built for Slack. It helps neurodivergent professionals decode confusing Slack threads, avoid over-reading ambiguous tone, draft replies that match their intent, and prepare for difficult conversations before they happen.
 
-Instead of acting like a generic chatbot or writing assistant, Beckett guides the user through conversation strategy: what is visible, what is uncertain, what the next step should be, and how to say it clearly. Responses are private and ephemeral by default. Beckett can search relevant Slack history when the user asks for coaching, but it does not store full Slack history or raw Slack search results by default.
+Instead of acting like a generic chatbot or writing assistant, Beckett guides the user through conversation strategy: what is visible, what is uncertain, what the next step should be, and how to say it clearly. Responses are private by default. In the zero-copy version, Beckett processes a selected message or the exact private Beckett thread only for the active request, posts the result back to Slack, and does not persist the conversation content.
 
 This hackathon submission is Slack-only. It does not rely on Beckett's Chrome extension, Gmail integration, courses, website dashboard, or beta signup flow.
 
@@ -26,8 +26,8 @@ This hackathon submission is Slack-only. It does not rely on Beckett's Chrome ex
 5. The user runs `/beckett prep I need to talk to my manager about workload in my 1:1`.
 6. Beckett starts a private sidebar walkthrough instead of opening a modal.
 7. Beckett asks one focused setup question at a time.
-8. Beckett searches relevant Slack history for possible evidence instead of making the user remember and paste everything manually.
-9. Beckett asks the user to confirm what evidence to include, then builds talking points, an opening line, likely pushback, a practice prompt, and a follow-up draft.
+8. Beckett rehydrates the exact private Slack thread and asks for any missing evidence one focused question at a time.
+9. Beckett builds talking points, an opening line, likely pushback, a practice prompt, and a follow-up draft from the context the user supplied in Slack.
 
 ## Demo Workspace Threads
 
@@ -65,15 +65,13 @@ User asks Beckett: Help me respond without sounding defensive.
 flowchart LR
   A["Slack message shortcut or /beckett command"] --> B["Next.js Slack endpoint"]
   B --> C["Slack request signature verification"]
-  C --> D["Beckett account + Slack integration lookup"]
-  D --> H["Active Slack context"]
-  D --> E["Live Slack context search"]
-  H --> E
-  E --> F["Slack agent tool selector"]
+  C --> D["Encrypted workspace installation lookup"]
+  D --> H["Selected message or exact Beckett DM thread"]
+  H --> F["Slack agent tool selector"]
   F --> G["Anthropic coaching call with Beckett guardrails"]
   G --> I["Slack Agent/Split View coach panel"]
-  B --> J["Guided sidebar session state"]
-  J --> E
+  B --> J["Content-free flow and credit metadata"]
+  J --> H
   G --> K["Private ephemeral acknowledgement"]
 ```
 
@@ -81,10 +79,11 @@ flowchart LR
 
 - Beckett responds privately by default.
 - Beckett does not post into the channel unless the user chooses to copy or send wording.
-- Beckett does not store full Slack history or raw Slack search results by default.
+- Beckett does not store Slack messages, prompts, generated responses, transcripts, or content-derived titles and summaries.
+- Slack remains the transcript system of record; Beckett retains only encrypted installation credentials, opaque routing/flow state, optional account links, and content-free credit and usage events.
 - Beckett separates visible evidence from possible interpretation.
 - Beckett does not infer diagnosis or hidden intent.
-- Guided sidebar questions collect only the context Beckett needs for the requested coaching session.
+- Guided sidebar answers remain in the Slack-owned thread and are re-read transiently only when the user continues that flow.
 
 ## Demo Script
 
@@ -98,8 +97,8 @@ Demo:
 5. Run `/beckett prep I need to talk to my manager about workload in my 1:1`.
 6. Show Beckett starting the prep in the Slack Agent/Split View panel.
 7. Show Beckett asking one focused question at a time.
-8. Show Beckett pulling possible evidence from relevant Slack history.
-9. Show the user confirming what to include.
+8. Show Beckett using the exact private thread and asking for one missing piece of evidence.
+9. Show the user supplying that evidence in Slack.
 10. Show talking points, opening line, likely pushback, practice prompt, and follow-up draft.
 
 Close: "Beckett for Slack helps neurodivergent workers communicate clearly inside the tool where work already happens."
@@ -112,13 +111,13 @@ Close: "Beckett for Slack helps neurodivergent workers communicate clearly insid
 - `/beckett draft`, `/beckett clarity`, `/beckett boundary`, `/beckett followup`, and `/beckett tone` return a clean unsupported/help response.
 - `Beckett - Decode` message shortcut returns a private response that separates visible facts from possible interpretation.
 - `Beckett - Respond` message shortcut returns private draft options for the selected message.
-- Unlinked Slack users can use lightweight decode/respond/rewrite when they paste text or use Beckett shortcuts on selected message text.
-- Unlinked Slack users are prompted to connect before prep/practice, saved history, contact context, or broader Slack history.
+- Unlinked Slack users receive five successful coaching responses per UTC day across Decode, Respond, Rewrite, Prep, and Practice.
+- Linked Slack users share their Beckett subscription's daily credit allowance; linking remains optional.
 - `/beckett prep I need to ask my manager for a raise` starts a private guided sidebar flow without opening a modal.
 - Prep output appears privately in Slack.
 - Sidebar assistant flow asks focused follow-up questions instead of producing only one long wall of text when more context is needed.
-- Beckett searches authorized Slack history for possible evidence before asking the user to provide evidence manually.
-- Beckett asks the user to confirm what evidence to include.
+- Beckett never searches the wider workspace in the zero-copy launch and requests missing context from the user.
+- A cold/serverless continuation rehydrates only the exact Slack-owned Beckett thread.
 - Beckett does not hallucinate reactions, agreement, annoyance, rapport, or hidden intent.
 - Beckett does not post publicly by default.
 - Demo excludes Chrome extension, Gmail, courses, website dashboard, and beta signup.
