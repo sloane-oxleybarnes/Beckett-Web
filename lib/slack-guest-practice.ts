@@ -68,20 +68,20 @@ export async function startGuestPracticeFromPrep(input: {
   channelId: string;
   prepThreadTs: string;
 }) {
+  const botAccessToken = await lookupSlackWorkspaceBotToken(input.teamId);
+  if (!botAccessToken) return { ok: false as const, error: "missing_bot_token" };
   let prepSession = await loadSlackGuestSession({
     teamId: input.teamId,
     slackUserId: input.slackUserId,
     channelId: input.channelId,
     threadTs: input.prepThreadTs,
+    accessToken: botAccessToken,
   }).catch((error) => {
     console.warn("Slack Guest session table is unavailable during Practice handoff", {
       message: error instanceof Error ? error.message : String(error),
     });
     return null;
   });
-  const botAccessToken = await lookupSlackWorkspaceBotToken(input.teamId);
-  if (!botAccessToken) return { ok: false as const, error: "missing_bot_token" };
-
   if (prepSession?.practice_thread_ts) {
     const permalink = await practicePermalink({
       botAccessToken,
@@ -102,6 +102,7 @@ export async function startGuestPracticeFromPrep(input: {
           slackUserId: input.slackUserId,
           channelId: input.channelId,
           threadTs: input.prepThreadTs,
+          accessToken: botAccessToken,
         });
         if (!current?.practice_thread_ts) continue;
         const permalink = await practicePermalink({
@@ -121,6 +122,8 @@ export async function startGuestPracticeFromPrep(input: {
     teamId: input.teamId,
     slackUserId: input.slackUserId,
     threadTs: input.prepThreadTs,
+    channelId: input.channelId,
+    accessToken: botAccessToken,
   });
   if (!prep?.person || !prep.location || !prep.outcome || !prep.concern) {
     if (prepSession) await releaseSlackGuestPracticeClaim(prepSession).catch(() => null);

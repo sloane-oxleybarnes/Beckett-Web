@@ -1,114 +1,71 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { supabaseAdmin } from "@/lib/server-admin";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { getSlackOAuthWorkerUrl, getSlackRedirectOrigin } from "@/lib/slack-oauth";
+import { linkSlackUser, saveSlackInstallation } from "@/lib/slack-installation";
+import { verifySlackState } from "@/lib/slack-signed-state";
 
-const REQUIRED_SLACK_USER_SCOPES = [
-  "channels:history",
-  "groups:history",
-  "im:history",
-  "mpim:history",
-  "users:read",
-  "search:read",
-  "search:read.public",
-  "search:read.private",
-  "search:read.im",
-  "search:read.mpim",
-  "search:read.users",
-];
+function scopes(value?: string) {
+  return String(value || "").split(",").map((scope) => scope.trim()).filter(Boolean);
+}
 
 export async function GET(req: NextRequest) {
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    return NextResponse.redirect(new URL("/auth/login?next=/dashboard/apps", req.url));
-  }
-
   const code = req.nextUrl.searchParams.get("code");
-  const state = req.nextUrl.searchParams.get("state");
-  const expectedState = req.cookies.get("beckett_slack_oauth_state")?.value;
-
-  if (!code || !state || state !== expectedState) {
-    return NextResponse.redirect(new URL("/dashboard/apps?slack=auth_error", req.url));
+  const stateValue = req.nextUrl.searchParams.get("state") || "";
+  const state = verifySlackState(stateValue);
+  if (!code || !state || (state.purpose !== "install" && state.purpose !== "connect")) {
+    return NextResponse.redirect(new URL("/slack/installed?error=auth", req.url));
   }
 
-  const origin = getSlackRedirectOrigin();
-  const redirectUri = `${origin}/api/slack/callback`;
-  const slackOAuthWorker = getSlackOAuthWorkerUrl();
-
-  if (!slackOAuthWorker) {
-    return NextResponse.redirect(new URL("/dashboard/apps?slack=setup_error", req.url));
+  const supabase = await createSupabaseServerClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (state.purpose === "connect" && (!session || session.user.id !== state.userId)) {
+    return NextResponse.redirect(new URL("/auth/login?next=/dashboard/settings", req.url));
   }
 
-  const tokenRes = await fetch(slackOAuthWorker, {
+  const redirectUri = `${getSlackRedirectOrigin()}/api/slack/callback`;
+  const worker = getSlackOAuthWorkerUrl();
+  if (!worker) return NextResponse.redirect(new URL("/slack/installed?error=setup", req.url));
+
+  const tokenResponse = await fetch(worker, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code, redirect_uri: redirectUri }),
   }).catch(() => null);
-
-  const tokenData = await tokenRes?.json().catch(() => ({})) as {
+  const token = await tokenResponse?.json().catch(() => ({})) as {
     ok?: boolean;
-    error?: string;
+    access_token?: string | null;
+    refresh_token?: string | null;
+    expires_in?: number | null;
     scope?: string;
-    authed_user?: { access_token?: string; id?: string; scope?: string };
-    team?: { id?: string; name?: string };
+    team?: { id?: string | null } | null;
+    enterprise?: { id?: string | null } | null;
+    authed_user?: { id?: string | null } | null;
   };
-
-  if (!tokenRes?.ok || !tokenData.ok || !tokenData.authed_user?.access_token) {
-    return NextResponse.redirect(new URL("/dashboard/apps?slack=auth_error", req.url));
+  if (!tokenResponse?.ok || !token.ok || !token.access_token || !token.team?.id) {
+    return NextResponse.redirect(new URL("/slack/installed?error=auth", req.url));
   }
 
-  const now = new Date().toISOString();
-  const userScopes = splitSlackScopes(tokenData.authed_user?.scope);
-  const botScopes = splitSlackScopes(tokenData.scope);
-  const metadata = {
-    ...tokenData,
-    granted_user_scopes: userScopes,
-    granted_bot_scopes: botScopes,
-    required_user_scopes: REQUIRED_SLACK_USER_SCOPES,
-    missing_user_scopes: REQUIRED_SLACK_USER_SCOPES.filter((scope) => !userScopes.includes(scope)),
-    last_validated_at: now,
-    last_failure_reason: null,
-  };
-
-  await supabaseAdmin.from("user_integrations").upsert(
-    {
-      user_id: session.user.id,
-      provider: "slack",
-      access_token: tokenData.authed_user.access_token,
-      external_user_id: tokenData.authed_user.id || null,
-      external_team_id: tokenData.team?.id || null,
-      external_team_name: tokenData.team?.name || null,
-      metadata,
-      connected_at: now,
-      updated_at: now,
-    },
-    { onConflict: "user_id,provider" }
-  );
-
-  await trackBetaEvent({
-    userId: session.user.id,
-    email: session.user.email,
-    eventName: "slack_connected",
-    source: "web_app",
-    metadata: {
-      teamId: tokenData.team?.id || null,
-      teamName: tokenData.team?.name || null,
-    },
+  await saveSlackInstallation({
+    teamId: token.team.id,
+    enterpriseId: token.enterprise?.id,
+    installerUserId: session?.user.id || null,
+    botAccessToken: token.access_token,
+    botRefreshToken: token.refresh_token,
+    expiresIn: token.expires_in,
+    botScopes: scopes(token.scope),
   });
 
-  const response = NextResponse.redirect(new URL("/dashboard/apps?slack=connected", req.url));
-  response.cookies.delete("beckett_slack_oauth_state");
-  return response;
-}
+  if (session?.user.id && token.authed_user?.id) {
+    await linkSlackUser({ teamId: token.team.id, slackUserId: token.authed_user.id, beckettUserId: session.user.id });
+    await trackBetaEvent({
+      userId: session.user.id,
+      email: session.user.email,
+      eventName: "slack_connected",
+      source: "web_app",
+      metadata: { teamId: token.team.id },
+    });
+  }
 
-function splitSlackScopes(value: string | undefined) {
-  return String(value || "")
-    .split(",")
-    .map((scope) => scope.trim())
-    .filter(Boolean);
+  return NextResponse.redirect(new URL(state.purpose === "connect" ? "/dashboard/settings?slack=connected" : "/slack/installed", req.url));
 }

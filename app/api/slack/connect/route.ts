@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSlackOAuthWorkerUrl, getSlackRedirectOrigin } from "@/lib/slack-oauth";
+import { signSlackState } from "@/lib/slack-signed-state";
 
 export async function GET(req: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   const origin = getSlackRedirectOrigin();
   const redirectUri = `${origin}/api/slack/callback`;
-  const state = crypto.randomUUID();
+  const state = signSlackState({ purpose: "connect", userId: session.user.id });
   const slackOAuthWorker = getSlackOAuthWorkerUrl();
 
   if (!slackOAuthWorker) {
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
   }
 
   const authRes = await fetch(
-    `${slackOAuthWorker}/auth-url?redirect_uri=${encodeURIComponent(redirectUri)}`,
+    `${slackOAuthWorker}/auth-url?${new URLSearchParams({ redirect_uri: redirectUri, state })}`,
     { cache: "no-store" }
   ).catch(() => null);
 
@@ -41,15 +42,5 @@ export async function GET(req: NextRequest) {
   } catch {
     return NextResponse.redirect(new URL("/dashboard/apps?slack=setup_error", req.url));
   }
-  url.searchParams.set("state", state);
-
-  const response = NextResponse.redirect(url);
-  response.cookies.set("beckett_slack_oauth_state", state, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: true,
-    path: "/",
-    maxAge: 60 * 10,
-  });
-  return response;
+  return NextResponse.redirect(url);
 }

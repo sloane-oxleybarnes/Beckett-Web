@@ -71,11 +71,7 @@ export async function runQueuedSlackCommand({
     await task();
     await updateJob(reservation.job_id, "completed");
   } catch (taskError) {
-    await updateJob(
-      reservation.job_id,
-      "failed",
-      taskError instanceof Error ? taskError.message : String(taskError)
-    ).catch((statusError) => {
+    await updateJob(reservation.job_id, "failed", "slack_command_failed").catch((statusError) => {
       console.error("Slack command failure status update failed", {
         jobId: reservation.job_id,
         message: statusError instanceof Error ? statusError.message : String(statusError),
@@ -90,7 +86,7 @@ async function updateJob(jobId: string, status: SlackCommandJobStatus, errorMess
   const values: Record<string, string | null> = {
     status,
     updated_at: now,
-    error_message: errorMessage?.slice(0, 1_000) || null,
+    error_message: errorMessage || null,
   };
   if (status === "processing") values.started_at = now;
   if (status === "completed" || status === "failed") values.completed_at = now;

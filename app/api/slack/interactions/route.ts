@@ -5,6 +5,8 @@ import {
   buildGuestSlackContextPacket,
   buildSlackCoachingContext,
   fetchSlackConversationContext,
+  fetchSlackThreadSnapshot,
+  formatSlackThreadSnapshot,
   handleSlackAiError,
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
@@ -29,6 +31,7 @@ import {
 } from "@/lib/slack-app";
 import {
   createSlackDraftActionSession,
+  extractSlackDraftOptions,
   SLACK_DRAFT_CANCEL_ACTION_ID,
   SLACK_DRAFT_SEND_ACTION_ID,
   SLACK_DRAFT_USE_ACTION_ID,
@@ -109,6 +112,7 @@ type SlackInteractionPayload = {
 type SlackDraftActionValue = {
   sessionId?: string;
   optionId?: SlackDraftOption["id"];
+  draftText?: string;
 };
 
 type SlackPendingRequest = {
@@ -260,6 +264,7 @@ function getDraftAction(payload: SlackInteractionPayload) {
       actionId: action.action_id,
       sessionId: parsed.sessionId,
       optionId: parsed.optionId,
+      draftText: parsed.draftText,
     };
   } catch {
     return null;
@@ -342,14 +347,15 @@ async function loadDraftSession({
 }) {
   const { data, error } = await supabaseAdmin
     .from("slack_agent_sessions")
-    .select("id, user_id, slack_team_id, slack_user_id, slack_channel_id, thread_ts, flow_type, status, answers")
+    .select("id, user_id, slack_team_id, slack_user_id, slack_channel_id, thread_ts, flow_type, status, answers, zero_copy_flow_session_id")
     .eq("id", sessionId)
     .eq("slack_team_id", teamId)
     .eq("slack_user_id", slackUserId)
     .maybeSingle();
 
   if (error) throw error;
-  return data as
+  if (!data) return null;
+  const row = data as
     | {
         id: string;
         user_id: string;
@@ -359,6 +365,7 @@ async function loadDraftSession({
         thread_ts: string | null;
         flow_type: string;
         status: string;
+        zero_copy_flow_session_id?: string | null;
         answers: {
           source_channel_id?: string;
           source_channel_name?: string;
@@ -367,6 +374,25 @@ async function loadDraftSession({
         };
       }
     | null;
+  if (!row) return null;
+  const { data: flow, error: flowError } = row.zero_copy_flow_session_id
+    ? await supabaseAdmin
+        .from("slack_flow_sessions")
+        .select("slack_source_channel_id, slack_source_thread_ts")
+        .eq("id", row.zero_copy_flow_session_id)
+        .eq("slack_team_id", teamId)
+        .eq("slack_user_id", slackUserId)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (flowError) throw flowError;
+  return {
+    ...row,
+    answers: {
+      ...(row.answers || {}),
+      source_channel_id: flow?.slack_source_channel_id || row.answers?.source_channel_id,
+      source_thread_ts: flow?.slack_source_thread_ts || row.answers?.source_thread_ts,
+    },
+  };
 }
 
 function draftDestinationLabel(answers: {
@@ -378,8 +404,8 @@ function draftDestinationLabel(answers: {
   return answers.source_thread_ts ? `${channel} thread` : channel;
 }
 
-function buildDraftActionValue(sessionId: string, optionId: SlackDraftOption["id"]) {
-  return JSON.stringify({ sessionId, optionId });
+function buildDraftActionValue(sessionId: string, optionId: SlackDraftOption["id"], draftText?: string) {
+  return JSON.stringify({ sessionId, optionId, ...(draftText ? { draftText } : {}) });
 }
 
 function buildDraftConfirmationPayload({
@@ -410,13 +436,13 @@ function buildDraftConfirmationPayload({
         text: { type: "plain_text", text: "Send to Slack" },
         style: "primary",
         action_id: SLACK_DRAFT_SEND_ACTION_ID,
-        value: buildDraftActionValue(sessionId, option.id),
+        value: buildDraftActionValue(sessionId, option.id, option.text),
       },
       {
         type: "button",
         text: { type: "plain_text", text: "Cancel" },
         action_id: SLACK_DRAFT_CANCEL_ACTION_ID,
-        value: buildDraftActionValue(sessionId, option.id),
+        value: buildDraftActionValue(sessionId, option.id, option.text),
       },
     ],
   });
@@ -1045,12 +1071,14 @@ async function handleDraftButtonResponse({
   actionId,
   sessionId,
   optionId,
+  draftText,
 }: {
   origin: string;
   payload: SlackInteractionPayload;
   actionId: string;
   sessionId: string;
   optionId: SlackDraftOption["id"];
+  draftText?: string;
 }) {
   const responseUrl = payload.response_url || "";
   const teamId = payload.team?.id || "";
@@ -1063,7 +1091,15 @@ async function handleDraftButtonResponse({
     }
 
     const session = await loadDraftSession({ sessionId, teamId, slackUserId });
-    const option = session?.answers?.draft_options?.find((item) => item.id === optionId);
+    const liveOptions = extractSlackDraftOptions(payload.message?.text || "");
+    const recoveredText = draftText || liveOptions.find((item) => item.id === optionId)?.text;
+    const option = recoveredText
+      ? {
+          id: optionId,
+          label: optionId === "direct" ? "Direct but kind" : optionId === "warm" ? "Warm and collaborative" : "Concise",
+          text: recoveredText,
+        } satisfies SlackDraftOption
+      : session?.answers?.draft_options?.find((item) => item.id === optionId);
     if (!session || !option) {
       await replaceSlackInteraction(responseUrl, "That draft is no longer available. Ask Beckett to draft a new response.");
       return;
@@ -1344,15 +1380,35 @@ async function handleHistoryButtonResponse({
     }
 
     if (actionId === SLACK_HISTORY_EXPLAIN_MORE_ACTION_ID && thread) {
-      const messages = await loadSlackCoachingMessages({
-        threadId: thread.id,
-        userId: user.id,
-        limit: 10,
-      }).catch(() => []);
-      const transcript = messages
-        .map((message) => `${message.role === "beckett" ? "Beckett" : "User"}: ${message.content}`)
-        .join("\n")
-        .slice(0, 3000);
+      const snapshot = await fetchSlackThreadSnapshot({
+        accessToken: user.botAccessToken || user.accessToken,
+        channelId: thread.slack_channel_id,
+        threadTs: thread.thread_ts,
+        currentSlackUserId: slackUserId,
+      });
+      const messages = snapshot.status === "available"
+        ? []
+        : await loadSlackCoachingMessages({ threadId: thread.id, userId: user.id, limit: 10 }).catch(() => []);
+      const transcript = snapshot.status === "available"
+        ? formatSlackThreadSnapshot(snapshot, 3000)
+        : messages
+            .map((message) => `${message.role === "beckett" ? "Beckett" : "User"}: ${message.content}`)
+            .join("\n")
+            .slice(0, 3000);
+      if (!transcript) {
+        if (thread.slack_channel_id && thread.thread_ts) {
+          await slackApiPost(user.botAccessToken, "chat.postMessage", {
+            channel: thread.slack_channel_id,
+            thread_ts: thread.thread_ts,
+            ...buildBeckettPayload({
+              title: "Beckett",
+              body: "I couldn’t reload this thread’s earlier messages, so I can’t safely explain them further. Please try again or reconnect Beckett.",
+              hideTitle: true,
+            }),
+          });
+        }
+        return;
+      }
       const response = await runSlackCoaching({
         user,
         action: "agent_message",
@@ -1366,7 +1422,7 @@ async function handleHistoryButtonResponse({
         sourceLabel: `${thread.title}:explain_more`,
         messageText: transcript || thread.summary || thread.prompt_snippet || "",
         contextStatus: "available",
-        contextMessageCount: messages.length,
+        contextMessageCount: snapshot.status === "available" ? snapshot.turns.length : messages.length,
         broaderSearchUsed: false,
         intent: thread.flow_type === "respond" ||
           thread.flow_type === "decode" ||
@@ -1419,12 +1475,19 @@ async function handleHistoryButtonResponse({
     }
 
     if (actionId === SLACK_HISTORY_CONTINUE_ACTION_ID && thread) {
-      const messages = await loadSlackCoachingMessages({
-        threadId: thread.id,
-        userId: user.id,
-        limit: 10,
-      }).catch(() => []);
-      const payloadToPost = buildSlackHistoryContinuePayload(thread, messages);
+      const snapshot = await fetchSlackThreadSnapshot({
+        accessToken: user.botAccessToken || user.accessToken,
+        channelId: thread.slack_channel_id,
+        threadTs: thread.thread_ts,
+        currentSlackUserId: slackUserId,
+      });
+      const messages = snapshot.status === "available"
+        ? []
+        : await loadSlackCoachingMessages({ threadId: thread.id, userId: user.id, limit: 10 }).catch(() => []);
+      const liveTranscript = snapshot.status === "available"
+        ? formatSlackThreadSnapshot(snapshot, 1800)
+        : null;
+      const payloadToPost = buildSlackHistoryContinuePayload(thread, messages, liveTranscript);
       if (thread.slack_channel_id && thread.thread_ts) {
         const postedContinue = await slackApiPost<{ ts?: string }>(user.botAccessToken, "chat.postMessage", {
           channel: thread.slack_channel_id,
@@ -1474,10 +1537,21 @@ async function handleHistoryButtonResponse({
         flowType === "prep" ||
         flowType === "practice")
     ) {
-      const practiceMessages = flowType === "practice" && thread
+      const practiceSnapshot = flowType === "practice" && thread
+        ? await fetchSlackThreadSnapshot({
+            accessToken: user.botAccessToken || user.accessToken,
+            channelId: thread.slack_channel_id,
+            threadTs: thread.thread_ts,
+            currentSlackUserId: slackUserId,
+          })
+        : null;
+      const practiceMessages = flowType === "practice" && thread && practiceSnapshot?.status !== "available"
         ? await loadSlackCoachingMessages({ threadId: thread.id, userId: user.id, limit: 12 }).catch(() => [])
         : [];
-      const practiceConcern = [...practiceMessages].reverse().find((message) =>
+      const practiceTurns = practiceSnapshot?.status === "available" ? practiceSnapshot.turns : [];
+      const practiceConcern = [...practiceTurns].reverse().find((turn) =>
+        turn.role === "user" && /\b(worried|concern|afraid|think i(?:'m| am)|lazy|capable|pushback)\b/i.test(turn.text)
+      )?.text || [...practiceMessages].reverse().find((message) =>
         message.role === "user" && /\b(worried|concern|afraid|think i(?:'m| am)|lazy|capable|pushback)\b/i.test(message.content)
       )?.content;
       if (flowType === "decode" || flowType === "respond") {
@@ -1509,8 +1583,9 @@ async function handleHistoryButtonResponse({
               "Prepared conversation context. Start the whole role-play immediately.",
               thread.summary || thread.prompt_snippet || "Use the completed Prep context.",
               `Concern and realistic pushback: ${practiceConcern || "Use realistic resistance that tests the user's goal without becoming hostile."}`,
-              ...practiceMessages
-                .map((message) => `${message.role === "beckett" ? "Beckett" : "User"}: ${message.content}`),
+              ...(practiceTurns.length
+                ? [formatSlackThreadSnapshot(practiceSnapshot!, 3000)]
+                : practiceMessages.map((message) => `${message.role === "beckett" ? "Beckett" : "User"}: ${message.content}`)),
             ].join("\n")
           : quickPrompt(flowType),
       });
@@ -1583,6 +1658,7 @@ export async function POST(req: NextRequest) {
           actionId: draftAction.actionId,
           sessionId: draftAction.sessionId,
           optionId: draftAction.optionId,
+          draftText: draftAction.draftText,
         })
       );
 
