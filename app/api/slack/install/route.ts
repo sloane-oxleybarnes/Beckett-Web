@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSlackOAuthWorkerUrl, getSlackRedirectOrigin } from "@/lib/slack-oauth";
 import { signSlackState } from "@/lib/slack-signed-state";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   const worker = getSlackOAuthWorkerUrl();
   const redirectUri = `${getSlackRedirectOrigin()}/api/slack/callback`;
