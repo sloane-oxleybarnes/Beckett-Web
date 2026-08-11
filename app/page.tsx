@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { SITE_CONTENT_DEFAULTS, contentValue } from "@/lib/site-content";
+import { GOOGLE_WORKSPACE_MARKETPLACE_URL } from "@/lib/app-links";
 import "./home.css";
 
 type Mode = "personal" | "professional";
@@ -401,7 +402,7 @@ export default function HomePage() {
             <p className="sec-sub">Beckett connects the parts of the workday that create pressure: planning, messages, meetings, practice, and practical skills.</p>
             <div className="plat-grid">
               {[
-                { icon: "pi-gmail", letter: "G", name: "Gmail™ Decode", desc: "Bring a specific thread to clarify the ask and draft a response in your own voice. Read-only; Beckett cannot send." },
+                { icon: "pi-gmail", letter: "G", name: "Gmail™ Decode", desc: "Bring a specific thread to clarify the ask and draft a response in your own voice. Read-only; Beckett cannot send.", href: GOOGLE_WORKSPACE_MARKETPLACE_URL, linkLabel: "Install Gmail™ add-on →" },
                 { icon: "pi-slack", letter: "S", name: "Slack", desc: "Provides private decoding, response help, rewriting, preparation, and practice inside Slack." },
                 { icon: "pi-meet", letter: "C", name: "Google Calendar™", desc: "Choose calendars, view your week, and prepare for meetings with other attendees. Beckett never edits events." },
                 { icon: "pi-zoom", letter: "M", name: "Practice + Skills", desc: "Rehearse high-stakes conversations and build practical strategies you can carry into the day." },
@@ -410,6 +411,7 @@ export default function HomePage() {
                   <div className={`plat-icon ${p.icon}`}>{p.letter}</div>
                   <div className="plat-name">{p.name}</div>
                   <div className="plat-desc">{p.desc}</div>
+                  {p.href && <a href={p.href} target="_blank" rel="noreferrer" className="plat-link">{p.linkLabel}</a>}
                   <div className="plat-live">Live in Beckett</div>
                 </div>
               ))}

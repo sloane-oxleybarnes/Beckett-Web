@@ -726,6 +726,8 @@
 .lumen-home .pi-zoom { background: #2D8CFF; color: #fff; }
 .lumen-home .plat-name { font-size: 15px; font-weight: 500; color: #fff; margin-bottom: 6px; }
 .lumen-home .plat-desc { font-size: 13px; color: rgba(255,255,255,.5); line-height: 1.55; font-weight: 300; }
+.lumen-home .plat-link { display: inline-block; margin-top: 12px; color: var(--primary-light); font-size: 12px; font-weight: 600; text-decoration: none; }
+.lumen-home .plat-link:hover { text-decoration: underline; }
 .lumen-home .plat-live { margin-top: 14px; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; color: #4ADE80; }
 .lumen-home .plat-live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #4ADE80; }
 

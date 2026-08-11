@@ -1,3 +1,5 @@
+import { CHROME_WEB_STORE_URL, GOOGLE_WORKSPACE_MARKETPLACE_URL } from "@/lib/app-links";
+
 export const CONNECTED_APP_IDS = [
   "gmail",
   "google_calendar",
@@ -17,6 +19,8 @@ export type ConnectedAppDefinition = {
   iconSrc: string;
   connectHref: string;
   connectLabel: string;
+  installHref?: string;
+  installLabel?: string;
   steps: string[];
   sharedProvider?: "microsoft";
 };
@@ -30,9 +34,11 @@ export const CONNECTED_APPS: ConnectedAppDefinition[] = [
     iconSrc: "/brand/connected-apps/gmail.png",
     connectHref: "/api/gmail/oauth/start?next=/dashboard/apps",
     connectLabel: "Continue with Google",
+    installHref: GOOGLE_WORKSPACE_MARKETPLACE_URL,
+    installLabel: "Install Gmail™ add-on",
     steps: [
       "Choose Continue with Google and approve Gmail read access.",
-      "Install Beckett from Google Workspace Marketplace when it becomes publicly available.",
+      "Install Beckett from Google Workspace™ Marketplace.",
       "In Gmail, open a conversation and choose Beckett from the right sidebar.",
     ],
   },
@@ -100,7 +106,7 @@ export const CONNECTED_APPS: ConnectedAppDefinition[] = [
     shortName: "Chrome",
     description: "Use Beckett from supported pages in your browser.",
     iconSrc: "/brand/connected-apps/chrome.png",
-    connectHref: "https://chromewebstore.google.com/detail/beckett/calejchnmkljjkgchnodpdojmammmddk",
+    connectHref: CHROME_WEB_STORE_URL,
     connectLabel: "Open Chrome Web Store",
     steps: [
       "Install Beckett from the Chrome Web Store.",

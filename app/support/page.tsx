@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { GOOGLE_WORKSPACE_MARKETPLACE_URL } from "@/lib/app-links";
 
 export const metadata = {
   title: "Support - Beckett",
@@ -119,7 +120,19 @@ export default function SupportPage() {
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-xs font-medium text-primary">
                   {index + 1}
                 </span>
-                <span>{step}</span>
+                <span>
+                  {step}
+                  {index === 0 && (
+                    <Link
+                      href={GOOGLE_WORKSPACE_MARKETPLACE_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 block font-medium text-primary hover:underline"
+                    >
+                      Open Beckett in Google Workspace™ Marketplace →
+                    </Link>
+                  )}
+                </span>
               </li>
             ))}
           </ol>

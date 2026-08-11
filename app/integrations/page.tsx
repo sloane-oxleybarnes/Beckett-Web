@@ -3,7 +3,7 @@ import Footer from "@/components/marketing/Footer";
 import Link from "next/link";
 import { contentValue } from "@/lib/site-content";
 import { getSiteContent } from "@/lib/site-content-server";
-import { CHROME_WEB_STORE_URL } from "@/lib/app-links";
+import { CHROME_WEB_STORE_URL, GOOGLE_WORKSPACE_MARKETPLACE_URL } from "@/lib/app-links";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -15,11 +15,11 @@ export const metadata: Metadata = {
   },
 };
 
-const live = [
-  { name: "Gmail™", icon: "📧", description: "Decode and draft in any Gmail thread." },
+const live: Array<{ name: string; icon: string; description: string; href?: string; linkLabel?: string }> = [
+  { name: "Gmail™", icon: "📧", description: "Decode and draft in any Gmail thread.", href: GOOGLE_WORKSPACE_MARKETPLACE_URL, linkLabel: "Install from Google Workspace™ Marketplace →" },
   { name: "Slack", icon: "💬", description: "Inline support in channels, DMs, and threads." },
   { name: "Google Calendar™", icon: "📅", description: "Read selected calendars, show a week view, and offer attendee-aware meeting prep." },
-  { name: "Chrome extension", icon: "🧩", description: "Brings Beckett into the browser tools beta users are testing now." },
+  { name: "Chrome extension", icon: "🧩", description: "Brings Beckett into the browser tools beta users are testing now.", href: CHROME_WEB_STORE_URL, linkLabel: "Install from Chrome Web Store →" },
 ];
 
 const slackCommands = ["respond", "rewrite", "decode", "prep", "practice"];
@@ -106,14 +106,14 @@ export default async function IntegrationsPage() {
                   Live
                 </span>
               </div>
-              {item.name === "Chrome extension" && (
+              {item.href && item.linkLabel && (
                 <Link
-                  href={chromeStoreUrl}
+                  href={item.name === "Chrome extension" ? chromeStoreUrl : item.href}
                   target="_blank"
                   rel="noreferrer"
                   className="mt-4 inline-block text-xs font-medium text-primary hover:underline"
                 >
-                  Install from Chrome Web Store →
+                  {item.linkLabel}
                 </Link>
               )}
             </div>
