@@ -1,11 +1,10 @@
-import Image from "next/image";
 import Link from "next/link";
 
 const sections = [
   {
     title: "Who may use Beckett",
     body: [
-      "Beckett is currently offered as an invite-only beta to people who are at least 18 years old and located in the United States. You must provide accurate account information and keep your login credentials secure.",
+      "Beckett is currently offered as a beta to people who are at least 18 years old and located in the United States. You must provide accurate account information and keep your login credentials secure.",
       "Beckett Labs Inc may approve, limit, suspend, or end beta access at any time, including to protect users, the service, or connected platforms.",
     ],
   },
@@ -33,7 +32,7 @@ const sections = [
   {
     title: "Connected services",
     body: [
-      "If you connect Gmail, Slack, Chrome, or another service, you authorize Beckett to use the access you approve only to provide the requested features. Your use of those services remains subject to their own terms and policies.",
+      "If you connect Gmail, Microsoft 365 or Microsoft Outlook, Slack, Chrome, or another service, you authorize Beckett to use the access you approve only to provide the requested features. Your use of those services remains subject to their own terms and policies.",
       "You may disconnect integrations from Beckett or the connected provider. Some features will stop working after disconnection.",
     ],
   },
@@ -54,6 +53,7 @@ const sections = [
     title: "Ownership",
     body: [
       "Beckett Labs Inc owns Beckett, its software, branding, and product materials. You keep ownership of content you submit. You give Beckett a limited permission to process that content only as needed to operate, secure, support, and improve the service as described in these Terms and the Privacy Policy.",
+      "Microsoft, Microsoft 365, and Outlook are trademarks of the Microsoft group of companies.",
     ],
   },
   {
@@ -74,7 +74,7 @@ const sections = [
 
 export const metadata = {
   title: "Terms of Use - Beckett",
-  description: "Terms for using the Beckett invite-only communication coaching beta.",
+  description: "Terms for using the Beckett communication coaching beta.",
   alternates: { canonical: "/terms" },
 };
 
@@ -83,12 +83,13 @@ export default function TermsPage() {
     <main className="min-h-screen bg-bg text-ink">
       <header className="border-b border-border bg-white/80">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-4">
-          <Link href="/">
-            <Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={126} height={32} priority />
+          <Link href="/" className="text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>
+            Beckett
           </Link>
-          <Link href="/beta" className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">
-            Request beta access
-          </Link>
+          <nav className="flex gap-4 text-sm text-ink-mid" aria-label="Policy links">
+            <Link href="/support" className="hover:text-primary">Support</Link>
+            <Link href="/privacy" className="hover:text-primary">Privacy</Link>
+          </nav>
         </div>
       </header>
 
@@ -100,7 +101,7 @@ export default function TermsPage() {
         <p className="max-w-3xl text-base leading-relaxed text-ink-mid">
           These Terms govern your use of the Beckett beta operated by Beckett Labs Inc. By creating or using an account, you agree to them.
         </p>
-        <p className="mt-4 text-sm text-ink-light">Effective: July 14, 2026</p>
+        <p className="mt-4 text-sm text-ink-light">Effective: August 10, 2026</p>
       </section>
 
       <section className="mx-auto grid w-full max-w-4xl gap-5 px-5 pb-12">

@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useMemo, useState } from "react";
 
 export type AdminFeedbackRow = {
@@ -17,6 +19,7 @@ export type AdminFeedbackRow = {
   analysis_result: Record<string, unknown> | null;
   context_snapshot: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
+  screenshotUrls?: Array<{ url: string; name: string }>;
   created_at: string;
 };
 
@@ -184,6 +187,20 @@ export default function AdminFeedbackViewer({
                           <p className="mt-1 whitespace-pre-wrap rounded-sm bg-bg p-3 text-sm leading-relaxed text-ink-mid">
                             {row.response_text}
                           </p>
+                        </div>
+                      )}
+
+                      {row.screenshotUrls && row.screenshotUrls.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Screenshots</p>
+                          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            {row.screenshotUrls.map((screenshot) => (
+                              <a key={screenshot.url} href={screenshot.url} target="_blank" rel="noreferrer" className="overflow-hidden rounded-sm border border-border hover:border-primary">
+                                <img src={screenshot.url} alt={screenshot.name} className="h-40 w-full object-cover" />
+                                <p className="truncate px-2 py-1.5 text-xs text-ink-mid">{screenshot.name}</p>
+                              </a>
+                            ))}
+                          </div>
                         </div>
                       )}
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getAuthenticatedContext } from "@/lib/server-auth";
 import { supabaseAdmin } from "@/lib/server-admin";
 import type { CoachingTone } from "@/lib/onboarding";
 import { trackBetaEvent } from "@/lib/beta-events";
@@ -22,20 +22,23 @@ type OnboardingBody = BetaConsentSubmission & {
   coaching_tone?: CoachingTone;
   neurodivergent_context?: string[];
   neurodivergent_context_other?: string | null;
+  work_apps?: string[];
 };
 
-export async function POST(req: NextRequest) {
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+const allowedWorkApps = new Set(["gmail", "slack", "outlook", "chrome", "teams", "zoom"]);
 
-  if (!session) {
+export async function POST(req: NextRequest) {
+  const { user } = await getAuthenticatedContext();
+
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const body = (await req.json()) as OnboardingBody;
   const now = new Date().toISOString();
+  const workApps = Array.isArray(body.work_apps)
+    ? body.work_apps.filter((value): value is string => typeof value === "string" && allowedWorkApps.has(value)).slice(0, 12)
+    : [];
 
   if (!hasRequiredBetaConsentSubmission(body)) {
     return NextResponse.json(
@@ -46,8 +49,8 @@ export async function POST(req: NextRequest) {
 
   const { error } = await supabaseAdmin.from("profiles").upsert(
     {
-      id: session.user.id,
-      email: body.email || session.user.email,
+      id: user.id,
+      email: body.email || user.email,
       full_name: body.full_name,
       first_name: body.first_name,
       last_name: body.last_name,
@@ -77,7 +80,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const email = body.email || session.user.email || null;
+  const email = body.email || user.email || null;
   if (email) {
     await supabaseAdmin
       .from("beta_signups")
@@ -89,7 +92,7 @@ export async function POST(req: NextRequest) {
   }
 
   await trackBetaEvent({
-    userId: session.user.id,
+    userId: user.id,
     email,
     eventName: "onboarding_completed",
     source: "web_app",
@@ -98,6 +101,7 @@ export async function POST(req: NextRequest) {
       triggersCount: body.workplace_triggers?.length || 0,
       preferencesCount: body.communication_preferences?.length || 0,
       neurodivergentContextCount: body.neurodivergent_context?.length || 0,
+      workApps,
     },
   });
 

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import AddToSlackButton from "@/components/integrations/AddToSlackButton";
 import { createClient } from "@/lib/supabase";
 import type { Profile } from "@/lib/supabase";
 import {
@@ -28,7 +27,7 @@ function ConnectRow({
   detail?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-start gap-3">
         <span className="text-lg mt-0.5">{icon}</span>
         <div>
@@ -59,15 +58,6 @@ const planBadgeColor: Record<string, string> = {
   pro: "bg-primary text-white",
   team: "bg-amber-100 text-amber-700",
 };
-
-const slackCommandExamples = [
-  "/beckett rewrite \"Any update on this?\"",
-  "/beckett decode \"Sure, sounds fine.\"",
-  "/beckett draft ask my manager for clearer priorities this week",
-  "/beckett prep I need to give a teammate feedback",
-  "/beckett tone \"I need this by Friday.\"",
-  "/beckett followup remind Avery about the readout",
-];
 
 function toggleValue(list: string[], value: string, max?: number) {
   if (list.includes(value)) return list.filter((item) => item !== value);
@@ -208,6 +198,13 @@ type Diagnostics = {
       connectedAt?: string | null;
       updatedAt?: string | null;
     };
+    microsoft: {
+      connected: boolean;
+      email?: string | null;
+      scopes?: string | null;
+      connectedAt?: string | null;
+      updatedAt?: string | null;
+    };
   };
   aiUsage: {
     limit: number;
@@ -220,28 +217,6 @@ type Diagnostics = {
     checkedAt: string;
   };
 };
-
-function HealthPill({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-pill px-2.5 py-1 text-xs font-medium ${
-        ok ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
-      }`}
-    >
-      {ok ? "OK" : "!"} {label}
-    </span>
-  );
-}
-
-function formatDiagnosticDate(value?: string | null) {
-  if (!value) return "Not recorded";
-  return new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -256,12 +231,27 @@ export default function SettingsPage() {
   const [profileSaved, setProfileSaved] = useState(false);
   const [preferences, setPreferences] = useState<string[]>([]);
   const [coachingTone, setCoachingTone] = useState<CoachingTone>("direct_kind");
+  const [editingCoaching, setEditingCoaching] = useState(false);
   const [customPreferences, setCustomPreferences] = useState("");
   const [deletionNotes, setDeletionNotes] = useState("");
   const [deletionStatus, setDeletionStatus] = useState<"idle" | "loading" | "requested" | "error">("idle");
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
-  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
-  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
+  const [microsoftStatus, setMicrosoftStatus] = useState<"connected" | "error" | null>(null);
+  const [microsoftError, setMicrosoftError] = useState<string | null>(null);
+  const [showMicrosoftOptions, setShowMicrosoftOptions] = useState(false);
+  const [calendarUpdatesStatus, setCalendarUpdatesStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("microsoft");
+    const error = params.get("microsoft_error");
+    if (status === "connected") setMicrosoftStatus("connected");
+    if (error) {
+      setMicrosoftStatus("error");
+      setMicrosoftError(error);
+    }
+    if (status || error) window.history.replaceState({}, "", window.location.pathname);
+  }, []);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -282,16 +272,11 @@ export default function SettingsPage() {
   }, [supabase]);
 
   const loadDiagnostics = useCallback(async () => {
-    setDiagnosticsLoading(true);
-    setDiagnosticsError(null);
     try {
       const res = await fetch("/api/extension/diagnostics", { cache: "no-store" });
-      if (!res.ok) throw new Error("Could not load diagnostics.");
-      setDiagnostics((await res.json()) as Diagnostics);
-    } catch (error) {
-      setDiagnosticsError(error instanceof Error ? error.message : "Could not load diagnostics.");
-    } finally {
-      setDiagnosticsLoading(false);
+      if (res.ok) setDiagnostics((await res.json()) as Diagnostics);
+    } catch {
+      // Connected account rows remain available even if diagnostics are unavailable.
     }
   }, []);
 
@@ -326,7 +311,34 @@ export default function SettingsPage() {
     await supabase.from("profiles").update(update).eq("id", user.id);
     setProfile((current) => current ? { ...current, ...update } : current);
     setProfileSaved(true);
+    setEditingCoaching(false);
     setTimeout(() => setProfileSaved(false), 3000);
+  }
+
+  function cancelCoachingEdit() {
+    setPreferences(profile?.communication_preferences || []);
+    setCoachingTone(profile?.coaching_tone || "direct_kind");
+    setCustomPreferences("");
+    setEditingCoaching(false);
+  }
+
+  async function enableCalendarUpdates() {
+    setCalendarUpdatesStatus("Turning on calendar updates…");
+    try {
+      const response = await fetch("/api/microsoft/subscriptions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "calendar" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      setCalendarUpdatesStatus(
+        response.ok
+          ? "Calendar updates are on. Home will pick up schedule changes the next time it loads."
+          : (data.error || "Could not turn on calendar updates.")
+      );
+    } catch {
+      setCalendarUpdatesStatus("Could not turn on calendar updates. Please try again.");
+    }
   }
 
   async function clearCoachingSettings() {
@@ -521,75 +533,118 @@ export default function SettingsPage() {
 
       {/* Beckett coaching settings */}
       <section className="bg-white rounded-card border border-border p-6 mb-5">
-        <h2
-          className="text-lg text-ink mb-1"
-          style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-        >
-          Beckett&apos;s Coaching Settings
-        </h2>
-        <p className="text-sm text-ink-mid mb-5">
-          Choose how Beckett coaches, explains, and drafts with you. Personal profile details
-          live in About Me.
-        </p>
-        <form onSubmit={saveCoachingSettings} className="space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <label className="block text-sm font-medium text-ink mb-2">What I Want Beckett to Help Me With</label>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {communicationPreferenceOptions.map((option) => (
-                <SettingsOption
-                  key={option}
-                  label={option}
-                  selected={preferences.includes(option)}
-                  onClick={() => setPreferences((current) => toggleValue(current, option))}
-                />
-              ))}
-            </div>
-            <CustomPreferenceControls
-              value={customPreferences}
-              onChange={setCustomPreferences}
-              onAdd={addCustomPreferences}
-              values={preferences}
-              onRemove={(value) => setPreferences((current) => current.filter((item) => item !== value))}
-            />
+            <h2
+              className="text-lg text-ink mb-1"
+              style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
+            >
+              Beckett&apos;s Coaching Settings
+            </h2>
+            <p className="text-sm text-ink-mid">
+              Your selected preferences shape how Beckett coaches, explains, and drafts with you.
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setEditingCoaching((editing) => !editing)}
+            className="shrink-0 self-start rounded-pill border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-primary-mid hover:bg-primary-light"
+            aria-expanded={editingCoaching}
+          >
+            {editingCoaching ? "Close editor" : "Edit"}
+          </button>
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-ink mb-2">Coaching tone</label>
-            <div className="space-y-2">
-              {coachingToneOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setCoachingTone(option.value)}
-                  className={`w-full text-left rounded-sm border px-3 py-3 transition-colors ${
-                    coachingTone === option.value
-                      ? "border-primary bg-primary-light"
-                      : "border-border hover:border-primary-mid"
-                  }`}
-                >
-                  <p className="text-sm font-medium text-ink">{option.label}</p>
-                  <p className="text-xs text-ink-mid mt-0.5">{option.description}</p>
-                </button>
-              ))}
+        {!editingCoaching ? (
+          <div className="mt-5 space-y-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">What I want Beckett to help me with</p>
+              {preferences.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {preferences.map((preference) => (
+                    <span key={preference} className="rounded-pill border border-primary/20 bg-primary-light px-3 py-1.5 text-xs text-primary">
+                      {preference}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-ink-light">No coaching focus selected yet.</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Coaching tone</p>
+              <p className="mt-1 text-sm font-medium text-ink">{coachingToneOptions.find((option) => option.value === coachingTone)?.label || "Direct but kind"}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-ink-mid">{coachingToneOptions.find((option) => option.value === coachingTone)?.description || "Clear, specific, low-shame feedback."}</p>
             </div>
           </div>
+        ) : (
+          <form onSubmit={saveCoachingSettings} className="mt-5 space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-ink mb-2">What I Want Beckett to Help Me With</label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {communicationPreferenceOptions.map((option) => (
+                  <SettingsOption
+                    key={option}
+                    label={option}
+                    selected={preferences.includes(option)}
+                    onClick={() => setPreferences((current) => toggleValue(current, option))}
+                  />
+                ))}
+              </div>
+              <CustomPreferenceControls
+                value={customPreferences}
+                onChange={setCustomPreferences}
+                onAdd={addCustomPreferences}
+                values={preferences}
+                onRemove={(value) => setPreferences((current) => current.filter((item) => item !== value))}
+              />
+            </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="submit"
-              className="bg-primary text-white text-sm rounded-pill px-5 py-2 hover:bg-primary-dark transition-colors"
-            >
-              {profileSaved ? "Saved ✓" : "Save coaching settings"}
-            </button>
-            <button
-              type="button"
-              onClick={clearCoachingSettings}
-              className="text-sm border border-border rounded-pill px-5 py-2 text-ink hover:bg-bg transition-colors"
-            >
-              Clear settings
-            </button>
-          </div>
-        </form>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-2">Coaching tone</label>
+              <div className="space-y-2">
+                {coachingToneOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setCoachingTone(option.value)}
+                    className={`w-full text-left rounded-sm border px-3 py-3 transition-colors ${
+                      coachingTone === option.value
+                        ? "border-primary bg-primary-light"
+                        : "border-border hover:border-primary-mid"
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-ink">{option.label}</p>
+                    <p className="text-xs text-ink-mid mt-0.5">{option.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="submit"
+                className="bg-primary text-white text-sm rounded-pill px-5 py-2 hover:bg-primary-dark transition-colors"
+              >
+                {profileSaved ? "Saved ✓" : "Save coaching settings"}
+              </button>
+              <button
+                type="button"
+                onClick={clearCoachingSettings}
+                className="text-sm border border-border rounded-pill px-5 py-2 text-ink hover:bg-bg transition-colors"
+              >
+                Clear settings
+              </button>
+              <button
+                type="button"
+                onClick={cancelCoachingEdit}
+                className="text-sm text-ink-light hover:text-ink"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
       </section>
 
       {/* Connected accounts */}
@@ -604,10 +659,11 @@ export default function SettingsPage() {
           Connect only the tools you want Beckett to use for coaching. Beckett stores connection
           status and usage metadata, not full Gmail or Slack message history by default.
         </p>
-        <div className="mb-5 rounded-sm border border-primary/15 bg-primary-light/40 p-3 text-xs leading-relaxed text-ink-mid">
-          Gmail is read-only and Slack is used only for context. Beckett cannot send email, post to
-          Slack, move meetings, or change anything without you taking the final action.
-        </div>
+        {microsoftStatus === "error" && microsoftError && (
+          <div className="mb-5 rounded-sm border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-800">
+            Microsoft 365 could not be connected: {microsoftError}
+          </div>
+        )}
         <div className="space-y-4">
           {/* Google / Gmail */}
           <ConnectRow
@@ -627,6 +683,81 @@ export default function SettingsPage() {
               });
             }}
           />
+          {/* One Microsoft 365 connection with optional, incremental permissions. */}
+          <div className="rounded-sm border border-border bg-bg/40 p-4">
+            <ConnectRow
+              icon="▦"
+              name="Microsoft 365"
+              description="Connect once for read-only Outlook calendar context and meeting preparation"
+              connected={diagnostics?.integrations.microsoft.connected}
+              detail={diagnostics?.integrations.microsoft.email || "Microsoft account connected"}
+              onConnect={() => {
+                window.location.href = "/api/microsoft/connect";
+              }}
+            />
+            <div className="mt-3 border-t border-border pt-3">
+              <button
+                type="button"
+                onClick={() => setShowMicrosoftOptions((visible) => !visible)}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                {showMicrosoftOptions ? "Hide optional Microsoft permissions" : "Manage optional Microsoft permissions"}
+              </button>
+              {showMicrosoftOptions && (
+                <div className="mt-3 space-y-4 rounded-sm border border-primary/15 bg-primary-light/20 p-3">
+                  <p className="text-xs leading-relaxed text-ink-mid">
+                    Beckett asks for these only when you choose the related feature. Your primary Microsoft 365 connection remains read-only.
+                  </p>
+                  <ConnectRow
+                    icon="✉"
+                    name="Outlook Mail Decode"
+                    description="Enable read-only access when you want Beckett to explain a message you choose"
+                    connected={Boolean(diagnostics?.integrations.microsoft.connected && (diagnostics.integrations.microsoft.scopes?.split(" ").includes("Mail.Read") || diagnostics.integrations.microsoft.scopes?.split(" ").includes("Mail.ReadWrite")))}
+                    detail="Mail Decode enabled"
+                    onConnect={() => {
+                      window.location.href = "/api/microsoft/connect?kind=mail";
+                    }}
+                  />
+                  <ConnectRow
+                    icon="＋"
+                    name="Add Outlook calendar blocks"
+                    description="Enable calendar writes for an approved break or focus block"
+                    connected={Boolean(diagnostics?.integrations.microsoft.connected && diagnostics.integrations.microsoft.scopes?.split(" ").includes("Calendars.ReadWrite"))}
+                    detail="Calendar blocks enabled"
+                    onConnect={() => {
+                      window.location.href = "/api/microsoft/connect?kind=calendar-write";
+                    }}
+                  />
+                  <ConnectRow
+                    icon="✎"
+                    name="Save Outlook drafts"
+                    description="Enable draft saving only after you review and confirm; Beckett never sends"
+                    connected={Boolean(diagnostics?.integrations.microsoft.connected && diagnostics.integrations.microsoft.scopes?.split(" ").includes("Mail.ReadWrite"))}
+                    detail="Draft saving enabled"
+                    onConnect={() => {
+                      window.location.href = "/api/microsoft/connect?kind=mail-write";
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+            {diagnostics?.integrations.microsoft.connected && (
+              <div className="mt-3 border-t border-border pt-3">
+                <p className="text-xs font-medium text-ink">Home calendar updates</p>
+                <p className="mt-1 text-xs leading-relaxed text-ink-mid">
+                  Optional. Let Beckett receive calendar change signals so Home can refresh its schedule-based suggestions. Beckett does not notify you or edit your calendar.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void enableCalendarUpdates()}
+                  className="mt-3 rounded-pill border border-border px-4 py-1.5 text-xs text-ink hover:bg-bg"
+                >
+                  Keep Home suggestions updated
+                </button>
+                {calendarUpdatesStatus && <p className="mt-2 text-xs text-ink-mid" role="status">{calendarUpdatesStatus}</p>}
+              </div>
+            )}
+          </div>
           {/* Slack */}
           <ConnectRow
             icon="💬"
@@ -638,145 +769,7 @@ export default function SettingsPage() {
               window.location.href = "/api/slack/connect";
             }}
           />
-          <div className="rounded-sm border border-border bg-bg/60 p-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="max-w-xl">
-                <p className="text-sm font-medium text-ink">Slack quickstart</p>
-                <ol className="mt-2 space-y-1.5 text-xs leading-relaxed text-ink-mid">
-                  <li>1. Connect Slack from Beckett Settings.</li>
-                  <li>2. Approve Beckett for your workspace. Some workspaces may require admin approval.</li>
-                  <li>3. Open Slack Desktop and type <code className="font-mono text-ink">/beckett</code>.</li>
-                </ol>
-                <p className="mt-3 text-xs leading-relaxed text-ink-mid">
-                  For a specific Slack message, use the message shortcuts: <span className="font-medium text-ink">Beckett - Decode</span> or <span className="font-medium text-ink">Beckett - Respond</span>.
-                </p>
-                {!diagnostics?.integrations.slack.connected && (
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <AddToSlackButton href="/api/slack/connect" />
-                    <span className="text-xs leading-relaxed text-ink-light">
-                      Connects this Slack workspace to your Beckett account.
-                    </span>
-                  </div>
-                )}
-              </div>
-              <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:max-w-lg">
-                {slackCommandExamples.map((example) => (
-                  <code
-                    key={example}
-                    className="break-words rounded-sm border border-primary/15 bg-white px-2.5 py-2 text-[11px] leading-snug text-ink"
-                  >
-                    {example}
-                  </code>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
-      </section>
-
-      {/* Beta diagnostics */}
-      <section className="bg-white rounded-card border border-border p-6 mb-5">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div>
-            <h2
-              className="text-lg text-ink mb-1"
-              style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-            >
-              Beta diagnostics
-            </h2>
-            <p className="text-sm text-ink-mid">
-              Quick health check for account access, integrations, and beta AI usage.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadDiagnostics()}
-            disabled={diagnosticsLoading}
-            className="shrink-0 text-xs border border-border rounded-pill px-4 py-1.5 text-ink hover:bg-bg transition-colors disabled:opacity-50"
-          >
-            {diagnosticsLoading ? "Checking..." : "Refresh"}
-          </button>
-        </div>
-
-        {diagnosticsError && (
-          <div
-            className="rounded-sm border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"
-            role="alert"
-          >
-            {diagnosticsError}
-          </div>
-        )}
-
-        {diagnostics ? (
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <HealthPill ok={diagnostics.beckett.authenticated} label="Beckett login" />
-              <HealthPill ok={diagnostics.extension.tokenIssued} label="Extension token" />
-              <HealthPill ok={diagnostics.integrations.slack.connected} label="Slack" />
-              <HealthPill ok={diagnostics.integrations.google.connected} label="Google" />
-              <HealthPill ok={diagnostics.api.reachable} label="API reachable" />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Account</p>
-                <p className="mt-1 text-sm text-ink">{diagnostics.beckett.email || profile.email}</p>
-                <p className="text-xs text-ink-light capitalize">Plan: {diagnostics.beckett.plan}</p>
-              </div>
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">AI usage today</p>
-                {diagnostics.aiUsage.unlimited ? (
-                  <>
-                    <p className="mt-1 text-sm text-ink">Unlimited tester access</p>
-                    <p className="text-xs text-ink-light">{diagnostics.aiUsage.used} calls logged today</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-1 text-sm text-ink">
-                      {diagnostics.aiUsage.used}/{diagnostics.aiUsage.limit} used
-                    </p>
-                    <p className="text-xs text-ink-light">{diagnostics.aiUsage.remaining} remaining</p>
-                  </>
-                )}
-              </div>
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Slack</p>
-                {diagnostics.integrations.slack.connected ? (
-                  <>
-                    <p className="mt-1 text-sm text-ink">
-                      {diagnostics.integrations.slack.teamName || "Workspace connected"}
-                    </p>
-                    <p className="text-xs text-ink-light">
-                      User: {diagnostics.integrations.slack.userId || "unknown"}
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-1 text-sm text-amber-700">Not connected in web app settings</p>
-                )}
-              </div>
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Last check</p>
-                <p className="mt-1 text-sm text-ink">{formatDiagnosticDate(diagnostics.api.checkedAt)}</p>
-                <p className="text-xs text-ink-light">
-                  Extension sync: {formatDiagnosticDate(diagnostics.extension.lastProfileSyncAt)}
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs text-ink-light">
-              If Slack shows connected here but analysis still fails, reload the Chrome extension and reconnect
-              Slack from the extension popup so the local browser token is refreshed too.
-            </p>
-          </div>
-        ) : !diagnosticsError ? (
-          <div
-            className="rounded-sm border border-border bg-bg/60 p-4 text-sm text-ink-light"
-            role="status"
-            aria-live="polite"
-          >
-            {diagnosticsLoading ? "Checking beta systems..." : "Run a health check to see current status."}
-          </div>
-        ) : null}
       </section>
 
       {/* Extension setup */}

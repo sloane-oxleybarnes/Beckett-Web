@@ -1,30 +1,30 @@
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { requireUser } from "@/lib/server-auth";
 import Link from "next/link";
 import MoodSelector from "@/components/dashboard/MoodSelector";
 import CoachWalkthrough from "@/components/dashboard/CoachWalkthrough";
 import BetaMissionsCard from "@/components/dashboard/BetaMissionsCard";
+import MicrosoftDayPlan from "@/components/dashboard/MicrosoftDayPlan";
 
 type DashboardPageProps = {
-  searchParams?: {
+  searchParams?: Promise<{
     tour?: string | string[];
-  };
+  }>;
 };
 
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  const supabase = createSupabaseServerClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) redirect("/auth/login");
+export default async function DashboardPage(props: DashboardPageProps) {
+  const searchParams = await props.searchParams;
+  const { supabase, user } = await requireUser().catch(() => redirect("/auth/login"));
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name, plan, extension_connected_at, first_login_complete, dashboard_walkthrough_completed_at")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .single();
 
   const name =
     profile?.full_name?.split(" ")[0] ||
-    session.user.email?.split("@")[0] ||
+    user.email?.split("@")[0] ||
     "there";
 
   let skillsCompleted = 0;
@@ -33,7 +33,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     const { data: completions } = await supabase
       .from("course_completions")
       .select("course_id")
-      .eq("user_id", session.user.id)
+      .eq("user_id", user.id)
     if (completions) {
       skillsCompleted = completions.length;
       completions.forEach((completion: { course_id: string }) => completedCourseIds.add(completion.course_id));
@@ -45,7 +45,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     const { data: progressRows } = await supabase
       .from("course_progress")
       .select("course_id")
-      .eq("user_id", session.user.id);
+      .eq("user_id", user.id);
     if (progressRows) {
       skillsStarted = progressRows.filter((row: { course_id: string }) => !completedCourseIds.has(row.course_id)).length;
     }
@@ -122,6 +122,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       </section> : null}
 
       <BetaMissionsCard />
+
+      <MicrosoftDayPlan />
 
       <section className="mb-6">
         <div className="rounded-card border border-border bg-white p-6">

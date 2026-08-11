@@ -20,6 +20,10 @@
 # misc
 .DS_Store
 *.pem
+/.tmp/
+/outputs/
+*.inspect.ndjson
+docs/beckett-architecture-editable/
 
 # debug
 npm-debug.log*

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" xmlns:mailappor="http://schemas.microsoft.com/office/mailappversion/1.1" xsi:type="MailApp">
+  <Id>90c2f2db-20b8-4c6f-91e7-9cba3b5c4b5e</Id>
+  <Version>1.0.0.1</Version>
+  <ProviderName>Beckett Labs Inc.</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="Beckett" />
+  <Description DefaultValue="Private, user-invoked communication coaching for selected Microsoft Outlook messages." />
+  <IconUrl DefaultValue="https://beckett-git-staging-sloane-s-projects1.vercel.app/brand/outlook-icon-64.png" />
+  <HighResolutionIconUrl DefaultValue="https://beckett-git-staging-sloane-s-projects1.vercel.app/brand/outlook-icon-128.png" />
+  <SupportUrl DefaultValue="https://beckett-git-staging-sloane-s-projects1.vercel.app/support" />
+  <AppDomains><AppDomain>https://beckett-git-staging-sloane-s-projects1.vercel.app</AppDomain></AppDomains>
+  <Hosts><Host Name="Mailbox" /></Hosts>
+  <Requirements><Sets><Set Name="Mailbox" MinVersion="1.5" /></Sets></Requirements>
+  <FormSettings><Form xsi:type="ItemRead"><DesktopSettings><SourceLocation DefaultValue="https://beckett-git-staging-sloane-s-projects1.vercel.app/outlook-addin" /><RequestedHeight>450</RequestedHeight></DesktopSettings></Form></FormSettings>
+  <Permissions>ReadItem</Permissions>
+  <Rule xsi:type="RuleCollection" Mode="Or"><Rule xsi:type="ItemIs" ItemType="Message" FormType="Read" /></Rule>
+  <DisableEntityHighlighting>false</DisableEntityHighlighting>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
+      <Description resid="residDescription" />
+      <Requirements><bt:Sets DefaultMinVersion="1.5"><bt:Set Name="Mailbox" /></bt:Sets></Requirements>
+      <Hosts>
+        <Host xsi:type="MailHost">
+          <DesktopFormFactor>
+            <ExtensionPoint xsi:type="MessageReadCommandSurface">
+              <OfficeTab id="TabDefault"><Group id="BeckettReadGroup"><Label resid="residLabel" /><Control xsi:type="Button" id="BeckettOpenRead"><Label resid="residLabel" /><Supertip><Title resid="residLabel" /><Description resid="residDescription" /></Supertip><Icon><bt:Image size="16" resid="icon16" /><bt:Image size="32" resid="icon32" /><bt:Image size="80" resid="icon80" /></Icon><Action xsi:type="ShowTaskpane"><SourceLocation resid="taskPaneUrl" /></Action></Control></Group></OfficeTab>
+            </ExtensionPoint>
+          </DesktopFormFactor>
+        </Host>
+      </Hosts>
+      <Resources>
+        <bt:Images><bt:Image id="icon16" DefaultValue="https://beckett-git-staging-sloane-s-projects1.vercel.app/brand/outlook-icon-16.png" /><bt:Image id="icon32" DefaultValue="https://beckett-git-staging-sloane-s-projects1.vercel.app/brand/outlook-icon-32.png" /><bt:Image id="icon80" DefaultValue="https://beckett-git-staging-sloane-s-projects1.vercel.app/brand/outlook-icon-80.png" /></bt:Images>
+        <bt:Urls><bt:Url id="taskPaneUrl" DefaultValue="https://beckett-git-staging-sloane-s-projects1.vercel.app/outlook-addin" /></bt:Urls>
+        <bt:ShortStrings><bt:String id="residLabel" DefaultValue="Beckett" /></bt:ShortStrings>
+        <bt:LongStrings><bt:String id="residDescription" DefaultValue="Private, user-invoked communication coaching for selected Microsoft Outlook messages." /></bt:LongStrings>
+      </Resources>
+    </VersionOverrides>
+  </VersionOverrides>
+</OfficeApp>

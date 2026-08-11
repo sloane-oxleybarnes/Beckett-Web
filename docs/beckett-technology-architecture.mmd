@@ -1,0 +1,71 @@
+flowchart TB
+  subgraph Client["User surfaces"]
+    U["Users"]
+    Web["Beckett web app and dashboard"]
+    Ext["Chrome extension<br/>Gmail and Slack side panel"]
+    SlackUI["Slack workspace<br/>/beckett, shortcuts, events"]
+  end
+
+  subgraph Runtime["Delivery and runtime"]
+    GitHub["GitHub<br/>source repo"]
+    CloudflareDNS["Cloudflare DNS<br/>meetbeckett.co zone"]
+    CloudflareWorkers["Cloudflare Workers<br/>Slack OAuth secret exchange<br/>beta signup fallback"]
+    Vercel["Vercel<br/>Next.js app, API routes, cron jobs"]
+  end
+
+  subgraph Core["Core app services"]
+    Supabase["Supabase<br/>Auth + Postgres<br/>profiles, beta signups, integrations,<br/>usage limits, contacts, Slack history"]
+    Bedrock["AWS Bedrock<br/>Claude model runtime"]
+    GCP["Google Cloud Platform<br/>OAuth client + Gmail API"]
+    SlackAPI["Slack API<br/>OAuth, commands, events,<br/>chat, search, history"]
+  end
+
+  subgraph Growth["Lifecycle, support, and messaging"]
+    HubSpot["HubSpot<br/>CRM contacts, lifecycle fields"]
+    Loops["Loops<br/>email audience + lifecycle events"]
+    Resend["Resend<br/>transactional email"]
+  end
+
+  subgraph Analytics["Analytics"]
+    PostHog["PostHog<br/>product events"]
+    GA["Google Analytics<br/>website analytics"]
+  end
+
+  U --> Web
+  U --> Ext
+  U --> SlackUI
+
+  GitHub -->|"push / deploy connection"| Vercel
+  Web -->|"meetbeckett.co"| CloudflareDNS
+  Ext -->|"www.meetbeckett.co/api"| CloudflareDNS
+  CloudflareDNS -->|"Vercel DNS records"| Vercel
+
+  Web -->|"Supabase browser auth/client calls"| Supabase
+  Vercel -->|"server auth, data reads/writes,<br/>service-role jobs"| Supabase
+  Ext -->|"extension token + coaching requests"| Vercel
+
+  Vercel -->|"AI prompts from extension,<br/>practice, Slack agent flows"| Bedrock
+  Bedrock -->|"coaching response"| Vercel
+
+  Web -->|"Google OAuth consent<br/>Gmail read-only scope"| GCP
+  Ext -->|"Chrome identity + Gmail read-only"| GCP
+  Vercel -->|"fetch full Gmail thread context<br/>with stored token"| GCP
+  Vercel -->|"store Google connection status/token"| Supabase
+
+  SlackUI -->|"slash commands,<br/>events, interactions"| Vercel
+  Vercel -->|"Slack OAuth auth URL<br/>and code exchange"| CloudflareWorkers
+  CloudflareWorkers -->|"oauth.v2.access<br/>using Slack app secret"| SlackAPI
+  Vercel -->|"store Slack tokens,<br/>team, user, scopes"| Supabase
+  Vercel -->|"post replies, publish Home,<br/>fetch/search context"| SlackAPI
+  SlackAPI -->|"Slack context + delivery results"| Vercel
+
+  Vercel -->|"beta signup, approval,<br/>lifecycle updates"| HubSpot
+  Vercel -->|"create contact + events"| Loops
+  Vercel -->|"signup confirmations,<br/>invites, reminders, support email"| Resend
+
+  Vercel -->|"server-side beta/product events"| PostHog
+  Web -->|"client analytics script"| PostHog
+  Web -->|"gtag page analytics"| GA
+
+  Vercel -->|"daily email automation cron"| Resend
+  Vercel -->|"daily automation reads/writes"| Supabase

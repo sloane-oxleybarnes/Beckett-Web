@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { BECKETT_BOUNDARIES, BECKETT_COACHING_PRINCIPLE } from "@/lib/beckett-boundaries";
 
@@ -6,8 +5,9 @@ const sections = [
   {
     title: "What Beckett reads",
     body: [
-      "During beta, Beckett can use Gmail, Slack, and Chrome extension context only when you connect those tools and ask Beckett for coaching, or when you turn on an analysis setting yourself.",
-      "In the Gmail add-on, Beckett uses add-on-specific access to the open message or available thread context after you choose an analysis action. If you separately connect Gmail in the Beckett web app, Beckett uses the read-only access you approve for the feature you request. For Slack, Beckett uses connected workspace context and may search relevant Slack history across authorized channels, DMs, group DMs, and private channels when you ask for coaching.",
+      "During beta, Beckett can use Gmail, Microsoft Outlook, Slack, and Chrome extension context only when you connect those tools and ask Beckett for coaching, or when you turn on an analysis setting yourself.",
+      "In the Gmail add-on, Beckett uses add-on-specific access to the open message or available thread context after you choose an analysis action. If you separately connect Gmail in the Beckett web app, Beckett uses the read-only access you approve for the feature you request. In Slack, Beckett processes a user-selected message or the exact private Beckett thread only for the active request. It does not search the workspace in the zero-copy version.",
+      "In the add-in for Microsoft Outlook, Beckett uses the Office JavaScript API to read the sender, subject, and plain-text body of the message open in Outlook after you open Beckett on that message. Beckett sends that selected content to its service only after you choose Decode with Beckett. The Marketplace version does not read attachments, scan the mailbox in the background, modify messages, create drafts, or send mail.",
       "Beckett is not meant to read your work communication in the background without your action.",
     ],
   },
@@ -16,15 +16,15 @@ const sections = [
     body: [
       "Beckett stores account details, beta access status, onboarding answers, connection status, usage counts, timestamps, contacts you choose to add, and coaching settings.",
       "This can include personal information such as your name and email address, authentication and connection information, user-provided communication preferences, and workplace communication context you choose to send for coaching.",
-      "Beckett does not store full Gmail or Slack message history by default, including raw Slack search results used for a coaching response. For product analytics and CRM, Beckett uses counts, timestamps, connection status, and safe event names, not raw message content.",
+      "Beckett does not store full Gmail or Outlook message history by default. For Slack, Beckett does not persist messages, prompts, generated responses, transcripts, or content-derived titles and summaries. Slack remains the transcript system of record; Beckett stores only encrypted installation credentials, opaque routing and flow metadata, account links, and content-free credit and usage events. Selected content is processed to generate the requested response but is not persisted in Beckett's application database. Service providers may process that content under Beckett's configured service terms. For product analytics and CRM, Beckett uses counts, timestamps, connection status, and safe event names, not raw message content.",
       "When a selected Gmail conversation matches a confirmed Beckett contact, Beckett may store a short derived interaction summary so future coaching has continuity. Optional email-style learning is off by default and stores compact observations such as typical length or formatting, not full email bodies.",
     ],
   },
   {
     title: "How Beckett uses your data",
     body: [
-      "Beckett uses user data to provide and improve its single purpose: workplace and workplace-adjacent communication coaching in Gmail, Slack, the Chrome extension, practice sessions, and skill modules.",
-      "That includes authenticating your account, enforcing beta access and usage limits, generating coaching responses, remembering your preferences, connecting Gmail or Slack when you ask, troubleshooting bugs, responding to support requests, and improving coaching quality.",
+      "Beckett uses user data to provide and improve its single purpose: workplace and workplace-adjacent communication coaching in Gmail, Outlook, Slack, the Chrome extension, practice sessions, and skill modules.",
+      "That includes authenticating your account, enforcing beta access and usage limits, generating coaching responses, remembering your preferences, connecting Gmail, Microsoft 365, or Slack when you ask, troubleshooting bugs, responding to support requests, and improving coaching quality.",
       "Beckett does not use or transfer user data for purposes unrelated to workplace or workplace-adjacent communication coaching.",
     ],
   },
@@ -32,7 +32,8 @@ const sections = [
     title: "Who Beckett shares data with",
     body: [
       "Beckett shares user data only with service providers and systems needed to run, secure, support, and improve Beckett.",
-      "These may include authentication and database providers such as Supabase, AI providers such as Anthropic for generating coaching responses, Google and Slack APIs when you connect those services, hosting and infrastructure providers, analytics and debugging tools, email delivery tools, and beta/customer-support tools such as HubSpot and Loops.",
+      "These may include authentication and database providers such as Supabase, AI providers such as Anthropic for generating coaching responses, Microsoft, Google, and Slack APIs when you connect those services, hosting and infrastructure providers, analytics and debugging tools, email delivery tools, and beta/customer-support tools such as HubSpot and Loops.",
+      "When you choose Decode with Beckett in Outlook, the selected sender, subject, and message body are sent to Beckett's configured AI provider to generate the response you requested.",
       "Service providers receive only the information needed for their role. Beckett does not sell personal data or transfer user data to advertising platforms, data brokers, or other information resellers.",
     ],
   },
@@ -40,8 +41,9 @@ const sections = [
     title: "What Beckett does not do",
     body: [
       "Beckett does not sell your personal data.",
-      "Beckett does not use Gmail or Slack content for advertising.",
+      "Beckett does not use Gmail, Outlook, or Slack content for advertising.",
       "Beckett does not automatically send Gmail messages. A draft is created only after you choose a draft action, and you review and send it from Gmail.",
+      "The Beckett add-in for Microsoft Outlook does not change the selected message, create or insert draft content, or send mail.",
       "Beckett does not use or transfer user data to determine creditworthiness or for lending purposes.",
       "Beckett does not collect payment card information through the Chrome extension during beta.",
       "Beckett does not collect health information, precise location, or general web browsing history for its Chrome extension.",
@@ -84,7 +86,7 @@ const sections = [
 export const metadata = {
   title: "Privacy and Trust - Beckett",
   description:
-    "How Beckett handles Gmail, Slack, extension context, beta feedback, deletion, and coaching boundaries.",
+    "How Beckett handles Gmail, Outlook, Slack, extension context, beta feedback, deletion, and coaching boundaries.",
   alternates: {
     canonical: "/privacy",
   },
@@ -95,21 +97,13 @@ export default function PrivacyPage() {
     <main className="min-h-screen bg-bg text-ink">
       <header className="border-b border-border bg-white/80">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-4">
-          <Link href="/" className="inline-flex items-center gap-3">
-            <Image
-              src="/brand/beckett-horizontal-logo.png"
-              alt="Beckett"
-              width={126}
-              height={32}
-              priority
-            />
+          <Link href="/" className="text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>
+            Beckett
           </Link>
-          <Link
-            href="/beta"
-            className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark"
-          >
-            Beta access
-          </Link>
+          <nav className="flex gap-4 text-sm text-ink-mid" aria-label="Policy links">
+            <Link href="/support" className="hover:text-primary">Support</Link>
+            <Link href="/terms" className="hover:text-primary">Terms</Link>
+          </nav>
         </div>
       </header>
 
@@ -129,7 +123,7 @@ export default function PrivacyPage() {
           how it uses and shares data, what feedback can include, and where the coaching
           boundaries are.
         </p>
-        <p className="mt-4 text-sm text-ink-light">Last updated: July 16, 2026</p>
+        <p className="mt-4 text-sm text-ink-light">Last updated: August 10, 2026</p>
       </section>
 
       <section className="mx-auto grid w-full max-w-4xl gap-5 px-5 pb-12">

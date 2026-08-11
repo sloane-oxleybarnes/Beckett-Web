@@ -53,7 +53,7 @@ export const SITE_CONTENT_FIELDS = [
     label: "Homepage beta subheadline",
     group: "Homepage beta",
     defaultValue:
-      "Free, invite-only access with 60 successful coaching actions per day, full Practice, and all current skill courses.",
+      "Free beta access with 60 successful coaching actions per day, full Practice, and all current skill courses.",
     inputType: "textarea",
   },
   {

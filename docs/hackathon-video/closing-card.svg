@@ -1,0 +1,10 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1920" height="1080" fill="#10312E"/>
+  <rect x="0" y="0" width="1920" height="18" fill="#2A9D8F"/>
+  <text x="144" y="300" fill="#F7F4EE" font-family="Inter, Helvetica, Arial, sans-serif" font-size="82" font-weight="800">Beckett helps neurodivergent workers</text>
+  <text x="144" y="402" fill="#F7F4EE" font-family="Inter, Helvetica, Arial, sans-serif" font-size="82" font-weight="800">communicate clearly</text>
+  <text x="144" y="512" fill="#BFD9D4" font-family="Inter, Helvetica, Arial, sans-serif" font-size="52" font-weight="600">inside the tools where work already happens.</text>
+  <rect x="144" y="680" width="600" height="82" rx="41" fill="#F7F4EE"/>
+  <text x="190" y="735" fill="#10312E" font-family="Inter, Helvetica, Arial, sans-serif" font-size="34" font-weight="800">Beckett for Slack</text>
+  <text x="144" y="928" fill="#BFD9D4" font-family="Inter, Helvetica, Arial, sans-serif" font-size="28" font-weight="500">Private by default. User stays in control.</text>
+</svg>

@@ -1,0 +1,13 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1920" height="1080" fill="#F7F4EE"/>
+  <rect x="0" y="0" width="1920" height="18" fill="#2A9D8F"/>
+  <rect x="144" y="160" width="124" height="124" rx="30" fill="#10312E"/>
+  <circle cx="206" cy="222" r="34" fill="#F7F4EE"/>
+  <path d="M198 226C211 204 235 206 242 222C250 240 225 259 199 279C175 258 152 239 162 221C171 205 191 207 198 226Z" fill="#2A9D8F"/>
+  <text x="144" y="410" fill="#17211F" font-family="Inter, Helvetica, Arial, sans-serif" font-size="104" font-weight="800">Beckett for Slack</text>
+  <text x="148" y="500" fill="#3F4C49" font-family="Inter, Helvetica, Arial, sans-serif" font-size="44" font-weight="500">Private workplace communication coaching</text>
+  <text x="148" y="612" fill="#17211F" font-family="Inter, Helvetica, Arial, sans-serif" font-size="58" font-weight="700">Decode messages. Draft replies. Prep difficult conversations.</text>
+  <rect x="144" y="718" width="515" height="72" rx="36" fill="#E7EFE9"/>
+  <text x="184" y="766" fill="#10312E" font-family="Inter, Helvetica, Arial, sans-serif" font-size="30" font-weight="700">Built where work already happens</text>
+  <text x="144" y="928" fill="#6E7774" font-family="Inter, Helvetica, Arial, sans-serif" font-size="28" font-weight="500">Slack Agent for Good</text>
+</svg>
