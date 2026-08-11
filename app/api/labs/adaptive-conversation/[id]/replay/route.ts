@@ -5,7 +5,8 @@ import type { AdaptiveReplay, AdaptiveSnapshot, AdaptiveState, AdaptiveTranscrip
 
 type Body = { turn?: number; message?: string }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { supabase, session, response } = await getAdaptiveAuth()
   if (response || !session) return response
   const body = await req.json().catch(() => null) as Body | null
@@ -15,7 +16,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { data: row, error } = await supabase
     .from('adaptive_conversation_sessions')
     .select('id, setup_snapshot, simulation_state, transcript, assessment, replay')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', session.user.id)
     .single()
   if (error || !row) return NextResponse.json({ error: 'Session not found.' }, { status: 404 })
@@ -68,7 +69,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { error: updateError } = await supabase
     .from('adaptive_conversation_sessions')
     .update({ replay, updated_at: now })
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', session.user.id)
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
   return NextResponse.json({ replay, reply: result.reply.trim(), conversationStatus: result.conversationStatus, endReason: result.endReason })

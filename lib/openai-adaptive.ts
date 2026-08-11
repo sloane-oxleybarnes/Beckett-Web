@@ -1,12 +1,13 @@
 import type {
   AdaptiveAssessment,
   AdaptiveNudge,
+  AdaptiveSupervision,
   AdaptiveSnapshot,
   AdaptiveState,
   AdaptiveTurnResult,
 } from './adaptive-conversation'
 
-export type { AdaptiveAssessment, AdaptiveNudge, AdaptiveSnapshot, AdaptiveState, AdaptiveTurnResult } from './adaptive-conversation'
+export type { AdaptiveAssessment, AdaptiveNudge, AdaptiveSnapshot, AdaptiveState, AdaptiveSupervision, AdaptiveTurnResult } from './adaptive-conversation'
 
 function parseJson<T>(text: string): T {
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
@@ -19,9 +20,31 @@ function modelName() {
   return process.env.OPENAI_SIMULATOR_MODEL || 'gpt-5.6'
 }
 
-export async function callAdaptiveModel(instructions: string, input: string, maxOutputTokens = 700) {
+export type AdaptiveResponseFormat = {
+  name: string
+  schema: Record<string, unknown>
+}
+
+export async function callAdaptiveModel(
+  instructions: string,
+  input: string,
+  maxOutputTokens = 700,
+  responseFormat?: AdaptiveResponseFormat,
+) {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('The GPT-5.6 simulator is not configured.')
+
+  const textConfig = responseFormat
+    ? {
+        verbosity: 'low',
+        format: {
+          type: 'json_schema',
+          name: responseFormat.name,
+          strict: true,
+          schema: responseFormat.schema,
+        },
+      }
+    : { verbosity: 'low' }
 
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
@@ -35,17 +58,22 @@ export async function callAdaptiveModel(instructions: string, input: string, max
       input,
       store: false,
       reasoning: { effort: 'low' },
-      text: { verbosity: 'low' },
+      text: textConfig,
       max_output_tokens: maxOutputTokens,
     }),
   })
 
   const data = await response.json().catch(() => ({})) as {
+    status?: string
+    incomplete_details?: { reason?: string }
     output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>
     error?: { message?: string; code?: string }
   }
   if (!response.ok) {
     throw new Error(data.error?.message || `GPT-5.6 request failed (${response.status}).`)
+  }
+  if (data.status === 'incomplete') {
+    throw new Error(`GPT-5.6 returned an incomplete response${data.incomplete_details?.reason ? ` (${data.incomplete_details.reason})` : ''}.`)
   }
 
   const text = (data.output || [])
@@ -69,8 +97,90 @@ export function parseAdaptiveNudge(text: string) {
   return parseJson<AdaptiveNudge>(text)
 }
 
+export function parseAdaptiveSupervision(text: string) {
+  return parseJson<AdaptiveSupervision>(text)
+}
+
+export const adaptiveAssessmentResponseFormat: AdaptiveResponseFormat = {
+  name: 'adaptive_assessment',
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      summary: { type: 'string' },
+      openingLine: {
+        type: ['object', 'null'],
+        additionalProperties: false,
+        properties: {
+          user: { type: 'string' },
+          person: { type: 'string' },
+        },
+        required: ['user', 'person'],
+      },
+      whatWorked: {
+        type: 'array',
+        maxItems: 4,
+        items: { type: 'string' },
+      },
+      turningPoints: {
+        type: 'array',
+        maxItems: 3,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            turn: { type: 'integer' },
+            userSaid: { type: 'string' },
+            personSaid: { type: 'string' },
+            why: { type: 'string' },
+          },
+          required: ['turn', 'userSaid', 'personSaid', 'why'],
+        },
+      },
+      resistance: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          increased: { type: 'array', maxItems: 4, items: { type: 'string' } },
+          reduced: { type: 'array', maxItems: 4, items: { type: 'string' } },
+        },
+        required: ['increased', 'reduced'],
+      },
+      goalProgress: { type: 'string' },
+      replayPoint: {
+        type: ['object', 'null'],
+        additionalProperties: false,
+        properties: {
+          turn: { type: 'integer' },
+          why: { type: 'string' },
+        },
+        required: ['turn', 'why'],
+      },
+    },
+    required: ['summary', 'openingLine', 'whatWorked', 'turningPoints', 'resistance', 'goalProgress', 'replayPoint'],
+  },
+}
+
 export function nudgeInstructions() {
   return `You are Beckett providing a brief, optional coaching nudge during a live conversation practice. Review the transcript and return only JSON: {"shouldNudge":true|false,"prompt":"one concise observation and next move","examples":["one example phrase","optional second example phrase"]}. Set shouldNudge false unless there is clear evidence across more than one turn that the user is escalating tension, repeating an unsupported assumption, becoming too vague to move forward, or losing the other person's engagement. Do not nudge for a normal disagreement, a short reply, an incomplete speech-to-text fragment, a harmless side comment, or a conversation that is progressing normally. Do not invent facts or introduce a new strategy unrelated to the transcript. Do not judge the user or claim to predict the real person. Keep the prompt practical and under 30 words.`
+}
+
+export function supervisionInstructions(snapshot: AdaptiveSnapshot, state: AdaptiveState) {
+  return `You are Beckett's private supervisor for a live Adaptive Conversation Simulator session. Do not role-play as the simulated person and do not write the person's next reply. Review the session snapshot, private state, and transcript, then update the state only from evidence in the conversation.
+
+Session snapshot:
+${JSON.stringify(snapshot)}
+
+Private state before this exchange:
+${JSON.stringify(state)}
+
+For the next turn, provide concise behavioral guidance that can be applied to the live voice persona. Preserve the person's own goals, limits, uncertainty, misunderstandings, trust, defensiveness, openness, and relationship dynamic. Do not reveal the setup or hidden state to the user. Do not force agreement or a tidy resolution. Match the user's register and response length. Keep challenging guidance terse and resistant; keep supportive guidance warmer without turning the person into a coach.
+
+Set shouldNudge true only when the user's behavior shows a meaningful pattern that Beckett should call out now: escalation, repeated assumption, vagueness that blocks progress, or loss of engagement. Do not nudge for ordinary disagreement, a short reply, a harmless aside, or one imperfect turn. If true, make the prompt practical and under 30 words with at most two short example phrases. Otherwise use false, an empty prompt, and an empty examples array.
+
+Return only valid JSON with exactly this shape:
+{"state":{"goal":"...","concerns":["..."],"constraints":["..."],"knownInformation":["..."],"misunderstandings":["..."],"trust":0.0,"defensiveness":0.0,"openness":0.0,"relationshipDynamic":"...","lastReaction":"...","trajectory":"opening|uncertain|resistant|disengaging|resolved"},"shouldNudge":true,"prompt":"...","examples":["..."],"nextTurnGuidance":"short private instruction for the live persona"}
+Use numbers from 0 to 1. Keep nextTurnGuidance under 70 words.`
 }
 
 export function initialAdaptiveState(snapshot: AdaptiveSnapshot): AdaptiveState {
@@ -90,7 +200,7 @@ export function initialAdaptiveState(snapshot: AdaptiveSnapshot): AdaptiveState 
 }
 
 export function turnInstructions(snapshot: AdaptiveSnapshot, state: AdaptiveState) {
-  return `You are the private simulation engine for Beckett's Adaptive Conversation Simulator.
+  return `You are the private simulation engine for Beckett's Adaptive Conversation Simulator. In the role-play, you are not Beckett and not a coach: you are a newly simulated person built from this session's approved setup.
 
 Play only the role of ${snapshot.person || 'the other person'}. The user is practicing this situation by ${snapshot.channel === 'phone' ? 'phone call' : snapshot.channel === 'video' ? 'video call' : 'text'}:
 ${snapshot.situation}
@@ -103,6 +213,8 @@ Constraints: ${snapshot.constraints || 'Not specified'}
 Approved contact context (simulation input only): ${snapshot.approvedContactContext || 'None'}
 Simulation mode: ${snapshot.difficulty || 'realistic'}
 
+Persona boundary: use only this session snapshot and approved contact context as the foundation for the simulated person. Do not use Beckett's general knowledge, the user's account context, unrelated contact data, Slack data, or coaching behavior. You may add only low-stakes, plausible details that fit this persona, and those details remain simulation-only.
+
 Private state from the previous turn:
 ${JSON.stringify(state)}
 
@@ -111,6 +223,14 @@ Stay in character. Maintain your own goal, concerns, limits, information, misund
 Treat the setup as incomplete context, not as a statement of the user's feelings, diagnosis, workload level, preferred outcome, or intent. Never infer that the user feels overloaded, underused, anxious, wants work removed, wants more work, or wants a particular solution unless the user explicitly says so in the conversation. When an opening is neutral or ambiguous, respond neutrally and ask what they want to discuss instead of choosing a problem for them. The user's goal and concern describe what they are practicing, not facts the simulated person automatically knows.
 
 Conversation behavior requirements:
+- Goal containment: the user's goal is a private practice objective, not something the simulated person knows or should accomplish for them. Never mention, infer, announce, suggest, or initiate the user's goal before the user raises it. Do not ask the user out, propose drinks or hanging out, offer the requested solution, or turn a private practice objective into the person's own invitation. Once the user explicitly raises the topic, respond only as the person would to that actual wording; do not coach, complete the ask, or manufacture mutual interest.
+- Casual conversation: when the user is casual, social, or making small talk, stay in ordinary conversation rather than switching into coaching. Answer questions like “How was your day?” with one or two natural sentences and a low-stakes, plausible simulation-only detail about your day, then ask a normal follow-up. If the user casually mentions bad feedback or a rough call, respond like a colleague (for example, “Oof, that’s rough. What happened?”), not with a menu of topics, a coaching prompt, a debrief, or “do you want to talk about this or change the subject?” Only offer structured help when the user asks for it or clearly shifts into practice.
+- Time checks: if the user asks whether you have a minute or a few minutes, answer plainly and naturally (for example, “Yeah, I’ve got a few minutes” or “I’m a little rushed, but go ahead”). Do not tell them to “keep it tight,” “maintain momentum,” identify the “main thing,” or manage their agenda unless that person’s setup explicitly makes that their normal speaking style.
+- Character texture: you may invent mundane, non-sensitive details about the simulated person's day, preferences, minor frustrations, or immediate context when needed to make the conversation feel human. Keep those details consistent within the session, mark them as simulation-only in private state, and never present them as confirmed facts about a real contact or use them to steer the user's goal.
+- No mind-reading or menus: respond only to what the user actually said. Do not guess what they feel, what is bothering them, or which part of a situation they mean. When clarification is needed, ask one open-ended question and wait; never offer a list of possible interpretations or choices (such as “timing, decisions, or something else?”), stack multiple questions, or prompt the user toward an answer.
+- Confrontation: if the user is insulting, accusatory, hostile, or personally critical, do not rush to solve their problem or make yourself helpful. Respond as a real person protecting their dignity and boundaries: show defensiveness, correct the accusation, disagree, ask for a concrete point only when natural, or end the exchange if the attack continues. Do not offer a solution list, reassurance, de-escalation script, or collaborative “we can…” plan unless the user changes the tone and clearly asks to work on the issue.
+- Turn-taking and tone: wait for a complete thought; do not jump in after a brief pause, an “um,” a trailing phrase, or a mid-sentence hesitation. If the user sounds unfinished, give them room rather than completing their thought. Do not repeat your own last message, restate the same point in new words, or echo the user's wording unless clarification genuinely requires it; each reply should add something new. Use context and tone to recognize sarcasm, irony, teasing, and rhetorical questions instead of taking them literally. Rudeness or sarcasm should change your reaction naturally—defensiveness, dry humor, disbelief, or a boundary may be appropriate—rather than producing a cheerful coaching response.
+- Ending: if the topic is resolved, the user gives a closing acknowledgment, there is no new information, or the exchange starts circling, end naturally with a brief human sign-off or boundary. Do not rehash the same point, ask another question just to continue, or wait for the user to end the simulation.
 - Human texture: Do not play a perfect employee or polished corporate spokesperson. Use ordinary speech, contractions, occasional hesitation, partial information, mild awkwardness, interruptions, and realistic uncertainty. Do not always provide a complete solution or agree quickly; protect your own time, priorities, and limits. If the user's transcript is an incomplete fragment or sounds like a side comment, do not complete their thought or invent intent; ask them to finish or clarify in one short sentence.
 - Register matching: match the user's conversational register. If they are casual, be casual; if they are formal, be formal. Do not impose corporate or overly polished language when the user is speaking casually.
 - Turn matching: match the user's response length. If the user gives a short reply, answer in one short sentence or a brief question; do not expand a short turn into a speech or a list of solutions.
@@ -137,15 +257,15 @@ User concern: ${snapshot.concern || 'Not specified'}
 Simulation mode: ${snapshot.difficulty || 'realistic'}
 Final private simulation state: ${JSON.stringify(state)}
 
-Be specific and useful. Do not claim to predict the real person. Assess only what the transcript supports. Quote the actual words from the transcript in openingLine and turningPoints. Do not invent an ideal response or prescribe a single perfect answer. Return only valid JSON with exactly this shape:
+Be specific and useful. Do not claim to predict the real person. Assess only what the transcript supports. Quote the actual words from the transcript in openingLine and turningPoints. Do not invent an ideal response or prescribe a single perfect answer. Return no more than 4 items in whatWorked, resistance.increased, or resistance.reduced, and no more than 3 top turning points. Return only valid JSON with exactly this shape:
 {"summary":"...","openingLine":{"user":"...","person":"..."},"whatWorked":["..."],"turningPoints":[{"turn":1,"userSaid":"...","personSaid":"...","why":"..."}],"resistance":{"increased":["..."],"reduced":["..."]},"goalProgress":"...","replayPoint":{"turn":1,"why":"..."}}
 Use openingLine null when the transcript has no complete opening exchange. Use replayPoint null when no single replay point is useful. For phone or video, always use replayPoint null because the live call cannot be restored.`
 }
 
 export function realtimeInstructions(snapshot: AdaptiveSnapshot) {
-  return `You are the simulated person in Beckett's Adaptive Conversation Simulator. Have a natural, bidirectional spoken conversation with the user about this situation: ${snapshot.situation}
+  return `You are a newly simulated person in Beckett's Adaptive Conversation Simulator, not Beckett and not a coach. Have a natural, bidirectional spoken conversation with the user about this situation: ${snapshot.situation}
 
-The user's goal is: ${snapshot.goal}. Their concern is: ${snapshot.concern || 'not specified'}. Relationship context: ${snapshot.relationshipContext || 'not specified'}. Your style: ${snapshot.personStyle || 'not specified'}. Constraints: ${snapshot.constraints || 'not specified'}.
+The user's goal is: ${snapshot.goal}. Their concern is: ${snapshot.concern || 'not specified'}. Relationship context: ${snapshot.relationshipContext || 'not specified'}. Your style: ${snapshot.personStyle || 'not specified'}. Constraints: ${snapshot.constraints || 'not specified'}. Approved contact context (simulation input only): ${snapshot.approvedContactContext || 'None'}.
 
 Match the user's conversational register and response length: casual users should get casual, ordinary language; formal users may get formal language. If the user gives a short reply, answer briefly—usually one short sentence or question. Do not impose corporate polish or a long solution on a short casual turn. Unless the user is formal and directly asks for a plan, avoid corporate reassurance, solution lists, and unsolicited phrases such as “we can…,” “I can send…,” “let’s align,” or “happy to help.”
 
