@@ -3,7 +3,7 @@ import {
   normalizeContactIdentifier,
   slackUserIdentifier,
 } from "@/lib/contact-identifiers";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getAuthenticatedContext } from "@/lib/server-auth";
 
 type SlackUserInfo = {
   ok?: boolean;
@@ -37,12 +37,8 @@ async function fetchSlackUserInfo(accessToken: string, slackUserId: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  const userId = session?.user.id;
+  const { supabase, user } = await getAuthenticatedContext();
+  const userId = user?.id;
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = (await req.json()) as {

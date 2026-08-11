@@ -11,11 +11,12 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function GoogleWorkspaceAddonConnectPage({
-  searchParams,
-}: {
-  searchParams?: { token?: string };
-}) {
+export default async function GoogleWorkspaceAddonConnectPage(
+  props: {
+    searchParams?: Promise<{ token?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const token = searchParams?.token || "";
   if (!isWorkspaceAddOnLinkToken(token)) {
     return <ExpiredLink />;
@@ -24,7 +25,7 @@ export default async function GoogleWorkspaceAddonConnectPage({
   const session = await getWorkspaceAddOnLinkSession(token);
   if (!session) return <ExpiredLink />;
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user?.email) {
     const next = `/auth/google-workspace-addon/connect?token=${encodeURIComponent(token)}`;

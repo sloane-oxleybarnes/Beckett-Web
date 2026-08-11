@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { getAuthenticatedContext } from '@/lib/server-auth'
 import { supabaseAdmin } from '@/lib/server-admin'
 
 function isAllowedRedirect(uri: string) {
@@ -17,10 +17,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid extension redirect URI.' }, { status: 400 })
   }
 
-  const supabase = createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const { user } = await getAuthenticatedContext()
 
-  if (!session) {
+  if (!user) {
     const login = new URL('/auth/login', req.url)
     login.searchParams.set('next', req.nextUrl.pathname + req.nextUrl.search)
     return NextResponse.redirect(login)
@@ -29,7 +28,7 @@ export async function GET(req: NextRequest) {
   const { data: profile, error } = await supabaseAdmin
     .from('profiles')
     .select('id, email, full_name, first_name, display_name, plan, extension_token')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
   if (error || !profile) {
@@ -41,7 +40,7 @@ export async function GET(req: NextRequest) {
     const { data: updated, error: updateError } = await supabaseAdmin
       .from('profiles')
       .update({ extension_token: crypto.randomUUID(), extension_connected_at: new Date().toISOString() })
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .select('extension_token')
       .single()
 
@@ -53,7 +52,7 @@ export async function GET(req: NextRequest) {
     await supabaseAdmin
       .from('profiles')
       .update({ extension_connected_at: new Date().toISOString() })
-      .eq('id', session.user.id)
+      .eq('id', user.id)
   }
 
   const target = new URL(redirectUri)

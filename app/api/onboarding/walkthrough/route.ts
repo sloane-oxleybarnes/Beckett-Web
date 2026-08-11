@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/server-admin";
 import { trackBetaEvent } from "@/lib/beta-events";
 
 export async function POST() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

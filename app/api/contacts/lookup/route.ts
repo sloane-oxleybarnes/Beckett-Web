@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { normalizeContactIdentifier } from '@/lib/contact-identifiers'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { getExtensionUserId } from '@/lib/extension-auth'
-
-async function getAuthedUserId(req: NextRequest): Promise<string | null> {
-  const extUserId = await getExtensionUserId(req)
-  if (extUserId) return extUserId
-  const supabase = createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.user.id ?? null
-}
+import { getRequestUserId } from '@/lib/server-auth'
 
 export async function GET(req: NextRequest) {
-  const userId = await getAuthedUserId(req)
+  const userId = await getRequestUserId(req, { allowExtension: true })
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const platform = req.nextUrl.searchParams.get('platform')
@@ -24,7 +16,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'platform and identifier required' }, { status: 400 })
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { data } = await supabase
     .from('contact_identifiers')
     .select('contact_id, platform, identifier, confirmed, contacts(id, name, trusted)')

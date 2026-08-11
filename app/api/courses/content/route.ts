@@ -6,7 +6,7 @@ import { ensureWebCourseAccess, WebCourseLimitError } from "@/lib/web-credits";
 export const dynamic = "force-dynamic";
 
 async function requireCourseAccess() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false as const, status: 401, error: "Unauthorized" };
 

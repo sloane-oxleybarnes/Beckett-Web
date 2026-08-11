@@ -1,21 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeContactIdentifier } from "@/lib/contact-identifiers";
 import { lookupRelationshipContextByIdentifier } from "@/lib/contact-relationship-context";
-import { getExtensionUserId } from "@/lib/extension-auth";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
-
-async function getAuthedUserId(req: NextRequest): Promise<string | null> {
-  const extUserId = await getExtensionUserId(req);
-  if (extUserId) return extUserId;
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return session?.user.id ?? null;
-}
+import { getRequestUserId } from "@/lib/server-auth";
 
 export async function GET(req: NextRequest) {
-  const userId = await getAuthedUserId(req);
+  const userId = await getRequestUserId(req, { allowExtension: true });
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const platform = req.nextUrl.searchParams.get("platform");

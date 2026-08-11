@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { requireUser } from "@/lib/server-auth";
 
 type Member = {
   id: string;
@@ -10,17 +10,12 @@ type Member = {
 };
 
 export default async function TeamPage() {
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) redirect("/auth/login");
+  const { supabase, user } = await requireUser().catch(() => redirect("/auth/login"));
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .single();
 
   if (profile?.plan !== "team" || profile?.role !== "admin") {
