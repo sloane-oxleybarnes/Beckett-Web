@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { requireUser } from "@/lib/server-auth";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import { ensureApprovedBetaPlan, hasApprovedBetaAccess } from "@/lib/beta-access";
 import { hasCurrentBetaConsent } from "@/lib/beta-consent";
@@ -9,23 +9,16 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    redirect("/auth/login");
-  }
+  const { supabase, user } = await requireUser().catch(() => redirect("/auth/login"));
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .single();
 
   const approved = await hasApprovedBetaAccess({
-    email: session.user.email,
+    email: user.email,
     plan: profile?.plan,
   });
   if (!approved) {
@@ -34,8 +27,8 @@ export default async function DashboardLayout({
   }
 
   const effectivePlan = await ensureApprovedBetaPlan({
-    userId: session.user.id,
-    email: session.user.email,
+    userId: user.id,
+    email: user.email,
     plan: profile?.plan,
   });
   const effectiveProfile = profile ? { ...profile, plan: effectivePlan } : profile;
@@ -45,7 +38,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <DashboardShell profile={effectiveProfile} userEmail={session.user.email || ""}>
+    <DashboardShell profile={effectiveProfile} userEmail={user.email || ""}>
       {children}
     </DashboardShell>
   );

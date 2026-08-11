@@ -4,6 +4,8 @@ import type { EmailOtpType } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/server-admin'
 import { trackBetaEvent } from '@/lib/beta-events'
 import { ensureApprovedBetaPlan, hasApprovedBetaAccess } from '@/lib/beta-access'
+import { hasCurrentBetaConsent } from '@/lib/beta-consent'
+import { profileSetupPath, safeInternalPath } from '@/lib/auth-next'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -13,12 +15,7 @@ export async function GET(request: NextRequest) {
   const type       = searchParams.get('type') as EmailOtpType | null
   const requestedNext = searchParams.get('next')
   const isPasswordAction = type === 'recovery' || type === 'invite'
-  const next =
-    requestedNext?.startsWith('/')
-      ? requestedNext
-      : isPasswordAction
-        ? '/auth/set-password'
-        : '/dashboard'
+  const next = safeInternalPath(requestedNext) || (isPasswordAction ? '/auth/set-password' : '/dashboard')
   const integration = searchParams.get('integration')
   const errorParam = searchParams.get('error')
   const errorDesc  = searchParams.get('error_description')
@@ -29,7 +26,7 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   if (code) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
@@ -37,7 +34,7 @@ export async function GET(request: NextRequest) {
       if (data.session?.user && !isPasswordAction) {
         const { data: profile } = await supabaseAdmin
           .from('profiles')
-          .select('plan')
+          .select('plan, first_login_complete, adult_us_eligibility_confirmed_at, adult_us_eligibility_version, terms_accepted_at, terms_version, privacy_acknowledged_at, privacy_version, coaching_disclaimer_acknowledged_at, coaching_disclaimer_version')
           .eq('id', data.session.user.id)
           .maybeSingle()
         const approved = await hasApprovedBetaAccess({
@@ -53,6 +50,43 @@ export async function GET(request: NextRequest) {
           email: data.session.user.email,
           plan: profile?.plan,
         })
+
+        const onboardingComplete = Boolean(profile?.first_login_complete && hasCurrentBetaConsent(profile))
+        const destination = onboardingComplete || next.startsWith('/auth/profile-setup')
+          ? next
+          : profileSetupPath(next)
+
+        if (integration === 'google') {
+          const now = new Date().toISOString()
+          await supabaseAdmin.from('user_integrations').upsert(
+            {
+              user_id: data.session.user.id,
+              provider: 'google',
+              access_token: data.session.provider_token || null,
+              external_user_id: data.session.user.email || null,
+              external_team_id: null,
+              external_team_name: null,
+              metadata: {
+                provider: 'google',
+                email: data.session.user.email || null,
+                scopes: 'gmail.readonly',
+              },
+              connected_at: now,
+              updated_at: now,
+            },
+            { onConflict: 'user_id,provider' }
+          )
+
+          await trackBetaEvent({
+            userId: data.session.user.id,
+            email: data.session.user.email,
+            eventName: 'gmail_connected',
+            source: 'web_app',
+            metadata: { integration: 'google' },
+          })
+        }
+
+        return NextResponse.redirect(new URL(destination, origin))
       }
 
       if (integration === 'google' && data.session?.user) {
@@ -68,7 +102,7 @@ export async function GET(request: NextRequest) {
             metadata: {
               provider: 'google',
               email: data.session.user.email || null,
-              scopes: 'gmail.readonly calendar.readonly',
+              scopes: 'gmail.readonly',
             },
             connected_at: now,
             updated_at: now,

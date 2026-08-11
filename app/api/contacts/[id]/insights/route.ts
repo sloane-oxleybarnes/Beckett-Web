@@ -1,25 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { upsertRelationshipSummary } from '@/lib/contact-relationship-context'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { getExtensionUserId } from '@/lib/extension-auth'
 import { callAnthropic } from '@/lib/anthropic'
+import { getRequestUserId } from '@/lib/server-auth'
 
-async function getAuthedUserId(req: NextRequest): Promise<string | null> {
-  const extUserId = await getExtensionUserId(req)
-  if (extUserId) return extUserId
-  const supabase = createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.user.id ?? null
-}
-
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const userId = await getAuthedUserId(req)
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const userId = await getRequestUserId(req, { allowExtension: true })
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   // Verify ownership and get contact info
   const { data: contact } = await supabase

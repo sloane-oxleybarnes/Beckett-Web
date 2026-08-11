@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeContactIdentifier } from "@/lib/contact-identifiers";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getAuthenticatedContext } from "@/lib/server-auth";
 
 type ContactRow = {
   id: string;
@@ -44,12 +44,8 @@ function mergeText(primary: string | null, duplicate: string | null) {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  const userId = session?.user.id;
+  const { supabase, user } = await getAuthenticatedContext();
+  const userId = user?.id;
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = (await req.json()) as {

@@ -1,16 +1,12 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { SITE_CONTENT_FIELDS } from "@/lib/site-content";
+import { isAdminAuthenticated } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
-function isAdmin() {
-  return cookies().get("admin_auth")?.value === process.env.ADMIN_PASSWORD;
-}
-
 export async function PUT(req: Request) {
-  if (!isAdmin()) {
+  if (!await isAdminAuthenticated()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

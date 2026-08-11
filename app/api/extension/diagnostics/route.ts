@@ -1,21 +1,18 @@
 import { NextResponse } from "next/server";
 import { getAiUsageToday, getDailyAiLimit, isUnlimitedAiUser, UNLIMITED_AI_LIMIT } from "@/lib/ai-usage";
 import { supabaseAdmin } from "@/lib/server-admin";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getAuthenticatedContext } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { user } = await getAuthenticatedContext();
 
-  if (!session) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = session.user.id;
+  const userId = user.id;
   const [{ data: profile }, { data: integrations }, used] = await Promise.all([
     supabaseAdmin
       .from("profiles")
@@ -33,11 +30,12 @@ export async function GET() {
   const limit = unlimited ? UNLIMITED_AI_LIMIT : getDailyAiLimit();
   const slack = integrations?.find((item) => item.provider === "slack");
   const google = integrations?.find((item) => item.provider === "google");
+  const microsoft = integrations?.find((item) => item.provider === "microsoft");
 
   return NextResponse.json({
     beckett: {
       authenticated: true,
-      email: profile?.email || session.user.email || null,
+      email: profile?.email || user.email || null,
       plan: profile?.plan || "free",
     },
     extension: {
@@ -65,6 +63,22 @@ export async function GET() {
                 : null),
             connectedAt: google.connected_at || null,
             updatedAt: google.updated_at || null,
+          }
+        : { connected: false },
+      microsoft: microsoft
+        ? {
+            connected: true,
+            email:
+              microsoft.external_user_id ||
+              (microsoft.metadata && typeof microsoft.metadata === "object" && "email" in microsoft.metadata
+                ? String(microsoft.metadata.email)
+                : null),
+            connectedAt: microsoft.connected_at || null,
+            updatedAt: microsoft.updated_at || null,
+            scopes:
+              microsoft.metadata && typeof microsoft.metadata === "object" && "scopes" in microsoft.metadata
+                ? String(microsoft.metadata.scopes)
+                : null,
           }
         : { connected: false },
     },

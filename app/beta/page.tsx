@@ -22,11 +22,12 @@ const betaPerks = [
   "Direct line to the team — your feedback shapes what we build",
 ];
 
-export default async function BetaPage({
-  searchParams,
-}: {
-  searchParams?: { access?: string };
-}) {
+export default async function BetaPage(
+  props: {
+    searchParams?: Promise<{ access?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const content = await getSiteContent([
     "beta.hero.badge",
     "beta.hero.title",

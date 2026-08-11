@@ -15,7 +15,7 @@ function cleanText(value: unknown, max = 1000) {
 }
 
 async function getUserId() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -26,7 +26,7 @@ export async function GET() {
   const userId = await getUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("course_toolkit_items")
     .select("id, course_id, category, label, content, created_at, updated_at")
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No valid toolkit items." }, { status: 400 });
   }
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("course_toolkit_items")
     .insert(rows)
@@ -77,7 +77,7 @@ export async function DELETE(req: NextRequest) {
   const id = cleanText(body.id, 80);
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("course_toolkit_items")
     .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })

@@ -3,22 +3,14 @@ import {
   buildContactIdentifierRows,
   ContactIdentifierInput,
 } from "@/lib/contact-identifiers";
-import { getExtensionUserId } from "@/lib/extension-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-
-async function getAuthedUserId(req: NextRequest): Promise<string | null> {
-  const extUserId = await getExtensionUserId(req)
-  if (extUserId) return extUserId
-  const supabase = createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.user.id ?? null
-}
+import { getRequestUserId } from "@/lib/server-auth";
 
 export async function GET(req: NextRequest) {
-  const userId = await getAuthedUserId(req);
+  const userId = await getRequestUserId(req, { allowExtension: true });
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("contacts")
     .select("*, contact_identifiers(*), contact_insights(*), contact_relationship_summaries(*)")
@@ -30,7 +22,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const userId = await getAuthedUserId(req);
+  const userId = await getRequestUserId(req, { allowExtension: true });
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = (await req.json()) as {
@@ -49,7 +41,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name required" }, { status: 400 });
   }
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: contact, error } = await supabase
     .from("contacts")
     .insert({

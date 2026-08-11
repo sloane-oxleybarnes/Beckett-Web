@@ -4,22 +4,12 @@ import {
   ContactIdentifierInput,
   legacyPlatformsFromPatch,
 } from "@/lib/contact-identifiers";
-import { getExtensionUserId } from "@/lib/extension-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getRequestUserId } from "@/lib/server-auth";
 
-async function getAuthedUserId(req: NextRequest): Promise<string | null> {
-  const extUserId = await getExtensionUserId(req)
-  if (extUserId) return extUserId
-  const supabase = createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.user.id ?? null
-}
-
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const userId = await getAuthedUserId(req)
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const userId = await getRequestUserId(req, { allowExtension: true })
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const body = await req.json() as {
@@ -34,7 +24,7 @@ export async function PUT(
     identifiers?: ContactIdentifierInput[]
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   // Ensure the contact belongs to this user
   const { data: existing } = await supabase
@@ -127,14 +117,12 @@ export async function PUT(
   return NextResponse.json({ contact })
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const userId = await getAuthedUserId(req)
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const userId = await getRequestUserId(req, { allowExtension: true })
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { error } = await supabase
     .from('contacts')
     .delete()

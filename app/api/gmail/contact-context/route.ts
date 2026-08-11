@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { callAnthropic } from '@/lib/anthropic'
 
 export async function GET(req: NextRequest) {
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
