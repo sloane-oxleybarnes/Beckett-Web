@@ -4,7 +4,7 @@
 
 **Name:** Beckett
 
-**Short description:** Workplace communication coaching for Gmail and Slack.
+**Short description:** Workplace communication coaching for Slack and supported non-email work pages.
 
 **Category:** Productivity
 
@@ -16,13 +16,13 @@
 
 ## Full description
 
-Beckett is a workplace communication coach for neurodivergent professionals. During beta, Beckett helps you understand confusing Gmail and Slack messages, draft clearer replies, and practice what to say before you send.
+Beckett is a workplace communication coach for neurodivergent professionals. During beta, the Chrome extension supports user-invoked coaching on supported non-email work pages. Gmail coaching is available separately through Beckett's native Google Workspace add-on.
 
 Beckett works from a browser side panel. You stay in control: analysis only happens when you ask Beckett to analyze the current message or when you turn on an analysis setting yourself. Beckett sends the relevant conversation context to Beckett's backend to generate coaching responses and enforce beta usage limits.
 
 Beta features:
 
-- Analyze Gmail and Slack conversations for tone, context, and likely next steps.
+- Analyze supported Slack and non-email work conversations for tone, context, and likely next steps.
 - Draft replies in a direct, kind, professional voice.
 - Ask follow-up questions about the visible conversation.
 - Practice difficult workplace conversations.
@@ -32,31 +32,27 @@ Beckett is currently focused on workplace communication. Google Meet, Zoom, cale
 
 ## Single purpose
 
-Beckett provides workplace communication coaching inside Gmail and Slack for beta users.
+Beckett provides user-invoked workplace communication coaching on supported non-email browser pages.
 
 ## Permission justifications
 
-**storage:** Saves Beckett login state, extension preferences, Gmail/Slack connection metadata, and local settings so users do not have to reconnect every time.
+**storage:** Saves Beckett login state, extension preferences, Slack connection metadata, and local settings so users do not have to reconnect every time.
 
-**identity:** Allows users to log in with Beckett, connect Gmail through Google OAuth, and connect Slack through Slack OAuth.
+**identity:** Allows users to log in with Beckett and connect Slack through Slack OAuth.
 
-**sidePanel:** Opens Beckett's coaching panel next to Gmail and Slack.
+**sidePanel:** Opens Beckett's coaching panel next to supported work pages.
 
-**tabs:** Detects when the active tab is Gmail or Slack and opens or updates Beckett's side panel for that page.
+**tabs:** Detects when the active tab is a supported work page and opens or updates Beckett's side panel for that page.
 
-**activeTab:** Lets Beckett work with the current Gmail or Slack tab when the user opens the extension or asks for coaching.
+**activeTab:** Lets Beckett work with the current supported tab when the user opens the extension or asks for coaching.
 
-**scripting:** Injects the Gmail or Slack reader script when needed so Beckett can read the current visible conversation after the user asks for coaching.
+**scripting:** Injects a supported-page reader script when needed so Beckett can read the current visible conversation after the user asks for coaching.
 
 ## Host permission justifications
-
-**https://mail.google.com/***: Lets Beckett read the current Gmail conversation in the browser when the user asks for analysis or drafting help.
 
 **https://app.slack.com/***: Lets Beckett read the current Slack conversation in the browser when the user asks for analysis or drafting help.
 
 **https://meetbeckett.co/*** and **https://www.meetbeckett.co/***: Connects the extension to the user's Beckett account, settings, beta limits, and AI analysis API.
-
-**https://gmail.googleapis.com/***: Allows Beckett to fetch full Gmail thread context after the user connects Gmail, including collapsed thread messages that are not visible on screen.
 
 **https://slack.com/api/***: Allows Beckett to fetch Slack thread context after the user connects Slack.
 
@@ -64,18 +60,17 @@ Beckett provides workplace communication coaching inside Gmail and Slack for bet
 
 ## Data use answers
 
-Beckett reads Gmail and Slack message content only when the user requests analysis/drafting or enables an analysis setting. Beckett does not read messages continuously in the background.
+Beckett reads supported-page message content only when the user requests analysis or drafting. Beckett does not read messages continuously in the background.
 
-Beckett stores account and usage metadata needed for beta access, rate limits, analytics, debugging, and support. Beckett does not store full Gmail or Slack message history by default.
+Beckett stores account and usage metadata needed for beta access, rate limits, analytics, debugging, and support. Beckett does not store full message history by default.
 
 If a user submits feedback, the feedback/debug report may include message content so the Beckett team can investigate the issue. Users should only submit feedback when they are comfortable sharing that context.
 
-Beckett does not sell user data. Beckett does not use Gmail or Slack content for advertising.
+Beckett does not sell user data or use message content for advertising.
 
 ## Screenshots to prepare
 
-1. Extension side panel logged in on Gmail with analysis controls visible.
-2. Gmail analysis result with message content blurred or sample/test content.
-3. Slack side panel with analyze controls visible.
-4. Draft-from-scratch or practice flow, using sample/test content.
-5. Settings/account connection state showing Beckett, Gmail, and Slack connected.
+1. Extension side panel logged in on a supported page with analysis controls visible.
+2. Slack side panel with analyze controls visible.
+3. Draft-from-scratch or practice flow, using sample/test content.
+4. Beckett account connection state.

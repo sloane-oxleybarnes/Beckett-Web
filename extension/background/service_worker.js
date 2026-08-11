@@ -35,7 +35,7 @@ function isBeckettAppUrl(url = '') {
 }
 
 function isSupportedWorkSurface(url = '') {
-  return url.includes('mail.google.com') || url.includes('app.slack.com');
+  return url.includes('app.slack.com');
 }
 
 async function updateSidePanelForTab(tabId, url = '') {
@@ -55,7 +55,7 @@ async function updateSidePanelForTab(tabId, url = '') {
   await chrome.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
 }
 
-// Auto-open side panel on Gmail and Slack, and disable it inside Beckett.
+// Auto-open the side panel on supported work surfaces and disable it inside Beckett.
 chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
   if (info.status !== 'complete' || !tab.url) return;
   updateSidePanelForTab(tabId, tab.url);
@@ -249,23 +249,7 @@ async function handleTriggerAnalyze(payload, sendResponse) {
     const isPro = plan === 'pro' || plan === 'beta';
     const voiceContext = isPro ? buildVoiceContext(voice_samples, mode) : '';
 
-    // Enrich Gmail thread via API — fetches all messages including collapsed ones
-    let thread = ctx.thread || null;
-    let enrichedContext = null;
-    let gmailEnrichmentReason = null;
-    if (ctx.platform === 'gmail' && (ctx.threadId || ctx.subject || ctx.senderEmail)) {
-      try {
-        const backendThread = await fetchBackendGmailThread(ctx);
-        if (backendThread.messages?.length) {
-          thread = backendThread.messages;
-          enrichedContext = buildEnrichedGmailContext(ctx, backendThread.messages);
-        }
-      } catch (e) {
-        gmailEnrichmentReason = e.message || 'gmail_backend_unavailable';
-        console.warn('Beckett: backend Gmail thread fetch failed:', e.message);
-      }
-
-    }
+    const thread = ctx.thread || null;
 
     // Resolve user identity so Beckett can speak to the user directly.
     const currentUser = {
@@ -273,7 +257,7 @@ async function handleTriggerAnalyze(payload, sendResponse) {
       email: beckettUserEmail || null,
     };
 
-    const analysisContext = enrichedContext || ctx;
+    const analysisContext = ctx;
     const prompt = buildMessagePrompt({
       messageText: analysisContext.messageText,
       thread,
@@ -290,11 +274,10 @@ async function handleTriggerAnalyze(payload, sendResponse) {
     const analysisMetadata = {
       platform: ctx.platform,
       mode,
-      source: ctx.platform === 'slack' ? (ctx.source || 'slack_dom') : (ctx.platform === 'gmail' && thread !== ctx.thread ? 'gmail_api' : 'page_dom'),
+      source: ctx.platform === 'slack' ? (ctx.source || 'slack_dom') : 'page_dom',
       threadCount: Array.isArray(thread) ? thread.length : 0,
       channelType: analysisContext.channelType || null,
       channelName: analysisContext.channelName || null,
-      gmailEnrichmentReason,
       slackConnected: ctx.platform === 'slack' ? (!!slackToken || !!beckettSlackConnected) : null,
       slackUserId: ctx.platform === 'slack' ? (slackUserId || beckettSlackUserId || null) : null,
     };
@@ -304,7 +287,6 @@ async function handleTriggerAnalyze(payload, sendResponse) {
       mode,
       source: analysisMetadata.source,
       threadCount: analysisMetadata.threadCount,
-      gmailEnrichmentReason,
     });
     sendResponse({
       result,
@@ -312,7 +294,7 @@ async function handleTriggerAnalyze(payload, sendResponse) {
       sender: analysisContext.sender,
       senderEmail: analysisContext.senderEmail || null,
       metadata: analysisMetadata,
-      context: enrichedContext,
+      context: analysisContext,
     });
   } catch (e) {
     sendResponse({ error: friendlyAnalyzeError(e) });
@@ -332,51 +314,6 @@ function friendlyAnalyzeError(error) {
     return `${message} Reconnect Slack from Settings if this keeps happening.`;
   }
   return message;
-}
-
-function buildEnrichedGmailContext(ctx, messages) {
-  const latestIncoming = [...messages].reverse().find(m => !m.isCurrentUser);
-  return {
-    ...ctx,
-    thread: messages,
-    messageText: latestIncoming?.body || ctx.messageText,
-    sender: latestIncoming?.sender || ctx.sender,
-    senderEmail: latestIncoming?.senderEmail || ctx.senderEmail || null,
-    source: 'gmail_api',
-  };
-}
-
-async function fetchBackendGmailThread(ctx) {
-  const { beckettToken } = await chrome.storage.local.get('beckettToken');
-  if (!beckettToken) throw new Error('beckett_not_connected');
-
-  const params = new URLSearchParams();
-  const threadIds = [
-    ctx.threadId,
-    ...(ctx.threadIds || []),
-    ...(ctx.thread || []).map(m => m.threadId),
-  ].filter(Boolean);
-  const messageIds = [
-    ...(ctx.messageIds || []),
-    ...(ctx.thread || []).map(m => m.messageId),
-  ].filter(Boolean);
-  const visibleText = (ctx.thread || [])
-    .map(m => m.body || m.text || '')
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length)[0] || ctx.messageText || '';
-
-  if (threadIds.length) params.set('threadIds', [...new Set(threadIds)].join(','));
-  if (messageIds.length) params.set('messageIds', [...new Set(messageIds)].join(','));
-  if (ctx.subject) params.set('subject', ctx.subject);
-  if (ctx.senderEmail) params.set('senderEmail', ctx.senderEmail);
-  if (visibleText) params.set('visibleText', visibleText.slice(0, 500));
-
-  const res = await fetch(`${BECKETT_API}/extension/gmail/thread?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${beckettToken}` },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `gmail_backend_error_${res.status}`);
-  return data;
 }
 
 async function extractContextFromTab(tab) {
@@ -411,7 +348,6 @@ function sendExtractMessage(tabId) {
 }
 
 function getContentScriptForUrl(url) {
-  if (url.includes('mail.google.com')) return 'content/gmail.js';
   if (url.includes('app.slack.com')) return 'content/slack.js';
   return null;
 }
@@ -736,7 +672,6 @@ async function getSettings() {
     slackUserId: data.slackUserId || data.beckettSlackUserId || '',
     slackUserName: data.slackUserName || '',
     slackTeamName: data.beckettSlackTeamName || '',
-    gmailUserEmail: data.beckettUserEmail || '',
     beckettToken: data.beckettToken || null,
     beckettUserName: data.beckettUserName || '',
     beckettUserEmail: data.beckettUserEmail || '',

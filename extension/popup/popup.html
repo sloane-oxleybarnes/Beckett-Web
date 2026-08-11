@@ -31,7 +31,7 @@
         <button class="btn-text" id="disconnectBeckett">Disconnect</button>
       </div>
       <button class="btn-save" id="connectBeckett" style="width:100%;">Log in with Beckett</button>
-      <p class="note">Required for message coaching, drafting, Gmail, Slack, and beta limits.</p>
+      <p class="note">Required for coaching, shared Beckett context, and beta limits.</p>
       <p class="key-status" id="beckettStatus" hidden></p>
     </section>
 
@@ -58,13 +58,6 @@
         <button class="btn-save" id="addSafePerson">Add</button>
       </div>
       <p class="field-note" id="safeStatus" hidden></p>
-    </section>
-
-    <!-- Gmail -->
-    <section class="section">
-      <div class="label">Gmail connection</div>
-      <p class="note">Gmail is connected and managed in Beckett Settings. The extension uses that existing connection only when you ask it to decode an email.</p>
-      <button class="btn-save" id="manageGmail" style="width:100%;background:#EA4335;">Manage Gmail in Beckett</button>
     </section>
 
     <!-- Slack -->
@@ -98,7 +91,6 @@
     <section class="section">
       <div class="label">Active on</div>
       <div class="platform-list">
-        <div class="platform-item"><span class="platform-dot active"></span> Gmail</div>
         <div class="platform-item"><span class="platform-dot active"></span> Slack</div>
         <div class="platform-item"><span class="platform-dot"></span> Google Meet — coming soon</div>
         <div class="platform-item"><span class="platform-dot"></span> Zoom — coming soon</div>

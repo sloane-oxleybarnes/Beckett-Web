@@ -244,7 +244,7 @@ function buildBetaTrackerRows({
     const signup = signupByEmail.get(email) || null;
     const userId = profile?.id || "";
     const userIntegrations = integrations.filter((item) => item.user_id === userId);
-    const google = userIntegrations.find((item) => item.provider === "google");
+    const google = userIntegrations.find((item) => item.provider === "google_workspace_addon");
     const slack = userIntegrations.find((item) => item.provider === "slack");
     const analyses = aiUsage.filter((item) => item.user_id === userId);
     const courses = courseCompletions.filter((item) => item.user_id === userId);

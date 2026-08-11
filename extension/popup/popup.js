@@ -137,12 +137,6 @@ $('addSafePerson').addEventListener('click', async () => {
   showNote($('safeStatus'), `${name} added.`, 'ok');
 });
 
-// ── Gmail ─────────────────────────────────────────────────────────────────────
-
-$('manageGmail').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'https://www.meetbeckett.co/dashboard/settings#connected-accounts' });
-});
-
 // ── Slack ─────────────────────────────────────────────────────────────────────
 
 async function loadSlack() {

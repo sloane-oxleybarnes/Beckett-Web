@@ -32,7 +32,7 @@ export async function GET() {
   const unlimited = await isUnlimitedAiUser(userId);
   const limit = unlimited ? UNLIMITED_AI_LIMIT : getDailyAiLimit();
   const slack = integrations?.find((item) => item.provider === "slack");
-  const google = integrations?.find((item) => item.provider === "google");
+  const google = integrations?.find((item) => item.provider === "google_workspace_addon");
   const microsoft = integrations?.find((item) => item.provider === "microsoft");
 
   return NextResponse.json({
@@ -60,7 +60,6 @@ export async function GET() {
         ? {
             connected: true,
             email:
-              google.external_user_id ||
               (google.metadata && typeof google.metadata === "object" && "email" in google.metadata
                 ? String(google.metadata.email)
                 : null),

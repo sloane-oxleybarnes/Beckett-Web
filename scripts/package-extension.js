@@ -12,7 +12,6 @@ const include = [
   "manifest.json",
   "PRIVACY.md",
   "background/service_worker.js",
-  "content/gmail.js",
   "content/slack.js",
   "icons/icon16.png",
   "icons/icon48.png",

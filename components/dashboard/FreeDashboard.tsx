@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import UpgradeModal from "./UpgradeModal";
-import { CHROME_WEB_STORE_URL } from "@/lib/app-links";
+import { CHROME_WEB_STORE_URL, GOOGLE_WORKSPACE_MARKETPLACE_URL } from "@/lib/app-links";
 
 const gettingStarted = [
   {
@@ -11,8 +11,8 @@ const gettingStarted = [
     href: CHROME_WEB_STORE_URL,
     proOnly: false,
   },
-  { label: "Connect Gmail™", done: false, href: "#", proOnly: false },
-  { label: "Connect Slack", done: false, href: "#", proOnly: false },
+  { label: "Install Gmail™ add-on", done: false, href: GOOGLE_WORKSPACE_MARKETPLACE_URL, proOnly: false },
+  { label: "Connect Slack", done: false, href: "/dashboard/apps", proOnly: false },
   { label: "Connect LinkedIn", done: false, href: "#", proOnly: true },
   { label: "Enable meeting guidance", done: false, href: "#", proOnly: true },
 ];
