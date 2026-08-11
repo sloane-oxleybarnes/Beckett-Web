@@ -9,7 +9,6 @@ import {
   buildVoiceContext,
   BECKETT_BOUNDARY_GUIDANCE,
 } from '../utils/prompts.js';
-import { getGmailMessage, getGmailProfile, getGmailThread, parseThreadMessages, searchGmailMessages } from '../utils/gmail.js';
 
 const BECKETT_SITE = 'https://www.meetbeckett.co';
 const BECKETT_API = `${BECKETT_SITE}/api`;
@@ -36,7 +35,7 @@ function isBeckettAppUrl(url = '') {
 }
 
 function isSupportedWorkSurface(url = '') {
-  return url.includes('mail.google.com') || url.includes('app.slack.com');
+  return url.includes('mail.google.com');
 }
 
 async function updateSidePanelForTab(tabId, url = '') {
@@ -56,7 +55,7 @@ async function updateSidePanelForTab(tabId, url = '') {
   await chrome.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
 }
 
-// Auto-open side panel on Gmail and Slack, and disable it inside Beckett.
+// Auto-open the side panel on Gmail, and disable it inside Beckett.
 chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
   if (info.status !== 'complete' || !tab.url) return;
   updateSidePanelForTab(tabId, tab.url);
@@ -109,12 +108,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: true });
       return true;
 
-    case 'CONNECT_SLACK':
-      connectSlack()
-        .then(result => sendResponse(result))
-        .catch(e => sendResponse({ error: e.message }));
-      return true;
-
     case 'CONNECT_BECKETT':
       connectBeckett()
         .then(result => sendResponse(result))
@@ -123,10 +116,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'DISCONNECT_BECKETT':
       chrome.storage.local.remove(['beckettToken'], () => sendResponse({ ok: true }));
-      return true;
-
-    case 'DISCONNECT_SLACK':
-      chrome.storage.local.remove(['slackToken', 'slackUserId', 'slackUserName'], () => sendResponse({ ok: true }));
       return true;
 
     case 'GET_SETTINGS':
@@ -239,12 +228,12 @@ async function handleTriggerAnalyze(payload, sendResponse) {
     const ctx = await extractContextFromTab(tab) || tabContexts[tab.id] || null;
 
     if (!ctx) {
-      sendResponse({ error: 'Could not read this conversation. Open a Slack channel or DM, wait for messages to load, then try again.' });
+      sendResponse({ error: 'Could not read this email. Open a Gmail conversation, wait for it to load, then try again.' });
       return;
     }
 
-    const { lumenMode, plan, voice_samples, currentUserEmail, slackUserName, beckettUserName, beckettUserEmail, slackToken, slackUserId, beckettSlackConnected, beckettSlackUserId } = await chrome.storage.local.get([
-      'lumenMode', 'plan', 'voice_samples', 'currentUserEmail', 'slackUserName', 'beckettUserName', 'beckettUserEmail', 'slackToken', 'slackUserId', 'beckettSlackConnected', 'beckettSlackUserId',
+    const { lumenMode, plan, voice_samples, beckettUserName, beckettUserEmail } = await chrome.storage.local.get([
+      'lumenMode', 'plan', 'voice_samples', 'beckettUserName', 'beckettUserEmail',
     ]);
     const mode = payload.mode || lumenMode || 'business';
     const isPro = plan === 'pro' || plan === 'beta';
@@ -266,39 +255,12 @@ async function handleTriggerAnalyze(payload, sendResponse) {
         console.warn('Beckett: backend Gmail thread fetch failed:', e.message);
       }
 
-      if (!enrichedContext) {
-        try {
-          // Try silent token first; only prompt if needed to avoid interrupting the user
-          let token = null;
-          try { token = await getGoogleToken(false); } catch (_) {}
-          if (!token) { try { token = await getGoogleToken(true); } catch (_) {} }
-
-          if (token) {
-            const userEmail = await getOrFetchUserEmail(token);
-            const threadData = await resolveGmailThread(token, ctx);
-            const apiThread = parseThreadMessages(threadData).map(m => ({
-              ...m,
-              isCurrentUser: userEmail
-                ? (m.senderEmail ? m.senderEmail === userEmail.toLowerCase() : m.sender.toLowerCase().includes(userEmail.toLowerCase()))
-                : false,
-            }));
-            if (apiThread.length > 0) {
-              thread = apiThread;
-              enrichedContext = buildEnrichedGmailContext(ctx, apiThread);
-              gmailEnrichmentReason = null;
-            }
-          }
-        } catch (e) {
-          gmailEnrichmentReason = gmailEnrichmentReason || e.message || 'gmail_api_unavailable';
-          console.warn('Beckett: Gmail API thread fetch failed:', e.message);
-        }
-      }
     }
 
     // Resolve user identity so Beckett can speak to the user directly.
     const currentUser = {
-      name: ctx.currentUserName || slackUserName || beckettUserName || null,
-      email: currentUserEmail || beckettUserEmail || null,
+      name: ctx.currentUserName || beckettUserName || null,
+      email: beckettUserEmail || null,
     };
 
     const analysisContext = enrichedContext || ctx;
@@ -318,13 +280,11 @@ async function handleTriggerAnalyze(payload, sendResponse) {
     const analysisMetadata = {
       platform: ctx.platform,
       mode,
-      source: ctx.platform === 'slack' ? (ctx.source || 'slack_dom') : (ctx.platform === 'gmail' && thread !== ctx.thread ? 'gmail_api' : 'page_dom'),
+      source: ctx.platform === 'gmail' && thread !== ctx.thread ? 'gmail_api' : 'page_dom',
       threadCount: Array.isArray(thread) ? thread.length : 0,
       channelType: analysisContext.channelType || null,
       channelName: analysisContext.channelName || null,
       gmailEnrichmentReason,
-      slackConnected: ctx.platform === 'slack' ? (!!slackToken || !!beckettSlackConnected) : null,
-      slackUserId: ctx.platform === 'slack' ? (slackUserId || beckettSlackUserId || null) : null,
     };
 
     const result = await callBeckettJson('analyze_message', prompt, 1000, {
@@ -350,14 +310,11 @@ async function handleTriggerAnalyze(payload, sendResponse) {
 function friendlyAnalyzeError(error) {
   const message = error?.message || 'Analysis failed.';
   if (/Could not read the page/i.test(message)) {
-    return 'Could not read this conversation. Open a Slack channel or DM, wait for messages to load, then try again.';
+    return 'Could not read this email. Open a Gmail conversation, wait for it to load, then try again.';
   }
   if (/Daily beta AI limit/i.test(message)) return message;
   if (/Unauthorized|Beta access required/i.test(message)) {
     return 'Beckett login is not connected. Open the extension settings and log in with Beckett again.';
-  }
-  if (/Slack|token|authorization/i.test(message)) {
-    return `${message} Reconnect Slack from Settings if this keeps happening.`;
   }
   return message;
 }
@@ -440,7 +397,6 @@ function sendExtractMessage(tabId) {
 
 function getContentScriptForUrl(url) {
   if (url.includes('mail.google.com')) return 'content/gmail.js';
-  if (url.includes('app.slack.com')) return 'content/slack.js';
   return null;
 }
 
@@ -494,18 +450,10 @@ async function handleMeetingBrief(payload, sendResponse) {
     const { lumenMode } = await chrome.storage.local.get('lumenMode');
     const mode = lumenMode || 'business';
 
-    let recentThreads = '';
-    if (payload.attendeeEmails?.length) {
-      try {
-        const token = await getGoogleToken(false);
-        recentThreads = await fetchAttendeeThreadSummary(payload.attendeeEmails, token);
-      } catch (_) {}
-    }
-
     const prompt = buildMeetingBriefPrompt({
       meetingTitle: payload.meetingTitle,
       attendees: payload.attendees,
-      recentThreads,
+      recentThreads: '',
       mode,
     });
 
@@ -614,67 +562,23 @@ Answer as 1-3 short bullets. Be specific to the actual conversation above. If th
 async function handleFetchContactHistory(payload, sendResponse) {
   try {
     const { email } = payload;
-    if (!email) { sendResponse({ threads: [], slackMessages: [] }); return; }
+    if (!email) { sendResponse({ threads: [] }); return; }
 
     const cacheKey = `contact_history_${email.replace(/[^a-z0-9]/gi, '_')}`;
     const cached = await chrome.storage.local.get(cacheKey);
     if (cached[cacheKey] && Date.now() - cached[cacheKey].ts < 24 * 60 * 60 * 1000) {
-      sendResponse({ threads: cached[cacheKey].threads, slackMessages: cached[cacheKey].slackMessages || [] });
+      sendResponse({ threads: cached[cacheKey].threads });
       return;
     }
 
-    const token = await getGoogleToken();
-    const threads = await fetchContactThreads(email, token);
+    // Gmail context is intentionally fetched only through the user's Beckett web
+    // connection when they request analysis of a specific email thread.
+    const threads = [];
 
-    // Also fetch Slack DM history if Slack is connected
-    let slackMessages = [];
-    const { slackToken } = await chrome.storage.local.get('slackToken');
-    if (slackToken) {
-      slackMessages = await fetchSlackContactHistory(email, slackToken);
-    }
-
-    await chrome.storage.local.set({ [cacheKey]: { threads, slackMessages, ts: Date.now() } });
-    sendResponse({ threads, slackMessages });
+    await chrome.storage.local.set({ [cacheKey]: { threads, ts: Date.now() } });
+    sendResponse({ threads });
   } catch (e) {
     sendResponse({ error: e.message });
-  }
-}
-
-async function fetchSlackContactHistory(email, slackToken) {
-  try {
-    // Find DM channel with this user by matching email → Slack user ID
-    const usersRes = await fetch(
-      `https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(email)}`,
-      { headers: { Authorization: `Bearer ${slackToken}` } }
-    );
-    const usersData = await usersRes.json();
-    if (!usersData.ok || !usersData.user?.id) return [];
-
-    const userId = usersData.user.id;
-
-    // Open or find existing DM channel
-    const openRes = await fetch('https://slack.com/api/conversations.open', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${slackToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ users: userId }),
-    });
-    const openData = await openRes.json();
-    if (!openData.ok || !openData.channel?.id) return [];
-
-    const channelId = openData.channel.id;
-    const histRes = await fetch(
-      `https://slack.com/api/conversations.history?channel=${channelId}&limit=50`,
-      { headers: { Authorization: `Bearer ${slackToken}` } }
-    );
-    const histData = await histRes.json();
-    if (!histData.ok) return [];
-
-    return (histData.messages || [])
-      .filter(m => m.text)
-      .slice(0, 50)
-      .map(m => ({ text: m.text, ts: m.ts }));
-  } catch (_) {
-    return [];
   }
 }
 
@@ -692,230 +596,6 @@ async function getVoiceStats() {
   const personal = voice_samples.filter(s => s.mode === 'personal').length;
   const business = voice_samples.filter(s => s.mode === 'business').length;
   return { personal, business, total: voice_samples.length };
-}
-
-// ── Gmail helpers ─────────────────────────────────────────────
-
-async function getOrFetchUserEmail(token) {
-  const { currentUserEmail } = await chrome.storage.local.get('currentUserEmail');
-  if (currentUserEmail) return currentUserEmail;
-  try {
-    const profile = await getGmailProfile(token);
-    await chrome.storage.local.set({ currentUserEmail: profile.emailAddress });
-    return profile.emailAddress;
-  } catch (_) {
-    return null;
-  }
-}
-
-async function resolveGmailThread(token, ctx) {
-  const attempted = new Set();
-  const candidates = [];
-
-  function addCandidate(thread, source) {
-    if (!thread?.id || !Array.isArray(thread.messages)) return;
-    const existing = candidates.find(item => item.thread.id === thread.id);
-    if (existing) {
-      existing.sources.add(source);
-      return;
-    }
-    candidates.push({ thread, sources: new Set([source]) });
-  }
-
-  async function tryThread(threadId) {
-    const id = normalizeGmailId(threadId);
-    if (!id || attempted.has(`thread:${id}`)) return null;
-    attempted.add(`thread:${id}`);
-    try {
-      const thread = await getGmailThread(token, id);
-      addCandidate(thread, 'thread_id');
-      return thread;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  async function tryMessage(messageId) {
-    const id = normalizeGmailId(messageId);
-    if (!id || attempted.has(`message:${id}`)) return null;
-    attempted.add(`message:${id}`);
-    try {
-      const message = await getGmailMessage(token, id);
-      return message?.threadId ? await tryThread(message.threadId) : null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  async function trySearch(query) {
-    if (!query || attempted.has(`search:${query}`)) return null;
-    attempted.add(`search:${query}`);
-    try {
-      const messages = await searchGmailMessages(token, query, 10);
-      for (const message of messages) {
-        await tryThread(message.threadId);
-      }
-    } catch (_) {}
-    return candidates.length ? candidates[candidates.length - 1].thread : null;
-  }
-
-  const threadIds = [
-    ctx.threadId,
-    ...(ctx.threadIds || []),
-    ...(ctx.thread || []).map(m => m.threadId),
-  ].filter(Boolean);
-
-  for (const id of threadIds) {
-    await tryThread(id);
-  }
-
-  const messageIds = [
-    ...(ctx.messageIds || []),
-    ...(ctx.thread || []).map(m => m.messageId),
-  ].filter(Boolean);
-
-  for (const id of messageIds) {
-    await tryMessage(id);
-
-    const stripped = stripRfc822Brackets(id);
-    await trySearch(`rfc822msgid:${stripped}`);
-    await trySearch(`rfc822msgid:<${stripped}>`);
-  }
-
-  const subject = (ctx.subject || '').trim();
-  const senderEmail = (ctx.senderEmail || '').trim();
-  if (subject && senderEmail) {
-    await trySearch(`subject:"${escapeGmailQuery(subject)}" from:${senderEmail}`);
-    await trySearch(`subject:"${escapeGmailQuery(subject)}" to:${senderEmail}`);
-  }
-
-  if (subject) {
-    await trySearch(`subject:"${escapeGmailQuery(subject)}"`);
-  }
-
-  const visibleBodies = (ctx.thread || [])
-    .map(m => m.body || m.text || '')
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length);
-
-  for (const body of visibleBodies.slice(0, 2)) {
-    const phrase = extractSearchPhrase(body);
-    if (phrase) await trySearch(`"${escapeGmailQuery(phrase)}"`);
-  }
-
-  if (candidates.length) {
-    const visibleCount = Array.isArray(ctx.thread) ? ctx.thread.length : 0;
-    return candidates
-      .sort((a, b) => scoreGmailCandidate(b, ctx, visibleCount) - scoreGmailCandidate(a, ctx, visibleCount))[0]
-      .thread;
-  }
-
-  throw new Error('Could not fetch full Gmail thread.');
-}
-
-function scoreGmailCandidate(candidate, ctx, visibleCount) {
-  const thread = candidate.thread;
-  const count = thread.messages?.length || 0;
-  let score = count * 10;
-  if (count > visibleCount) score += 80;
-  if (candidate.sources.has('thread_id')) score += 20;
-
-  const visibleIds = new Set([
-    ...(ctx.messageIds || []),
-    ...(ctx.thread || []).map(m => m.messageId),
-  ].filter(Boolean).map(id => stripRfc822Brackets(id).toLowerCase()));
-
-  for (const message of thread.messages || []) {
-    const headers = message.payload?.headers || [];
-    const messageId = headers.find(h => h.name?.toLowerCase() === 'message-id')?.value || '';
-    if (visibleIds.has(stripRfc822Brackets(messageId).toLowerCase())) score += 40;
-  }
-
-  return score;
-}
-
-function normalizeGmailId(id) {
-  if (!id) return '';
-  return String(id)
-    .replace(/^#?msg-/, '')
-    .replace(/^msg-/, '')
-    .replace(/^thread-/, '')
-    .replace(/^#/, '')
-    .trim();
-}
-
-function stripRfc822Brackets(id) {
-  return normalizeGmailId(id).replace(/^<|>$/g, '');
-}
-
-function escapeGmailQuery(value) {
-  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function extractSearchPhrase(text) {
-  const cleaned = String(text || '')
-    .replace(/\s+/g, ' ')
-    .replace(/On .+ wrote:.*/i, '')
-    .trim();
-  const sentence = cleaned
-    .split(/(?<=[.!?])\s+/)
-    .find(part => part.length >= 18 && part.length <= 120);
-  return (sentence || cleaned.slice(0, 90)).trim();
-}
-
-async function fetchContactThreads(email, token) {
-  const searchRes = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?` +
-    new URLSearchParams({ q: `from:${email} OR to:${email}`, maxResults: 20 }),
-    { headers: { Authorization: 'Bearer ' + token } }
-  );
-  if (!searchRes.ok) throw new Error(`Gmail search error ${searchRes.status}`);
-  const { messages = [] } = await searchRes.json();
-
-  const threads = await Promise.all(
-    messages.slice(0, 10).map(async m => {
-      const detail = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject`,
-        { headers: { Authorization: 'Bearer ' + token } }
-      );
-      return detail.json();
-    })
-  );
-
-  return threads.map(t => ({
-    id: t.id,
-    subject: t.payload?.headers?.find(h => h.name === 'Subject')?.value || 'No subject',
-    snippet: t.snippet || '',
-  }));
-}
-
-async function fetchAttendeeThreadSummary(emails, token) {
-  const lines = [];
-  for (const email of emails.slice(0, 3)) {
-    try {
-      const threads = await fetchContactThreads(email, token);
-      if (threads.length) {
-        lines.push(`${email}: Recent threads — ${threads.slice(0, 3).map(t => t.subject).join(', ')}`);
-      }
-    } catch (_) {}
-  }
-  return lines.join('\n') || 'No recent email context found.';
-}
-
-function getGoogleToken(interactive = true) {
-  return new Promise((resolve, reject) => {
-    chrome.identity.getAuthToken({ interactive }, token => {
-      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-      else resolve(token);
-    });
-  });
-}
-
-// ── Slack OAuth ───────────────────────────────────────────────
-
-async function connectSlack() {
-  await chrome.tabs.create({ url: `${BECKETT_SITE}/api/slack/connect` });
-  return { ok: true, opened: true };
 }
 
 async function connectBeckett() {
@@ -962,7 +642,7 @@ async function getSettings() {
   const keys = [
     'plan', 'lumenMode',
     'safe_people', 'voice_samples',
-    'slackToken', 'slackUserId', 'slackUserName', 'beckettSlackConnected', 'beckettSlackUserId', 'beckettSlackTeamName', 'currentUserEmail', 'beckettToken', 'beckettUserName', 'beckettUserEmail',
+    'beckettToken', 'beckettUserName', 'beckettUserEmail',
   ];
   const data = await chrome.storage.local.get(keys);
   if (data.beckettToken) {
@@ -971,9 +651,6 @@ async function getSettings() {
       data.beckettUserName = profile.name || data.beckettUserName;
       data.beckettUserEmail = profile.email || data.beckettUserEmail;
       if (profile.plan) data.plan = profile.plan;
-      data.beckettSlackConnected = !!profile.integrations?.slack?.connected;
-      data.beckettSlackUserId = profile.integrations?.slack?.userId || '';
-      data.beckettSlackTeamName = profile.integrations?.slack?.teamName || '';
     }
   }
   const samples = data.voice_samples || [];
@@ -986,11 +663,7 @@ async function getSettings() {
       personal: samples.filter(s => s.mode === 'personal').length,
       business: samples.filter(s => s.mode === 'business').length,
     },
-    slackConnected: !!data.slackToken || !!data.beckettSlackConnected,
-    slackUserId: data.slackUserId || data.beckettSlackUserId || '',
-    slackUserName: data.slackUserName || '',
-    slackTeamName: data.beckettSlackTeamName || '',
-    gmailUserEmail: data.currentUserEmail || '',
+    gmailUserEmail: data.beckettUserEmail || '',
     beckettToken: data.beckettToken || null,
     beckettUserName: data.beckettUserName || '',
     beckettUserEmail: data.beckettUserEmail || '',
@@ -1007,9 +680,6 @@ async function syncBeckettProfile(token) {
     ...(profile.name && { beckettUserName: profile.name }),
     ...(profile.email && { beckettUserEmail: profile.email }),
     ...(profile.plan && { plan: profile.plan }),
-    beckettSlackConnected: !!profile.integrations?.slack?.connected,
-    beckettSlackUserId: profile.integrations?.slack?.userId || '',
-    beckettSlackTeamName: profile.integrations?.slack?.teamName || '',
   });
   return profile;
 }

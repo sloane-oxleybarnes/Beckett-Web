@@ -16,6 +16,8 @@ import {
   buildBeckettPayload,
   buildSlackCoachingContext,
   fetchSlackConversationContext,
+  fetchSlackThreadSnapshot,
+  formatSlackThreadSnapshot,
   isCompactSlackIntent,
   lookupSlackUserProfile,
   postSlackAgentMessage,
@@ -26,9 +28,16 @@ import {
   SlackCoachingIntent,
   SlackConnectedUser,
   SlackConversationContext,
+  type SlackThreadTurn,
 } from "@/lib/slack-app";
 import { extractGuestPrepOutcomeAndConcern } from "@/lib/slack-guest-routing";
 import { isUserCorrectingWrongFlow } from "@/lib/slack-guided-intent";
+import {
+  createSlackZeroCopyFlowSession,
+  loadSlackZeroCopyFlowSession,
+  normalizeSlackZeroCopyFlowType,
+  updateSlackZeroCopyFlowSession,
+} from "@/lib/slack-zero-copy-store";
 
 type GuidedFlowType = "respond" | "rewrite" | "decode" | "prep" | "practice";
 type PrepScenario =
@@ -91,11 +100,88 @@ type SlackAgentSession = {
   flow_type: GuidedFlowType;
   step: GuidedStep;
   status: "active" | "completed";
+  rehydration_failure?: string | null;
   answers: GuidedAnswers;
   evidence_suggestions: EvidenceSuggestion[];
   confirmed_evidence: EvidenceSuggestion[];
   coaching_thread_id?: string | null;
+  zero_copy_flow_session_id?: string | null;
 };
+
+const guidedSessionRuntime = globalThis as typeof globalThis & {
+  beckettTransientSlackGuidedSessions?: Map<string, SlackAgentSession>;
+};
+const transientSlackGuidedSessions =
+  guidedSessionRuntime.beckettTransientSlackGuidedSessions || new Map<string, SlackAgentSession>();
+guidedSessionRuntime.beckettTransientSlackGuidedSessions = transientSlackGuidedSessions;
+
+function removeLatestGuidedUserTurn(turns: SlackThreadTurn[], latestUserText?: string | null) {
+  const prior = [...turns];
+  const expected = latestUserText ? normalizeText(latestUserText) : "";
+  if (!expected) return prior;
+  for (let index = prior.length - 1; index >= 0; index -= 1) {
+    if (prior[index].role === "user" && normalizeText(prior[index].text) === expected) {
+      prior.splice(index, 1);
+      break;
+    }
+  }
+  return prior;
+}
+
+export function rehydrateGuidedAnswersFromSlack(
+  turns: SlackThreadTurn[],
+  seed: GuidedAnswers = {},
+  flowType?: GuidedFlowType
+) {
+  const answers: GuidedAnswers = {
+    ...seed,
+    extra_context: Array.isArray(seed.extra_context) ? [...seed.extra_context] : [],
+  };
+  let lastBeckett = "";
+  for (const turn of turns) {
+    if (turn.role === "beckett") {
+      lastBeckett = turn.text;
+      const startingRequest = turn.text.match(/\bStarting request:\s*([\s\S]+)/i)?.[1]?.trim();
+      if (startingRequest && flowType) {
+        Object.assign(answers, initialAnswers(startingRequest, flowType), seed);
+      }
+      const options = extractSlackDraftOptions(turn.text);
+      if (options.length) answers.draft_options = options;
+      continue;
+    }
+    if (turn.role !== "user") continue;
+    const cleaned = normalizeText(turn.text);
+    if (!answers.initial_request) answers.initial_request = cleaned;
+
+    if (/who is this going to/i.test(lastBeckett)) {
+      answers.audience = cleaned;
+    } else if (/paste the draft you want to rewrite/i.test(lastBeckett)) {
+      answers.initial_request = cleaned;
+    } else if (/paste the opening you want to try/i.test(lastBeckett)) {
+      answers.extra_context = [...(answers.extra_context || []), `Opening draft to coach: ${cleaned}`];
+    } else if (/who are you talking to|who should i role-play/i.test(lastBeckett)) {
+      answers.person = cleaned;
+      answers.conversation_location = answers.conversation_location || inferConversationLocation(cleaned);
+    } else if (/where will this conversation happen/i.test(lastBeckett)) {
+      answers.conversation_location = inferConversationLocation(cleaned);
+    } else if (/what outcome do you want/i.test(lastBeckett)) {
+      const extracted = extractGuestPrepOutcomeAndConcern(cleaned);
+      answers.outcome = extracted.outcome || cleaned;
+      if (extracted.concern) answers.concern = extracted.concern;
+    } else if (/what are you worried|what are you most concerned/i.test(lastBeckett)) {
+      answers.concern = cleaned;
+    } else if (/what do you want to practice getting better at/i.test(lastBeckett)) {
+      answers.practice_goal = cleaned;
+    } else if (/what kind of pushback should i role-play/i.test(lastBeckett)) {
+      answers.practice_pushback = cleaned;
+    } else if (
+      /are you able to paste|has this happened|would taking this on|are you thinking of looping|can you paraphrase/i.test(lastBeckett)
+    ) {
+      answers.extra_context = [...(answers.extra_context || []), `Message/paraphrase: ${cleaned}`];
+    }
+  }
+  return answers;
+}
 
 type GuidedFlowInput = {
   user: SlackConnectedUser;
@@ -803,24 +889,13 @@ export function buildSlackDraftUseActions(sessionId: string, options: SlackDraft
 export async function saveSlackDraftOptions(sessionId: string, response: string) {
   const options = extractSlackDraftOptions(response);
   if (!options.length) return [];
-
-  const { data, error } = await supabaseAdmin
-    .from("slack_agent_sessions")
-    .select("answers")
-    .eq("id", sessionId)
-    .maybeSingle();
-  if (error || !data) return [];
-
-  await supabaseAdmin
-    .from("slack_agent_sessions")
-    .update({
-      answers: {
-        ...((data.answers as GuidedAnswers | null) || {}),
-        draft_options: options,
-      },
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", sessionId);
+  const session = transientSlackGuidedSessions.get(sessionId);
+  if (session) {
+    transientSlackGuidedSessions.set(sessionId, {
+      ...session,
+      answers: { ...session.answers, draft_options: options },
+    });
+  }
 
   return options;
 }
@@ -882,11 +957,15 @@ async function findActiveSession({
   slackUserId,
   channelId,
   threadTs,
+  accessToken,
+  latestUserText,
 }: {
   teamId: string;
   slackUserId: string;
   channelId: string;
   threadTs?: string | null;
+  accessToken?: string | null;
+  latestUserText?: string | null;
 }) {
   let query = supabaseAdmin
     .from("slack_agent_sessions")
@@ -905,7 +984,44 @@ async function findActiveSession({
     .maybeSingle();
 
   if (error) throw error;
-  return (data as SlackAgentSession | null) || null;
+  if (!data) return null;
+  const row = data as SlackAgentSession;
+  const cached = transientSlackGuidedSessions.get(row.id);
+  const flow = row.zero_copy_flow_session_id
+    ? await loadSlackZeroCopyFlowSession(row.zero_copy_flow_session_id, row.user_id)
+    : null;
+  const snapshot = accessToken && row.thread_ts
+    ? await fetchSlackThreadSnapshot({
+        accessToken,
+        channelId: row.slack_channel_id,
+        threadTs: row.thread_ts,
+        currentSlackUserId: row.slack_user_id,
+      })
+    : null;
+  const liveAnswers = snapshot?.status === "available"
+    ? rehydrateGuidedAnswersFromSlack(
+        removeLatestGuidedUserTurn(snapshot.turns, latestUserText),
+        cached?.answers || {},
+        row.flow_type
+      )
+    : cached?.answers || {};
+  const session: SlackAgentSession = {
+    ...row,
+    coaching_thread_id: row.zero_copy_flow_session_id || row.coaching_thread_id || null,
+    answers: {
+      ...liveAnswers,
+      source_channel_id: flow?.slack_source_channel_id || liveAnswers.source_channel_id,
+      source_thread_ts: flow?.slack_source_thread_ts || liveAnswers.source_thread_ts,
+    },
+    evidence_suggestions: cached?.evidence_suggestions || [],
+    confirmed_evidence: cached?.confirmed_evidence || [],
+    rehydration_failure:
+      accessToken && snapshot?.status !== "available" && !cached
+        ? snapshot?.failureReason || "slack_api_error"
+        : null,
+  };
+  transientSlackGuidedSessions.set(session.id, session);
+  return session;
 }
 
 export async function hasActiveGuidedSlackSession({
@@ -943,6 +1059,22 @@ async function createSession({
   step: GuidedStep;
   coachingThreadId?: string | null;
 }) {
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const zeroCopyFlow = coachingThreadId
+    ? { id: coachingThreadId }
+    : await createSlackZeroCopyFlowSession({
+        slackTeamId: teamId,
+        slackUserId,
+        beckettUserId: user.id,
+        slackChannelId: channelId,
+        slackThreadTs: threadTs,
+        slackSourceChannelId: answers.source_channel_id || null,
+        slackSourceThreadTs: answers.source_thread_ts || null,
+        flowType: normalizeSlackZeroCopyFlowType(flowType),
+        currentStep: step,
+        status: "active",
+        expiresAt,
+      });
   const { data, error } = await supabaseAdmin
     .from("slack_agent_sessions")
     .insert({
@@ -953,30 +1085,70 @@ async function createSession({
       thread_ts: threadTs,
       flow_type: flowType,
       step,
-      answers,
-      coaching_thread_id: coachingThreadId || null,
-      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      answers: {},
+      evidence_suggestions: [],
+      confirmed_evidence: [],
+      coaching_thread_id: null,
+      zero_copy_flow_session_id: zeroCopyFlow.id,
+      expires_at: expiresAt,
     })
     .select("*")
     .single();
 
   if (error) throw error;
-  return data as SlackAgentSession;
+  const session = {
+    ...(data as SlackAgentSession),
+    answers,
+    evidence_suggestions: [],
+    confirmed_evidence: [],
+    coaching_thread_id: zeroCopyFlow.id,
+    zero_copy_flow_session_id: zeroCopyFlow.id,
+  };
+  transientSlackGuidedSessions.set(session.id, session);
+  return session;
 }
 
 async function updateSession(sessionId: string, patch: Partial<SlackAgentSession>) {
+  const safePatch = {
+    ...(patch.flow_type !== undefined ? { flow_type: patch.flow_type } : {}),
+    ...(patch.step !== undefined ? { step: patch.step } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    updated_at: new Date().toISOString(),
+  };
   const { data, error } = await supabaseAdmin
     .from("slack_agent_sessions")
-    .update({
-      ...patch,
-      updated_at: new Date().toISOString(),
-    })
+    .update(safePatch)
     .eq("id", sessionId)
     .select("*")
     .single();
 
   if (error) throw error;
-  return data as SlackAgentSession;
+  const stored = data as SlackAgentSession;
+  const existing: SlackAgentSession = transientSlackGuidedSessions.get(sessionId) || {
+    ...stored,
+    coaching_thread_id: stored.zero_copy_flow_session_id || stored.coaching_thread_id || null,
+    answers: {},
+    evidence_suggestions: [],
+    confirmed_evidence: [],
+  };
+  const session = {
+    ...existing,
+    ...stored,
+    ...patch,
+    answers: patch.answers || existing.answers,
+    evidence_suggestions: patch.evidence_suggestions || existing.evidence_suggestions,
+    confirmed_evidence: patch.confirmed_evidence || existing.confirmed_evidence,
+    coaching_thread_id: stored.zero_copy_flow_session_id || existing.coaching_thread_id || null,
+  } satisfies SlackAgentSession;
+  transientSlackGuidedSessions.set(sessionId, session);
+  if (session.coaching_thread_id) {
+    await updateSlackZeroCopyFlowSession(session.coaching_thread_id, {
+      currentStep: session.step,
+      flowType: normalizeSlackZeroCopyFlowType(session.flow_type),
+      status: session.status,
+    });
+  }
+  return session;
 }
 
 async function persistGuidedTurn({
@@ -1320,17 +1492,25 @@ function promptForFlow(session: SlackAgentSession, followupText?: string, recent
 }
 
 async function completeSession(input: GuidedFlowInput, session: SlackAgentSession, followupText?: string) {
-  const recentPracticeTranscript =
-    session.flow_type === "practice" && session.coaching_thread_id
-      ? formatSlackCoachingMessages(
+  let recentPracticeTranscript = "";
+  if (session.flow_type === "practice" && session.coaching_thread_id) {
+    const snapshot = await fetchSlackThreadSnapshot({
+      accessToken: input.user.botAccessToken || input.user.accessToken,
+      channelId: input.channelId,
+      threadTs: input.threadTs,
+      currentSlackUserId: input.slackUserId,
+    });
+    recentPracticeTranscript = snapshot.status === "available"
+      ? formatSlackThreadSnapshot(snapshot, 2400)
+      : formatSlackCoachingMessages(
           await loadSlackCoachingMessages({
             threadId: session.coaching_thread_id,
             userId: input.user.id,
             limit: 10,
           }).catch(() => []),
           2400
-        )
-      : "";
+        );
+  }
   const prompt = promptForFlow(session, followupText, recentPracticeTranscript);
   const contextChannelId = input.activeChannelId || session.answers.source_channel_id || null;
   const contextChannelName = session.answers.source_channel_name || null;
@@ -1579,7 +1759,11 @@ export async function startGuidedSlackFlow({
     userName: user.name,
   });
   const step = nextStepForAnswers(intent, answers) || (intent === "decode" ? "decode_followup" : "ask_audience");
-  const initialText = [sidebarOpener(intent), rootContextLine].filter(Boolean).join("\n\n");
+  const initialText = [
+    sidebarOpener(intent),
+    rootContextLine,
+    `Starting request: ${normalizeText(prompt).slice(0, 1600)}`,
+  ].filter(Boolean).join("\n\n");
   const posted = await postSlackAgentMessage({
     botAccessToken: user.botAccessToken,
     slackUserId,
@@ -1825,6 +2009,8 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
     slackUserId: input.slackUserId,
     channelId: input.channelId,
     threadTs: input.threadTs,
+    accessToken: input.user.botAccessToken || input.user.accessToken,
+    latestUserText: text,
   });
 
   if (session && isCancel(text)) {
@@ -1837,6 +2023,18 @@ export async function handleGuidedSlackPrep(input: GuidedFlowInput): Promise<Gui
   if (session && isStartOver(text)) {
     await updateSession(session.id, { status: "completed" });
     session = null;
+  }
+
+  if (session?.rehydration_failure) {
+    return {
+      handled: true,
+      title: flowTitle(session.flow_type),
+      coachingThreadId: session.coaching_thread_id,
+      response: [
+        "I couldn’t reload this Slack thread’s earlier messages, so I’m not going to guess at the missing context.",
+        "Please try again. If Slack still blocks the thread history, reconnect Beckett or start over in a new Beckett message.",
+      ].join("\n\n"),
+    };
   }
 
   if (session && session.flow_type === "prep" && isPracticeRoleplayRequest(text)) {

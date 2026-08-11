@@ -6,6 +6,8 @@ import {
   configureSlackAgentSurface,
   fetchSlackConversationContext,
   fetchSlackBroaderContext,
+  fetchSlackThreadSnapshot,
+  formatSlackThreadSnapshot,
   handleSlackAiError,
   isCompactSlackIntent,
   isAllowedSlackPlan,
@@ -60,6 +62,9 @@ import {
   isGuestStarterPrompt,
 } from "@/lib/slack-guest-routing";
 import { buildSlackPracticeUrl } from "@/lib/slack-practice-link";
+import { markSlackInstallationUninstalled } from "@/lib/slack-installation";
+import { signSlackState } from "@/lib/slack-signed-state";
+import { getSlackCreditSummary } from "@/lib/slack-credits";
 
 export const runtime = "nodejs";
 
@@ -389,6 +394,12 @@ export async function POST(req: NextRequest) {
   }
 
   const event = body.event;
+  if (body.type === "event_callback" && (event?.type === "app_uninstalled" || event?.type === "tokens_revoked")) {
+    if (body.team_id) {
+      scheduleSlackBackgroundTask("Slack installation revocation failed", markSlackInstallationUninstalled(body.team_id));
+    }
+    return NextResponse.json({ ok: true });
+  }
   if (
     body.type === "event_callback" &&
     event?.type === "app_home_opened" &&
@@ -502,10 +513,13 @@ async function publishHome({
       return null;
     });
 
+    const credits = await getSlackCreditSummary({ teamId, slackUserId }).catch(() => null);
+    const linkToken = signSlackState({ purpose: "account_link", teamId, slackUserId }, 15 * 60);
     await publishSlackConnectHome({
       botAccessToken,
       slackUserId,
-      settingsUrl: "https://www.meetbeckett.co/dashboard/settings",
+      settingsUrl: `https://www.meetbeckett.co/api/slack/account-link?token=${encodeURIComponent(linkToken)}`,
+      creditLine: credits ? `${credits.remaining} of ${credits.limit} free coaching credits remaining today` : undefined,
     });
     return;
   }
@@ -543,15 +557,35 @@ async function continueExistingSlackCoachingThread({
   });
   if (!thread) return null;
 
-  const previousMessages = await loadSlackCoachingMessages({
-    threadId: thread.id,
-    userId: user.id,
-    limit: 30,
-  }).catch(() => []);
-  const transcript = formatSlackCoachingMessages(previousMessages, 6000);
-  const hasSavedShortcutContext = previousMessages.some((message) =>
-    /Shortcut source context saved for follow-up:/i.test(message.content)
-  );
+  const snapshot = await fetchSlackThreadSnapshot({
+    accessToken: user.botAccessToken || user.accessToken,
+    channelId,
+    threadTs,
+    currentSlackUserId: slackUserId,
+  });
+  const priorTurns = [...snapshot.turns];
+  for (let index = priorTurns.length - 1; index >= 0; index -= 1) {
+    if (priorTurns[index].role === "user" && priorTurns[index].text.trim() === text.trim()) {
+      priorTurns.splice(index, 1);
+      break;
+    }
+  }
+  const legacyMessages = snapshot.status === "available"
+    ? []
+    : await loadSlackCoachingMessages({ threadId: thread.id, userId: user.id, limit: 30 }).catch(() => []);
+  const transcript = snapshot.status === "available"
+    ? formatSlackThreadSnapshot({ ...snapshot, turns: priorTurns }, 6000)
+    : formatSlackCoachingMessages(legacyMessages, 6000);
+  if (!transcript) {
+    return {
+      thread,
+      response: [
+        "I couldn’t reload the earlier messages in this Beckett thread, so I’m not going to guess at the missing context.",
+        "Please try again, reconnect Beckett, or start a new Beckett message.",
+      ].join("\n\n"),
+    };
+  }
+  const hasSavedShortcutContext = /Shortcut source context saved for follow-up:/i.test(transcript);
   const prompt = [
     `The user is continuing this Beckett coaching thread: ${thread.title}.`,
     thread.summary ? `Current summary: ${thread.summary}` : "",
@@ -581,7 +615,7 @@ async function continueExistingSlackCoachingThread({
     sourceLabel: thread.title,
     messageText: transcript || thread.summary || thread.prompt_snippet || text,
     contextStatus: "available",
-    contextMessageCount: previousMessages.length,
+    contextMessageCount: snapshot.status === "available" ? priorTurns.length : legacyMessages.length,
     broaderSearchUsed: false,
     intent: threadIntent,
     responseDetail: responseDetailForSlackIntent(threadIntent),
@@ -692,12 +726,31 @@ async function respondToAgentMessage({
           slackUserId,
           channelId,
           threadTs,
+          accessToken: botAccessToken,
+          latestUserText: text,
         }).catch(() => null);
         const selectedMessageState = await loadSlackGuestSelectedMessageState({
           teamId,
           slackUserId,
           threadTs,
+          accessToken: botAccessToken,
         }).catch(() => null);
+        if (guestSession?.state?.rehydrationFailure) {
+          const recoveryPayload = buildBeckettPayload({
+            title: "Beckett",
+            body: [
+              "I couldn’t reload the earlier messages in this Beckett thread, so I’m not going to guess at the missing context.",
+              "Please try again. If it continues, reconnect Beckett or start a new Beckett message.",
+            ].join("\n\n"),
+            hideTitle: true,
+          });
+          await slackApiPost(botAccessToken, "chat.postMessage", {
+            channel: channelId,
+            thread_ts: threadTs,
+            ...recoveryPayload,
+          });
+          return;
+        }
         const linkedSlackContext = extractSlackPermalinkContext(text);
         const sessionSource = guestSession?.source;
         const sourceChannelId = linkedSlackContext?.channelId || sessionSource?.channelId || selectedMessageState?.sourceChannelId;
@@ -782,9 +835,21 @@ async function respondToAgentMessage({
             ? guestPrepPrompt(text)
             : text;
         const prepState = intent === "prep"
-          ? await loadSlackGuestPrepState({ teamId, slackUserId, threadTs }).catch(() => null)
+          ? await loadSlackGuestPrepState({
+              teamId,
+              slackUserId,
+              channelId,
+              threadTs,
+              accessToken: botAccessToken,
+              latestUserText: text,
+            }).catch(() => null)
           : null;
-        const practiceState = await loadSlackGuestPracticeState({ teamId, slackUserId, threadTs }).catch(() => null);
+        const practiceState = await loadSlackGuestPracticeState({
+          teamId,
+          slackUserId,
+          threadTs,
+          accessToken: botAccessToken,
+        }).catch(() => null);
         let response: string;
         let actions: Record<string, unknown>[] | undefined;
         if (
@@ -972,7 +1037,13 @@ async function respondToAgentMessage({
           }
           transcript = appendGuestTurn(transcript, "beckett", response);
           const latestPrep = intent === "prep"
-            ? await loadSlackGuestPrepState({ teamId, slackUserId, threadTs }).catch(() => null)
+            ? await loadSlackGuestPrepState({
+                teamId,
+                slackUserId,
+                channelId,
+                threadTs,
+                accessToken: botAccessToken,
+              }).catch(() => null)
             : null;
           await updateSlackGuestSession(guestSession, {
             transcript,

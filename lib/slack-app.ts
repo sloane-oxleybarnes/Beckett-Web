@@ -1,21 +1,21 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { callAnthropic } from "@/lib/anthropic";
-import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
+import { AiUsageLimitError } from "@/lib/ai-usage";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { formatCoachingProfileForPrompt } from "@/lib/coaching-profile";
 import { slackUserIdentifier } from "@/lib/contact-identifiers";
-import {
-  lookupRelationshipContextByIdentifier,
-  recordSafeInteractionSummary,
-} from "@/lib/contact-relationship-context";
+import { lookupRelationshipContextByIdentifier } from "@/lib/contact-relationship-context";
 import { getPublicSiteUrl } from "@/lib/deployment-env";
 import { supabaseAdmin } from "@/lib/server-admin";
 import { selectSlackAgentTool, slackAgentToolInstruction } from "@/lib/slack-agent-tools";
 import { shouldLoadGuestConversationContext } from "@/lib/slack-guest-routing";
 import { slackApiRetryDelayMs } from "@/lib/slack-api-retry";
 import { formatSlackPrepAssessment } from "@/lib/slack-prep-copy";
+import type { SlackThreadTurn } from "@/lib/slack-thread-rehydration";
+import { getSlackInstallationToken } from "@/lib/slack-installation";
+import { registerSlackCreditForResponse, releaseSlackCredit, reserveSlackCredit, settleSlackCreditForPayload } from "@/lib/slack-credits";
 
 const MAX_SLACK_TEXT_LENGTH = 2800;
 const MAX_SLACK_CONTEXT_MESSAGES = 25;
@@ -25,22 +25,9 @@ const MAX_SLACK_BROAD_CONTEXT_RESULTS = 12;
 const MAX_SLACK_ASKED_PROMPT_LENGTH = 650;
 const MAX_QUICK_SLACK_ANSWER_LENGTH = 650;
 const MAX_LONGER_SLACK_ANSWER_LENGTH = 2000;
-const DEFAULT_SLACK_GUEST_DAILY_LIMIT = 5;
 export const SLACK_SLASH_QUICK_ACTION_ID = "beckett_slash_quick";
 export const SLACK_SLASH_LONGER_ACTION_ID = "beckett_slash_longer";
-export const REQUIRED_SLACK_USER_SCOPES = [
-  "channels:history",
-  "groups:history",
-  "im:history",
-  "mpim:history",
-  "users:read",
-  "search:read",
-  "search:read.public",
-  "search:read.private",
-  "search:read.im",
-  "search:read.mpim",
-  "search:read.users",
-];
+export const REQUIRED_SLACK_USER_SCOPES: string[] = [];
 
 export type SlackResponseDetail = "quick" | "longer";
 export type SlackCoachingIntent =
@@ -82,9 +69,9 @@ export function isCompactSlackIntent(intent: SlackCoachingIntent) {
 }
 
 export function shouldUseBroaderSlackContext(intent: SlackCoachingIntent, prompt: string) {
-  if (intent === "prep" || intent === "practice") return true;
-  const normalized = prompt.toLowerCase();
-  return /\b(history|relationship|pattern|before|previous|recently|again|evidence|proof|accomplishment|raise|promotion|manager|1:1|one-on-one|context with|how are things with)\b/.test(normalized);
+  void intent;
+  void prompt;
+  return false;
 }
 
 type SlackMessageOptions = {
@@ -122,6 +109,8 @@ export type SlackConnectedUser = {
   neurodivergentContext: string[];
   neurodivergentContextOther: string | null;
   toolkitItems: { course_id?: string | null; category?: string | null; label?: string | null; content?: string | null }[];
+  slackTeamId: string;
+  slackUserId: string;
 };
 
 type SlackVerificationResult =
@@ -146,6 +135,14 @@ type SlackHistoryMessage = {
   ts?: string;
   thread_ts?: string;
   reactions?: Array<{ name?: string; users?: string[]; count?: number }>;
+};
+
+export type { SlackThreadTurn } from "@/lib/slack-thread-rehydration";
+
+export type SlackThreadSnapshot = {
+  status: SlackContextStatus;
+  failureReason: SlackContextFailureReason | null;
+  turns: SlackThreadTurn[];
 };
 
 export type SlackLatestMessageContext = {
@@ -190,6 +187,13 @@ type SlackSearchInfoResponse = {
 };
 
 const slackUserNameCache = new Map<string, string>();
+
+function slackCreditRequestId(parts: Array<string | null | undefined>) {
+  const day = new Date().toISOString().slice(0, 10);
+  const secret = process.env.SLACK_SIGNING_SECRET || "beckett-slack-credit-id";
+  const digest = createHmac("sha256", secret).update([day, ...parts.map((part) => part || "")].join("\u001f")).digest("hex");
+  return `slack_${digest.slice(0, 48)}`;
+}
 
 function metadataRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -543,69 +547,15 @@ export function slackConnectResponse(origin: string, detail?: string) {
   return slackTextResponse(slackConnectText(origin, detail));
 }
 
-export function getSlackGuestDailyLimit() {
-  if (process.env.SLACK_GUEST_FULL_ACCESS === "true") return 999999;
-  const configured = Number(process.env.SLACK_GUEST_DAILY_AI_LIMIT);
-  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SLACK_GUEST_DAILY_LIMIT;
-}
-
-export class SlackGuestUsageLimitError extends Error {
-  status = 429;
-
-  constructor(public limit: number) {
-    super(`Guest Slack coaching is limited to ${limit} analyses per day. Connect Slack in Beckett Settings for the full beta experience.`);
-  }
-}
-
-function startOfUtcDay() {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
-}
-
-export async function recordSlackGuestUsage({
-  teamId,
-  slackUserId,
-  action,
-  metadata,
-}: {
-  teamId: string;
-  slackUserId: string;
-  action: string;
-  metadata?: Record<string, unknown>;
-}) {
-  const limit = getSlackGuestDailyLimit();
-  const { count, error: countError } = await supabaseAdmin
-    .from("slack_guest_usage_events")
-    .select("id", { count: "exact", head: true })
-    .eq("slack_team_id", teamId)
-    .eq("slack_user_id", slackUserId)
-    .gt("token_estimate", 0)
-    .gte("created_at", startOfUtcDay());
-
-  if (countError) throw countError;
-  const used = count || 0;
-  if (used >= limit) throw new SlackGuestUsageLimitError(limit);
-
-  const { error } = await supabaseAdmin.from("slack_guest_usage_events").insert({
-    slack_team_id: teamId,
-    slack_user_id: slackUserId,
-    source: "slack_guest",
-    action,
-    token_estimate: 1,
-    metadata: metadata || {},
-  });
-
-  if (error) throw error;
-  return { limit, used: used + 1, remaining: Math.max(limit - used - 1, 0) };
-}
-
 export async function postSlackResponse(responseUrl: string, text: string, options: SlackMessageOptions = {}) {
   if (!responseUrl) return;
-  await fetch(responseUrl, {
+  const payload = buildSlackMessagePayload(text, options);
+  const response = await fetch(responseUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildSlackMessagePayload(text, options)),
+    body: JSON.stringify(payload),
   });
+  await settleSlackCreditForPayload(payload, response.ok).catch((error) => console.error("Slack response credit settlement failed", error));
 }
 
 export function scheduleSlackBackgroundTask(label: string, task: Promise<void>) {
@@ -728,15 +678,35 @@ function slackIntentInstruction(intent: SlackCoachingIntent) {
 }
 
 export async function lookupSlackConnectedUser(teamId: string, slackUserId: string) {
-  const { data: integration, error } = await supabaseAdmin
-    .from("user_integrations")
-    .select("user_id, access_token, external_team_name, metadata")
-    .eq("provider", "slack")
-    .eq("external_team_id", teamId)
-    .eq("external_user_id", slackUserId)
+  const { data: link, error: linkError } = await supabaseAdmin
+    .from("slack_user_links")
+    .select("beckett_user_id")
+    .eq("slack_team_id", teamId)
+    .eq("slack_user_id", slackUserId)
+    .is("disconnected_at", null)
     .maybeSingle();
+  if (linkError) throw linkError;
 
-  if (error) throw error;
+  let integration: { user_id: string; access_token: string | null; external_team_name: string | null; metadata: Record<string, unknown> } | null = null;
+  if (link?.beckett_user_id) {
+    integration = {
+      user_id: link.beckett_user_id,
+      access_token: null,
+      external_team_name: null,
+      metadata: { access_token: await getSlackInstallationToken(teamId), granted_user_scopes: [] },
+    };
+  } else {
+    const legacy = await supabaseAdmin
+      .from("user_integrations")
+      .select("user_id, access_token, external_team_name, metadata")
+      .eq("provider", "slack")
+      .eq("external_team_id", teamId)
+      .eq("external_user_id", slackUserId)
+      .maybeSingle();
+    if (legacy.error) throw legacy.error;
+    integration = legacy.data as typeof integration;
+  }
+
   if (!integration?.user_id) return null;
 
   const { data: profile, error: profileError } = await supabaseAdmin
@@ -783,6 +753,8 @@ export async function lookupSlackConnectedUser(teamId: string, slackUserId: stri
       : [],
     neurodivergentContextOther: profile.neurodivergent_context_other || null,
     toolkitItems: toolkitItems || [],
+    slackTeamId: teamId,
+    slackUserId,
   } satisfies SlackConnectedUser;
 }
 
@@ -794,6 +766,9 @@ export async function lookupSlackWorkspaceBotToken(teamId: string) {
     null;
 
   if (!teamId) return null;
+
+  const installationToken = await getSlackInstallationToken(teamId).catch(() => null);
+  if (installationToken) return installationToken;
 
   const { data, error } = await supabaseAdmin
     .from("user_integrations")
@@ -826,7 +801,10 @@ export async function slackApiPost<T>(accessToken: string, method: string, body:
       retryAfter: res.headers.get("retry-after"),
       error: result.error,
     });
-    if (retryDelay === null || attempt === 3) return result;
+    if (retryDelay === null || attempt === 3) {
+      await settleSlackCreditForPayload(body, Boolean(result.ok)).catch((error) => console.error("Slack credit settlement failed", { method, message: error instanceof Error ? error.message : String(error) }));
+      return result;
+    }
     await new Promise((resolve) => setTimeout(resolve, retryDelay));
   }
 
@@ -1108,6 +1086,8 @@ function slackNoContextPromptInstruction({
   return "No recent Slack context was available. Answer from the user's request without implying you saw surrounding messages.";
 }
 
+// Kept for a separately reviewed future broader-access release; unreachable in zero-copy launch.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function buildTargetedBroaderSearchQuery({
   prompt,
   activeContext,
@@ -1304,6 +1284,75 @@ export async function fetchSlackConversationContext({
   } satisfies SlackConversationContext;
 }
 
+export async function fetchSlackThreadSnapshot({
+  accessToken,
+  channelId,
+  threadTs,
+  currentSlackUserId,
+  limit = 100,
+}: {
+  accessToken: string | null;
+  channelId?: string | null;
+  threadTs?: string | null;
+  currentSlackUserId?: string | null;
+  limit?: number;
+}): Promise<SlackThreadSnapshot> {
+  if (!accessToken) return { status: "unavailable", failureReason: "missing_token", turns: [] };
+  if (!channelId || !threadTs) return { status: "unavailable", failureReason: "missing_channel", turns: [] };
+
+  const data = await slackApiFetch<{ messages?: SlackHistoryMessage[] }>(
+    accessToken,
+    "conversations.replies",
+    new URLSearchParams({
+      channel: channelId,
+      ts: threadTs,
+      limit: String(Math.min(100, Math.max(1, limit))),
+      inclusive: "true",
+    })
+  ).catch(() => null);
+
+  if (!data?.ok) {
+    return {
+      status: "unavailable",
+      failureReason: slackContextFailureReasonForError(data?.error),
+      turns: [],
+    };
+  }
+
+  const turns = (data.messages || [])
+    .map((message): SlackThreadTurn | null => {
+      const text = stripSlackMarkup(message.text || "").trim();
+      if (!text) return null;
+      const role = message.user === currentSlackUserId
+        ? "user"
+        : message.bot_id || message.subtype === "bot_message"
+          ? "beckett"
+          : "other";
+      return {
+        role,
+        userId: message.user || null,
+        text,
+        ts: message.ts || null,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => Number(left!.ts || 0) - Number(right!.ts || 0)) as SlackThreadTurn[];
+
+  return {
+    status: turns.length ? "available" : "unavailable",
+    failureReason: turns.length ? null : "no_messages",
+    turns,
+  };
+}
+
+export function formatSlackThreadSnapshot(snapshot: SlackThreadSnapshot, maxLength = 6000) {
+  const transcript = snapshot.turns
+    .map((turn) => `${turn.role === "user" ? "User" : turn.role === "beckett" ? "Beckett" : "Other participant"}: ${turn.text}`)
+    .join("\n\n");
+  if (transcript.length <= maxLength) return transcript;
+  return transcript.slice(-maxLength);
+}
+
 export async function fetchLatestSlackMessageContext({
   accessToken,
   channelId,
@@ -1421,6 +1470,7 @@ export async function buildGuestSlackContextPacket({
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function runSlackBroaderSearch({
   accessToken,
   query,
@@ -1496,6 +1546,7 @@ async function runSlackBroaderSearch({
   } satisfies SlackConversationContext;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function runLegacySlackMessageSearch({
   accessToken,
   query,
@@ -1541,6 +1592,7 @@ async function runLegacySlackMessageSearch({
   } satisfies SlackConversationContext;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function fetchSlackRealTimeSearchInfo(accessToken: string | null) {
   if (!accessToken) {
     return {
@@ -1586,6 +1638,16 @@ export async function fetchSlackBroaderContext({
   relevantSlackUserIds?: string[];
   currentSlackUserId?: string | null;
 }) {
+  void accessToken;
+  void prompt;
+  void activeContext;
+  void contextChannelId;
+  void actionToken;
+  void relevantSlackUserIds;
+  void currentSlackUserId;
+  return slackUnavailable("feature_not_enabled", "zero_copy_launch_scope_policy");
+
+  /* Broad workspace search is intentionally disabled for the zero-copy launch.
   if (!accessToken) return slackUnavailable("missing_token");
 
   const rtsInfo = await fetchSlackRealTimeSearchInfo(accessToken);
@@ -1655,7 +1717,7 @@ export async function fetchSlackBroaderContext({
     );
   }
 
-  return generic;
+  return generic; */
 }
 
 export async function buildSlackCoachingContext({
@@ -1727,6 +1789,7 @@ export async function resolveSlackAuthorRelationshipContext({
   slackAuthorUserId?: string | null;
   interactionType: string;
 }) {
+  void interactionType;
   const identifier = slackUserIdentifier(teamId, slackAuthorUserId);
   if (!identifier) return null;
 
@@ -1739,7 +1802,6 @@ export async function resolveSlackAuthorRelationshipContext({
     identifier,
     requireConfirmed: true,
   });
-  let matchedBy = "confirmed_slack_user_id";
 
   for (const alias of slackProfile?.aliases || []) {
     if (relationshipContext) break;
@@ -1752,7 +1814,6 @@ export async function resolveSlackAuthorRelationshipContext({
       },
       requireConfirmed: false,
     });
-    matchedBy = "slack_profile_alias";
   }
 
   if (!relationshipContext) {
@@ -1763,24 +1824,6 @@ export async function resolveSlackAuthorRelationshipContext({
       promptContext: null,
     };
   }
-
-  await recordSafeInteractionSummary({
-    userId: user.id,
-    contactId: relationshipContext.contact.id,
-    platform: "slack",
-    interactionType,
-    summary: `Slack coaching was requested for ${relationshipContext.contact.name}. Beckett matched this person by ${matchedBy} and used stored relationship context.`,
-    metadata: {
-      source: interactionType,
-      slack_team_id: teamId,
-      slack_user_id: slackAuthorUserId || null,
-      slack_display_name: slackProfile?.name || null,
-      matched_by: matchedBy,
-    },
-    updateRelationshipSummary: false,
-  }).catch((error) => {
-    console.error("Slack relationship summary storage failed", error);
-  });
 
   return {
     linked: true,
@@ -1838,6 +1881,7 @@ export async function runSlackCoaching({
   responseDetail?: SlackResponseDetail;
   intent?: SlackCoachingIntent;
 }) {
+  void sourceLabel;
   if (contextStatus) {
     await noteSlackContextValidation(
       user.id,
@@ -1847,25 +1891,11 @@ export async function runSlackCoaching({
     });
   }
 
-  await recordAiUsage(user.id, {
-    source: "slack_desktop",
-    action,
-    metadata: {
-      sourceLabel,
-      teamName: user.teamName,
-      contextStatus: contextStatus || null,
-      contextFailureReason: contextFailureReason || null,
-      contextMessageCount: contextMessageCount || 0,
-      broaderSearchUsed: Boolean(broaderSearchUsed),
-      relationshipContextIncluded: Boolean(relationshipContext),
-      responseDetail: responseDetail || null,
-      intent,
-      agentTool: selectSlackAgentTool({
-        intent,
-        action,
-        hasSlackContext: Boolean(messageText || relationshipContext || contextStatus === "available"),
-      }),
-    },
+  const credit = await reserveSlackCredit({
+    requestId: slackCreditRequestId([user.slackTeamId, user.slackUserId, action, prompt, messageText]),
+    teamId: user.slackTeamId,
+    slackUserId: user.slackUserId,
+    beckettUserId: user.id,
   });
 
   const agentTool = selectSlackAgentTool({
@@ -1963,7 +1993,13 @@ User request:
 ${prompt}${relationshipLine}${messageLine}`;
 
   const maxTokens = responseDetail === "longer" ? 700 : responseDetail === "quick" ? 240 : 800;
-  const text = await callAnthropic(system, [{ role: "user", content: userPrompt }], maxTokens);
+  let text: string;
+  try {
+    text = await callAnthropic(system, [{ role: "user", content: userPrompt }], maxTokens);
+  } catch (error) {
+    await releaseSlackCredit(credit.id).catch(() => undefined);
+    throw error;
+  }
 
   await trackBetaEvent({
     userId: user.id,
@@ -1972,8 +2008,6 @@ ${prompt}${relationshipLine}${messageLine}`;
     source: "slack_desktop",
     metadata: {
       action,
-      sourceLabel,
-      teamName: user.teamName,
       contextStatus: contextStatus || null,
       contextFailureReason: contextFailureReason || null,
       contextMessageCount: contextMessageCount || 0,
@@ -1995,14 +2029,20 @@ ${prompt}${relationshipLine}${messageLine}`;
       .split("\n")
       .map((line) => line.trim())
       .find((line) => line && !/^~?\s*(?:result|answer|source)\s*~?:?$/i.test(line));
-    return fitSlackAnswer(directResult || cleaned, 220);
+    const final = fitSlackAnswer(directResult || cleaned, 220);
+    registerSlackCreditForResponse(final, { reservationId: credit.id, eventType: action, flowType: intent });
+    return final;
   }
   if (responseDetail === "quick" && intent === "prep") {
-    return compactSlackPrepAssessment(cleaned);
+    const final = compactSlackPrepAssessment(cleaned);
+    registerSlackCreditForResponse(final, { reservationId: credit.id, eventType: action, flowType: intent });
+    return final;
   }
-  if (responseDetail === "quick") return fitSlackAnswer(compactSlackResponseLayout(cleaned), compactSlackLimit(intent));
-  if (responseDetail === "longer") return fitSlackAnswer(cleaned, MAX_LONGER_SLACK_ANSWER_LENGTH);
-  return truncateSlackText(cleaned);
+  const final = responseDetail === "quick"
+    ? fitSlackAnswer(compactSlackResponseLayout(cleaned), compactSlackLimit(intent))
+    : responseDetail === "longer" ? fitSlackAnswer(cleaned, MAX_LONGER_SLACK_ANSWER_LENGTH) : truncateSlackText(cleaned);
+  registerSlackCreditForResponse(final, { reservationId: credit.id, eventType: action, flowType: intent });
+  return final;
 }
 
 export async function runSlackGuestCoaching({
@@ -2029,15 +2069,10 @@ export async function runSlackGuestCoaching({
     ].join("\n");
   }
 
-  await recordSlackGuestUsage({
+  const credit = await reserveSlackCredit({
+    requestId: slackCreditRequestId([teamId, slackUserId, action, prompt, cleanMessageText]),
     teamId,
     slackUserId,
-    action,
-    metadata: {
-      intent,
-      messageLength: cleanMessageText.length,
-      connectedProfile: false,
-    },
   });
 
   const agentTool = selectSlackAgentTool({
@@ -2085,16 +2120,22 @@ ${beckettBoundaryPrompt()}`;
     cleanMessageText,
   ].join("\n");
 
-  const text = await callAnthropic(system, [{ role: "user", content: userPrompt }], 420);
-  return fitSlackAnswer(
+  let text: string;
+  try {
+    text = await callAnthropic(system, [{ role: "user", content: userPrompt }], 420);
+  } catch (error) {
+    await releaseSlackCredit(credit.id).catch(() => undefined);
+    throw error;
+  }
+  const final = fitSlackAnswer(
     text.trim() || "I could not generate a response for that Slack request.",
     intent === "practice" ? 800 : intent === "prep" ? 1200 : MAX_QUICK_SLACK_ANSWER_LENGTH
   );
+  registerSlackCreditForResponse(final, { reservationId: credit.id, eventType: action, flowType: intent });
+  return final;
 }
 
 export function handleSlackAiError(error: unknown) {
-  if (error instanceof SlackGuestUsageLimitError) return error.message;
-
   if (error instanceof AiUsageLimitError) {
     return `You have reached today’s Beckett beta AI limit. ${error.message}`;
   }

@@ -117,14 +117,14 @@
     const ctx = extractCurrentContext();
     if (!ctx) return null;
 
-    // Tag messages with isCurrentUser using cached email from storage
-    const { currentUserEmail } = await chrome.storage.local.get('currentUserEmail');
-    if (currentUserEmail && ctx.thread) {
+    // The Beckett account is the source of truth for the signed-in user.
+    const { beckettUserEmail } = await chrome.storage.local.get('beckettUserEmail');
+    if (beckettUserEmail && ctx.thread) {
       ctx.thread = ctx.thread.map(m => ({
         ...m,
         isCurrentUser: m.senderEmail
-          ? m.senderEmail.toLowerCase() === currentUserEmail.toLowerCase()
-          : m.sender.toLowerCase().includes(currentUserEmail.toLowerCase()),
+          ? m.senderEmail.toLowerCase() === beckettUserEmail.toLowerCase()
+          : m.sender.toLowerCase().includes(beckettUserEmail.toLowerCase()),
       }));
       // Update latest message to be the latest incoming (not from user)
       const latestIncoming = [...ctx.thread].reverse().find(m => !m.isCurrentUser);
