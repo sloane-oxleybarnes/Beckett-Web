@@ -1,30 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { getAuthenticatedContext } from '@/lib/server-auth'
 import { callAnthropic } from '@/lib/anthropic'
-import { AiUsageLimitError, recordAiUsage } from '@/lib/ai-usage'
+import { AiUsageLimitError } from '@/lib/ai-usage'
+import { withAiMetering } from '@/lib/ai-metering'
 import { trackBetaEvent } from '@/lib/beta-events'
 import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
 import { getSafetyResponse } from '@/lib/safety-resources'
 import * as Sentry from '@sentry/nextjs'
-import { WEB_CREDITS_ENABLED } from '@/lib/web-credits'
-
-function extractJsonObject(text: string) {
-  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
-  return cleaned.startsWith('{') ? cleaned : cleaned.match(/\{[\s\S]*\}/)?.[0] || cleaned
-}
+import { WEB_CREDITS_ENABLED, WebCreditLimitError } from '@/lib/web-credits'
+import { extractJsonObject } from '@/lib/ai-json'
 
 export async function POST(req: NextRequest) {
   const diagnostic: { action?: string; courseId?: string | null; userId?: string } = {}
   try {
-  const supabase = createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  diagnostic.userId = session.user.id
+  const { supabase, user } = await getAuthenticatedContext()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  diagnostic.userId = user.id
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('plan, safety_resource_region')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
   const plan = profile?.plan || 'free'
@@ -62,16 +58,14 @@ export async function POST(req: NextRequest) {
     messages: { role: 'user' | 'assistant'; content: string }[],
     maxTokens: number
   ) => {
-    if (!WEB_CREDITS_ENABLED) {
-      await recordAiUsage(session.user.id, {
-        source: 'course',
-        action: `course_${action}`,
-      })
-    }
-    const result = await callAnthropic(system, messages, maxTokens)
+    const result = await withAiMetering({
+      userId: user.id,
+      source: 'course',
+      action: `course_${action}`,
+    }, () => callAnthropic(system, messages, maxTokens))
     await trackBetaEvent({
-      userId: session.user.id,
-      email: session.user.email,
+      userId: user.id,
+      email: user.email,
       eventName: 'analysis_completed',
       source: 'course',
       metadata: { action: `course_${action}` },
@@ -233,9 +227,12 @@ Return only valid JSON. No markdown, no extra text.`
       action: diagnostic.action || 'unknown',
       courseId: diagnostic.courseId || null,
       userId: diagnostic.userId || null,
-      status: error instanceof AiUsageLimitError ? error.status : 500,
+      status: error instanceof AiUsageLimitError || error instanceof WebCreditLimitError ? error.status : 500,
       message: error instanceof Error ? error.message : 'Unknown error',
     })
+    if (error instanceof WebCreditLimitError) {
+      return NextResponse.json({ error: error.message, kind: error.kind }, { status: error.status })
+    }
     if (error instanceof AiUsageLimitError) {
       return NextResponse.json(
         {

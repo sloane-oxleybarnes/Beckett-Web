@@ -133,26 +133,46 @@ export async function getWebCreditSummary(userId: string) {
   };
 }
 
-export async function assertWebCreditsAvailable(userId: string) {
-  const summary = await getWebCreditSummary(userId);
-  if (!summary.enabled || summary.unlimited) return summary;
-  if (summary.daily.remaining <= 0) throw new WebCreditLimitError("daily");
-  if (summary.monthly.remaining <= 0) throw new WebCreditLimitError("monthly");
-  return summary;
-}
-
-export async function recordSuccessfulWebCredit(userId: string, input: {
+export async function reserveWebCredit(userId: string, input: {
+  requestId: string;
   source: string;
   action: string;
-  metadata?: Record<string, string | number | boolean | null>;
+  metadata?: Record<string, unknown>;
 }) {
-  if (!WEB_CREDITS_ENABLED || await isUnlimitedWebCreditUser(userId)) return;
-  const { error } = await supabaseAdmin.from("web_credit_events").insert({
-    user_id: userId,
-    source: input.source,
-    action: input.action,
-    credits: 1,
-    metadata: input.metadata || {},
+  const summary = await getWebCreditSummary(userId);
+  if (!summary.enabled || summary.unlimited) return null;
+
+  const { data, error } = await supabaseAdmin.rpc("reserve_web_credit", {
+    p_request_id: input.requestId,
+    p_user_id: userId,
+    p_source: input.source,
+    p_action: input.action,
+    p_metadata: input.metadata || {},
+    p_daily_limit: summary.daily.limit,
+    p_monthly_limit: summary.monthly.limit,
+  });
+
+  if (error?.message?.includes("web_credit_daily_limit_reached")) {
+    throw new WebCreditLimitError("daily");
+  }
+  if (error?.message?.includes("web_credit_monthly_limit_reached")) {
+    throw new WebCreditLimitError("monthly");
+  }
+  if (error) throw error;
+
+  return data as { id: string; status: "reserved" | "committed" | "released" };
+}
+
+export async function commitWebCredit(reservationId: string) {
+  const { error } = await supabaseAdmin.rpc("commit_web_credit", {
+    p_reservation_id: reservationId,
+  });
+  if (error) throw error;
+}
+
+export async function releaseWebCredit(reservationId: string) {
+  const { error } = await supabaseAdmin.rpc("release_web_credit", {
+    p_reservation_id: reservationId,
   });
   if (error) throw error;
 }
@@ -166,28 +186,12 @@ export async function ensureWebCourseAccess(userId: string, plan: string | null 
   if (!WEB_CREDITS_ENABLED || plan !== "free") throw new WebCourseLimitError();
 
   const periodStart = utcMonthStart().toISOString().slice(0, 10);
-  const { data: existing, error: existingError } = await supabaseAdmin
-    .from("web_course_unlocks")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("course_id", courseId)
-    .eq("period_start", periodStart)
-    .maybeSingle();
-  if (existingError) throw existingError;
-  if (existing) return;
-
-  const { count, error: countError } = await supabaseAdmin
-    .from("web_course_unlocks")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("period_start", periodStart);
-  if (countError) throw countError;
-  if ((count || 0) >= 2) throw new WebCourseLimitError();
-
-  const { error } = await supabaseAdmin.from("web_course_unlocks").insert({
-    user_id: userId,
-    course_id: courseId,
-    period_start: periodStart,
+  const { error } = await supabaseAdmin.rpc("ensure_web_course_access", {
+    p_user_id: userId,
+    p_course_id: courseId,
+    p_period_start: periodStart,
+    p_limit: 2,
   });
-  if (error && error.code !== "23505") throw error;
+  if (error?.message?.includes("web_course_limit_reached")) throw new WebCourseLimitError();
+  if (error) throw error;
 }

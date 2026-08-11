@@ -1,14 +1,10 @@
 import { NextRequest } from "next/server";
 import { callAnthropic } from "@/lib/anthropic";
-import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
+import { AiUsageLimitError } from "@/lib/ai-usage";
+import { withAiMetering } from "@/lib/ai-metering";
 import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { trackBetaEvent } from "@/lib/beta-events";
-import {
-  WEB_CREDITS_ENABLED,
-  WebCreditLimitError,
-  assertWebCreditsAvailable,
-  recordSuccessfulWebCredit,
-} from "@/lib/web-credits";
+import { WebCreditLimitError } from "@/lib/web-credits";
 import {
   brandedSectionHeader,
   buttonWidget,
@@ -50,17 +46,13 @@ export async function POST(request: NextRequest) {
       if (!latest?.body) return cardResponse(errorCard("Message unavailable", "Gmail did not provide readable message content."));
       const personalization = await loadWorkspaceGmailPersonalization(profile, thread);
 
-      if (WEB_CREDITS_ENABLED) {
-        await assertWebCreditsAvailable(profile.id);
-      } else {
-        await recordAiUsage(profile.id, {
-          source: "google_workspace_addon",
-          action: refinement ? "refine_reply" : "draft_reply",
-          metadata: { platform: "gmail", messageCount: thread.messages.length, refined: Boolean(refinement) },
-        });
-      }
-
-      const result = await callAnthropic(
+      const action = refinement ? "refine_reply" : "draft_reply";
+      const result = await withAiMetering({
+        userId: profile.id,
+        source: "google_workspace_addon",
+        action,
+        metadata: { platform: "gmail", messageCount: thread.messages.length, refined: Boolean(refinement) },
+      }, () => callAnthropic(
         [
           "You are Beckett, a private communication coach.",
           "Messages labeled You were written by the signed-in Beckett user. Refer to that person only as you or your, never by name or in the third person. Never address the Beckett user as the recipient of a suggested reply.",
@@ -90,15 +82,7 @@ export async function POST(request: NextRequest) {
           },
         ],
         850,
-      );
-
-      if (WEB_CREDITS_ENABLED) {
-        await recordSuccessfulWebCredit(profile.id, {
-          source: "google_workspace_addon",
-          action: refinement ? "refine_reply" : "draft_reply",
-          metadata: { platform: "gmail", messageCount: thread.messages.length, refined: Boolean(refinement) },
-        });
-      }
+      ));
 
       await trackBetaEvent({
         userId: profile.id,

@@ -86,6 +86,21 @@ export async function getAiUsageToday(userId: string, source?: string) {
   return count || 0
 }
 
+export async function getAiUsageSummary(userId: string, source?: string) {
+  const isCourse = source === 'course'
+  const limit = isCourse ? getDailyCourseAiLimit() : getDailyAiLimit()
+  const [used, unlimited] = await Promise.all([
+    getAiUsageToday(userId, source),
+    isUnlimitedAiUser(userId),
+  ])
+  return {
+    limit: unlimited ? UNLIMITED_AI_LIMIT : limit,
+    used,
+    remaining: unlimited ? UNLIMITED_AI_LIMIT : Math.max(limit - used, 0),
+    unlimited,
+  }
+}
+
 export async function recordAiUsage(userId: string, input: {
   source: string
   action: string
@@ -94,27 +109,28 @@ export async function recordAiUsage(userId: string, input: {
 }) {
   const isCourse = input.source === 'course'
   const limit = isCourse ? getDailyCourseAiLimit() : getDailyAiLimit()
-  const used = await getAiUsageToday(userId, isCourse ? 'course' : undefined)
   const unlimited = await isUnlimitedAiUser(userId)
-
-  if (!unlimited && used >= limit) {
-    throw new AiUsageLimitError(limit, isCourse ? 'course' : 'analysis', hasUnlimitedAiBypassConfigured())
-  }
-
-  const { error } = await supabaseAdmin.from('ai_usage_events').insert({
-    user_id: userId,
-    source: input.source,
-    action: input.action,
-    token_estimate: input.tokenEstimate || 1,
-    metadata: input.metadata || {},
+  const effectiveLimit = unlimited ? UNLIMITED_AI_LIMIT : limit
+  const { data, error } = await supabaseAdmin.rpc('consume_ai_usage', {
+    p_user_id: userId,
+    p_source: input.source,
+    p_action: input.action,
+    p_token_estimate: input.tokenEstimate || 1,
+    p_metadata: input.metadata || {},
+    p_limit: effectiveLimit,
   })
 
+  if (error?.message?.includes('ai_usage_limit_reached')) {
+    throw new AiUsageLimitError(limit, isCourse ? 'course' : 'analysis', hasUnlimitedAiBypassConfigured())
+  }
   if (error) throw error
 
+  const used = Number(data || 0)
+
   return {
-    limit: unlimited ? UNLIMITED_AI_LIMIT : limit,
-    used: used + 1,
-    remaining: unlimited ? UNLIMITED_AI_LIMIT : Math.max(limit - used - 1, 0),
+    limit: effectiveLimit,
+    used,
+    remaining: unlimited ? UNLIMITED_AI_LIMIT : Math.max(limit - used, 0),
     unlimited,
   }
 }
