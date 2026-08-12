@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { triggerLoopsEvent } from "@/lib/loops";
 import { sendBetaAccessReadyEmail, sendBetaInviteEmail } from "@/lib/beta-emails";
-import { verifyAdminSession } from "@/lib/admin-session";
+import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { findAuthUserByEmail } from "@/lib/admin-beta-approval";
 
 function buildPasswordSetupLink(origin: string, tokenHash: string, type: "invite" | "recovery") {
@@ -16,8 +15,7 @@ function buildPasswordSetupLink(origin: string, tokenHash: string, type: "invite
 }
 
 export async function POST(req: NextRequest) {
-  const cookieStore = cookies();
-  if (!verifyAdminSession(cookieStore.get("admin_auth")?.value)) {
+  if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

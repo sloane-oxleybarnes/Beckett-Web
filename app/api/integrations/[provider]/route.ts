@@ -31,8 +31,9 @@ async function revokeProviderToken(provider: ConnectedProvider, token: string) {
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { provider: string } }) {
-  if (!isConnectedProvider(params.provider)) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ provider: string }> }) {
+  const { provider } = await params;
+  if (!isConnectedProvider(provider)) {
     return NextResponse.json({ error: "Unsupported integration." }, { status: 404 });
   }
 
@@ -47,27 +48,27 @@ export async function DELETE(_req: Request, { params }: { params: { provider: st
     .from("user_integrations")
     .select("access_token")
     .eq("user_id", session.user.id)
-    .eq("provider", params.provider)
+    .eq("provider", provider)
     .maybeSingle();
 
   if (readError) return NextResponse.json({ error: "Could not read the integration." }, { status: 500 });
 
   if (integration?.access_token) {
-    await revokeProviderToken(params.provider, integration.access_token);
+    await revokeProviderToken(provider, integration.access_token);
   }
 
   const { error: deleteError } = await supabaseAdmin
     .from("user_integrations")
     .delete()
     .eq("user_id", session.user.id)
-    .eq("provider", params.provider);
+    .eq("provider", provider);
 
   if (deleteError) return NextResponse.json({ error: "Could not disconnect the integration." }, { status: 500 });
 
   await trackBetaEvent({
     userId: session.user.id,
     email: session.user.email,
-    eventName: `${params.provider}_disconnected`,
+    eventName: `${provider}_disconnected`,
     source: "web_app",
   });
 

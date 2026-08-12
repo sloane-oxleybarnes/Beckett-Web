@@ -46,6 +46,7 @@ function prepHref(event: CalendarEvent) {
 }
 
 export default function CalendarPanel() {
+  const [renderedAt] = useState(() => Date.now());
   const [calendar, setCalendar] = useState<CalendarResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,8 +117,8 @@ export default function CalendarPanel() {
     });
   }, [weekStart]);
   const prepCandidates = useMemo(
-    () => (calendar?.events || []).filter((event) => hasOtherAttendees(event) && new Date(event.start).getTime() >= Date.now()).slice(0, 3),
-    [calendar]
+    () => (calendar?.events || []).filter((event) => hasOtherAttendees(event) && new Date(event.start).getTime() >= renderedAt).slice(0, 3),
+    [calendar, renderedAt]
   );
   const recommendedPrepCandidates = useMemo(
     () => meetingPrepLearningEnabled ? prepCandidates.filter((event) => hasEarnedMeetingPrepSignal(event, contacts)) : [],

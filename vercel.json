@@ -1,8 +1,8 @@
 {
   "framework": "nextjs",
-  "buildCommand": "next build",
+  "buildCommand": "npm run build",
   "devCommand": "next dev",
-  "installCommand": "npm install",
+  "installCommand": "npm ci",
   "crons": [
     {
       "path": "/api/admin/email-automations",

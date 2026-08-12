@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getCourse } from "@/lib/courses";
 import {
@@ -9,13 +8,9 @@ import {
 } from "@/lib/course-content";
 import { supabaseAdmin } from "@/lib/server-admin";
 import type { Course } from "@/lib/courses";
-import { verifyAdminSession } from "@/lib/admin-session";
+import { isAdminAuthenticated } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
-
-function isAdmin() {
-  return verifyAdminSession(cookies().get("admin_auth")?.value);
-}
 
 function jsonCourseCopy(course: Course): Course {
   return JSON.parse(JSON.stringify(course)) as Course;
@@ -56,7 +51,7 @@ async function getDraftOrFallback(courseId: string) {
 }
 
 export async function GET() {
-  if (!isAdmin()) {
+  if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -65,7 +60,7 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
-  if (!isAdmin()) {
+  if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -101,7 +96,7 @@ export async function PUT(req: Request) {
 }
 
 export async function POST(req: Request) {
-  if (!isAdmin()) {
+  if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

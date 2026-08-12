@@ -1,11 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { verifyAdminSession } from '@/lib/admin-session'
+import { isAdminAuthenticated } from '@/lib/admin-auth'
 
 export async function DELETE(request: NextRequest) {
-  const cookieStore = cookies()
-  if (!verifyAdminSession(cookieStore.get('admin_auth')?.value)) {
+  if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

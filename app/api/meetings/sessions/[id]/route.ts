@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 function cleanText(value: unknown, max: number) { return typeof value === "string" ? value.trim().slice(0, max) : null; }
 function cleanList(value: unknown) { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, 300)).filter(Boolean).slice(0, 20) : []; }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -21,7 +21,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     communication_reminders: cleanText(body.communication_reminders, 2000),
     prep_checklist: cleanList(body.prep_checklist),
     updated_at: new Date().toISOString(),
-  }).eq("id", params.id).eq("user_id", user.id).select("*").single();
+  }).eq("id", (await params).id).eq("user_id", user.id).select("*").single();
   if (error) return NextResponse.json({ error: "Could not save the meeting debrief." }, { status: 500 });
   return NextResponse.json({ session: data });
 }

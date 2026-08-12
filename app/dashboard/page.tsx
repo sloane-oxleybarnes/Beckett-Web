@@ -7,28 +7,29 @@ import BetaMissionsCard from "@/components/dashboard/BetaMissionsCard";
 import TodayGuide from "@/components/dashboard/TodayGuide";
 
 type DashboardPageProps = {
-  searchParams?: {
+  searchParams?: Promise<{
     tour?: string | string[];
-  };
+  }>;
 };
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const supabase = await createSupabaseServerClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) redirect("/auth/login");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/auth/login");
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name, plan, first_login_complete, dashboard_walkthrough_completed_at")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .single();
 
   const name =
     profile?.full_name?.split(" ")[0] ||
-    session.user.email?.split("@")[0] ||
+    user.email?.split("@")[0] ||
     "there";
 
-  const tourParam = Array.isArray(searchParams?.tour) ? searchParams?.tour[0] : searchParams?.tour;
+  const resolvedSearchParams = await searchParams;
+  const tourParam = Array.isArray(resolvedSearchParams?.tour) ? resolvedSearchParams.tour[0] : resolvedSearchParams?.tour;
   const isBeta = profile?.plan === "beta";
   const showWalkthrough =
     tourParam === "1" ||

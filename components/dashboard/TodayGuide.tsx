@@ -79,6 +79,7 @@ function practiceHref(event: CalendarEvent) {
 }
 
 export default function TodayGuide({ name }: { name: string }) {
+  const [renderedAt] = useState(() => Date.now());
   const [calendar, setCalendar] = useState<Calendar | null>(null);
   const [calendarStatus, setCalendarStatus] = useState<"loading" | "ready" | "error">("loading");
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
@@ -181,7 +182,7 @@ export default function TodayGuide({ name }: { name: string }) {
     const canRecommendPrep = Boolean(meetingPrepLearningEnabled && base.event && hasEarnedMeetingPrepSignal(base.event, contacts));
     return getDaySuggestion(calendar?.events || [], new Date(), { recommendPrep: canRecommendPrep });
   }, [calendar, contacts, meetingPrepLearningEnabled]);
-  const nextMeetingToPrep = useMemo(() => today.filter((event) => new Date(event.start).getTime() >= Date.now()).find(hasOtherAttendees), [today]);
+  const nextMeetingToPrep = useMemo(() => today.filter((event) => new Date(event.start).getTime() >= renderedAt).find(hasOtherAttendees), [renderedAt, today]);
   const calendarContext = useMemo<CalendarContext>(() => {
     const timed = today.filter((event) => event.end).sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
     const backToBack = timed.some((event, index) => index > 0 && new Date(event.start).getTime() - new Date(timed[index - 1].end as string).getTime() <= 15 * 60_000);

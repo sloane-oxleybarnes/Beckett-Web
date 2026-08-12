@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import AdminLoginForm from "./LoginForm";
 import AdminTabs from "./AdminTabs";
@@ -14,13 +13,12 @@ import AdminFeedbackViewer, { type AdminFeedbackRow } from "./FeedbackViewer";
 import { getCourseStudioItems } from "@/lib/course-content";
 import { getSiteContent } from "@/lib/site-content-server";
 import { BETA_MISSION_DEFINITIONS, getBetaMissionDefinition } from "@/lib/beta-missions";
-import { verifyAdminSession } from "@/lib/admin-session";
+import { isAdminAuthenticated } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const cookieStore = cookies();
-  const isAuthed = verifyAdminSession(cookieStore.get("admin_auth")?.value);
+  const isAuthed = await isAdminAuthenticated();
 
   if (!isAuthed) {
     return <AdminLoginForm />;
