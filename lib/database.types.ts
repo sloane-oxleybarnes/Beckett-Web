@@ -902,6 +902,42 @@ export type Database = {
         }
         Relationships: []
       }
+      microsoft_subscriptions: {
+        Row: {
+          client_state_hash: string
+          created_at: string
+          expiration_at: string
+          id: string
+          kind: string
+          last_notification_at: string | null
+          resource: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_state_hash: string
+          created_at?: string
+          expiration_at: string
+          id: string
+          kind: string
+          last_notification_at?: string | null
+          resource: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_state_hash?: string
+          created_at?: string
+          expiration_at?: string
+          id?: string
+          kind?: string
+          last_notification_at?: string | null
+          resource?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       outlook_sso_link_attempts: {
         Row: {
           created_at: string
