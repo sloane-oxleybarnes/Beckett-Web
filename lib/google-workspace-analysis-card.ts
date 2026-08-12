@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import {
   actionFixedFooter,
   brandedSectionHeader,
+  buttonWidget,
   endpointUrl,
   formatCardRichText,
   textWidget,
@@ -12,6 +13,16 @@ export type WorkspaceAnalysisSections = {
   happening: string;
   tone: string;
   want: string;
+};
+
+export type WorkspaceContactChoice = {
+  email: string;
+  label: string;
+};
+
+export type WorkspaceContactCardState = {
+  message: string;
+  choices?: WorkspaceContactChoice[];
 };
 
 function sectionLines(value: string, fallback: string) {
@@ -43,7 +54,24 @@ function analysisSection(header: string, value: string, fallback: string) {
 export function buildWorkspaceAnalysisCard(
   request: NextRequest,
   sections: WorkspaceAnalysisSections,
+  contactState?: WorkspaceContactCardState | null,
 ): Card {
+  const contactSection = contactState
+    ? {
+        header: brandedSectionHeader("Beckett Contacts"),
+        widgets: [
+          textWidget(formatCardRichText(contactState.message)),
+          ...(contactState.choices || []).map((choice) =>
+            buttonWidget(
+              choice.label,
+              endpointUrl(request, "/api/google-workspace-addon/contact"),
+              { email: choice.email },
+            ),
+          ),
+        ],
+      }
+    : null;
+
   return {
     name: "beckett-analysis-result",
     sections: [
@@ -62,6 +90,7 @@ export function buildWorkspaceAnalysisCard(
         sections.want,
         "No explicit next step is visible in the selected conversation.",
       ),
+      ...(contactSection ? [contactSection] : []),
     ],
     fixedFooter: actionFixedFooter(
       "Help me reply",

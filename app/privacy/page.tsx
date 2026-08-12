@@ -6,8 +6,8 @@ const sections = [
   {
     title: "What Beckett reads",
     body: [
-      "During beta, Beckett can use Gmail, Google Calendar, Microsoft 365 Calendar, Outlook, Slack, and Chrome extension context only when you connect those tools and ask Beckett for coaching, or when you turn on an analysis setting yourself.",
-      "In the Gmail add-on, Beckett uses add-on-specific access to the open message or available thread context after you choose an analysis action. If you separately connect Gmail in the Beckett web app, Beckett uses the read-only access you approve for the feature you request.",
+      "During beta, Beckett can use Gmail™, Google Calendar™, Microsoft 365 Calendar, Outlook, Slack, and Chrome extension context only when you connect those tools and ask Beckett for coaching, or when you turn on an analysis setting yourself.",
+      "In the Gmail add-on, Beckett uses add-on-specific access to the open message or available thread context after you choose an analysis action. Beckett does not request mailbox-wide Gmail access through the website or Chrome extension.",
       "For Slack, Beckett uses connected workspace context and may search relevant Slack history across authorized channels, DMs, group DMs, and private channels when you ask for coaching.",
       "For Google Calendar, Beckett uses read-only access to list the calendars you choose and to read upcoming event titles, timing, and attendees from those calendars. This lets Beckett show your day and offer meeting context. Beckett does not create, edit, cancel, or respond to calendar events during beta.",
       "For Microsoft 365, Beckett uses delegated read-only access to list the calendars you choose and read basic event titles, timing, and attendees. If you choose Analyze full thread in the Outlook add-in, Beckett also reads the messages in that one selected Outlook conversation. Beckett does not request Microsoft calendar write access, mail sending access, Teams access, or background change notifications.",
@@ -23,7 +23,7 @@ const sections = [
       "Beckett does not store full Gmail or Slack message history by default, including raw Slack search results used for a coaching response. For product analytics and CRM, Beckett uses counts, timestamps, connection status, and safe event names, not raw message content.",
       "Beckett does not store Google Calendar events. We retain a Google connection credential only while you keep that connection active, and remove it when you disconnect the service or delete your account.",
       "Beckett does not store Microsoft Calendar events or selected Outlook message bodies by default. Microsoft OAuth credentials are encrypted while the connection is active and removed from Beckett when you disconnect Microsoft 365.",
-      "When a selected Gmail conversation matches a confirmed Beckett contact, Beckett may store a short derived interaction summary so future coaching has continuity. Optional email-style learning is off by default and stores compact observations such as typical length or formatting, not full email bodies.",
+      "When you analyze a selected Gmail conversation, Beckett may match its participants to confirmed Beckett contacts and store a short derived interaction summary with source and date so future coaching has continuity. Beckett asks before creating a new contact or assigning a group conversation. Optional email-style learning is off by default and stores compact observations such as typical length or formatting, not full email bodies.",
       "Beckett may store short summaries or metadata when needed to make the product work, debug beta issues, or remember your preferences.",
     ],
   },
@@ -31,7 +31,7 @@ const sections = [
     title: "How Beckett uses your data",
     body: [
       "Beckett uses user data to provide and improve its single purpose: workplace and workplace-adjacent communication coaching in Gmail, Slack, the Chrome extension, practice sessions, and skill modules.",
-      "That includes authenticating your account, enforcing beta access and usage limits, generating coaching responses, remembering your preferences, connecting Gmail, calendars, Outlook, or Slack when you ask, troubleshooting bugs, responding to support requests, and improving coaching quality.",
+      "That includes authenticating your account, enforcing beta access and usage limits, generating coaching responses, remembering your preferences, linking the Gmail add-on, connecting calendars, Outlook, or Slack when you ask, troubleshooting bugs, responding to support requests, and improving coaching quality.",
       "Beckett does not use or transfer user data for purposes unrelated to workplace or workplace-adjacent communication coaching.",
       "Google data is sent to an AI provider only when it is needed to provide a coaching feature you requested. Beckett does not use Google API data to train generalized AI or machine-learning models.",
     ],
@@ -40,7 +40,7 @@ const sections = [
     title: "How your Beckett settings work across devices",
     body: [
       "Beckett keeps your core profile, coaching preferences, voluntary workday settings, contacts, connected-service choices, and selected safety-resource region in one protected account system. When a Beckett feature is available on more than one device or surface, it is designed to follow those same choices rather than create a separate version of you.",
-      "Some actions always require a new confirmation at the moment you take them. These include connecting Gmail or Calendar, turning on notifications, any future calendar change, starting live meeting support, or saving meeting notes, transcripts, or audio. Beckett does not infer your location; it uses the country or region you choose for safety-resource information.",
+      "Some actions always require a new confirmation at the moment you take them. These include installing or linking the Gmail add-on, connecting Calendar, creating a contact from a selected conversation, turning on notifications, any future calendar change, starting live meeting support, or saving meeting notes, transcripts, or audio. Beckett does not infer your location; it uses the country or region you choose for safety-resource information.",
       "During beta, Beckett lets you choose a country or region for safety-resource routing. Beckett has reviewed resource sets for the United States, Canada, the United Kingdom, and Australia. If you select another region, it will say that clearly and show an international fallback rather than imply local accuracy. Beckett stores the selected region, not precise location data.",
     ],
   },
@@ -162,7 +162,7 @@ export default function PrivacyPage() {
           how it uses and shares data, what feedback can include, and where the coaching
           boundaries are.
         </p>
-        <p className="mt-4 text-sm text-ink-light">Last updated: August 5, 2026</p>
+        <p className="mt-4 text-sm text-ink-light">Last updated: August 11, 2026</p>
       </section>
 
       <section className="mx-auto grid w-full max-w-4xl gap-5 px-5 pb-12">
