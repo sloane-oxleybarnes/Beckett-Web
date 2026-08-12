@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -37,10 +41,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
-      - run: npx tsc --noEmit
+      - run: npm run typecheck
       - run: npm run test:architecture
       - run: npm run test:onboarding
-      - run: npm run test:outlook
+      - run: npm run test:google-workspace-addon
       - run: npm run test:slack
       - run: npm audit --audit-level=high
       - run: npm run build

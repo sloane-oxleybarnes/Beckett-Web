@@ -7,6 +7,8 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:architecture": "node --test tests/architecture-guardrails.test.mjs tests/auth-next.test.mjs",
     "test:onboarding": "node --test tests/beta-consent.test.mjs",
     "test:google-workspace-addon": "node --test tests/google-workspace-addon-diagnostics.test.mjs tests/google-workspace-addon-link.test.mjs tests/google-workspace-gmail-context.test.mjs tests/google-workspace-gmail-draft-action.test.mjs",
     "test:slack": "node --test tests/slack-guest-routing.test.mjs tests/slack-api-retry.test.mjs tests/slack-command-copy.test.mjs tests/slack-prep-copy.test.mjs tests/slack-guided-intent.test.mjs tests/slack-zero-copy.test.mjs tests/slack-thread-rehydration.test.mjs",
@@ -15,7 +17,12 @@
     "demo:seed:slack": "node scripts/demo-seed.js --slack",
     "demo:seed:contacts": "node scripts/demo-seed.js --contacts",
     "demo:seed:all": "node scripts/demo-seed.js --all",
-    "package:extension": "node scripts/package-extension.js"
+    "package:extension": "node scripts/package-extension.js",
+    "commit:check": "node scripts/validate-conventional-commit.mjs",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "security:audit": "npm audit --audit-level=high",
+    "db:types": "npx supabase@2.113.0 gen types typescript --project-id $SUPABASE_PROJECT_ID --schema public > lib/database.types.ts",
+    "verify": "npm run lint && npm run typecheck && npm run test:architecture && npm run test:onboarding && npm run test:google-workspace-addon && npm run test:slack && npm run build"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.18.0",
