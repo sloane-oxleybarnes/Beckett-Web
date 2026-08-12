@@ -36,7 +36,7 @@ export async function DELETE(_req: Request, { params }: { params: { provider: st
     return NextResponse.json({ error: "Unsupported integration." }, { status: 404 });
   }
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();

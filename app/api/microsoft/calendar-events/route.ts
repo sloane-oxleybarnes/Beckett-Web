@@ -6,7 +6,7 @@ import { supabaseAdmin } from "@/lib/server-admin";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const { data: integration, error } = await supabaseAdmin

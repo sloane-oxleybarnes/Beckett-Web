@@ -17,7 +17,7 @@ const contains = <T extends readonly string[]>(values: T, value: unknown): value
   typeof value === "string" && values.includes(value);
 
 async function currentUser() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   return user;
 }

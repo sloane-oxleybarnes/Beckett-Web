@@ -12,7 +12,7 @@ type OutlookAddinUser = { id: string };
  */
 export async function getOutlookAddinUser(request: NextRequest): Promise<OutlookAddinUser | null> {
   const bearerToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user: cookieUser } } = await supabase.auth.getUser();
   if (cookieUser) return { id: cookieUser.id };
 

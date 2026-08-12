@@ -11,8 +11,9 @@ export async function getAdaptiveAuth() {
       response: NextResponse.json({ error: 'The Adaptive Conversation Simulator is not enabled.' }, { status: 404 }),
     }
   }
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return { supabase, session: null, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { supabase, session: null, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  const session = { user }
 
   const { data: profile } = await supabase
     .from('profiles')

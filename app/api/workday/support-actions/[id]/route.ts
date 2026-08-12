@@ -5,7 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 const outcomes = ["helped", "a_little", "not_helpful", "skipped"] as const;
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 

@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const attempt = request.nextUrl.searchParams.get("attempt") || "";
   if (!attempt) return NextResponse.redirect(destination(request, "error"));
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     const login = new URL("/auth/login", request.url);

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 type MicrosoftMetadata = { selectedCalendarIds?: unknown; [key: string]: unknown };
 
 async function currentConnection() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: "Unauthorized." }, { status: 401 }) };
   const { data: integration, error } = await supabaseAdmin

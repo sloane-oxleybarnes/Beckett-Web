@@ -5,7 +5,7 @@ import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function POST(_: Request, { params }: { params: { id: string } }) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const { data: session, error } = await supabase.from("meeting_sessions").select("title, user_notes, decisions, open_questions").eq("id", params.id).eq("user_id", user.id).single();

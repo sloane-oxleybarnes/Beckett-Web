@@ -11,7 +11,7 @@ import { normalizeRelationshipTag, normalizeRelationshipTags } from "@/lib/relat
 async function getAuthedUserId(req: NextRequest): Promise<string | null> {
   const extUserId = await getExtensionUserId(req)
   if (extUserId) return extUserId
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { data: { session } } = await supabase.auth.getSession()
   return session?.user.id ?? null
 }
@@ -37,7 +37,7 @@ export async function PUT(
     identifiers?: ContactIdentifierInput[]
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   // Ensure the contact belongs to this user
   const { data: existing } = await supabase
@@ -149,7 +149,7 @@ export async function DELETE(
   const userId = await getAuthedUserId(req)
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { error } = await supabase
     .from('contacts')
     .delete()

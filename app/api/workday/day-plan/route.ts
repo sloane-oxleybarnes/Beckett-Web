@@ -6,7 +6,7 @@ const MAX_FOCUS_LENGTH = 160;
 const MAX_NEXT_STEP_LENGTH = 300;
 
 async function currentUser() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   return { supabase, user };
 }

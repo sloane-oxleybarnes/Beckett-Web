@@ -5,7 +5,7 @@ function cleanText(value: unknown, max: number) { return typeof value === "strin
 function cleanList(value: unknown) { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, 300)).filter(Boolean).slice(0, 20) : []; }
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;

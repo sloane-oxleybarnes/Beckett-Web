@@ -12,7 +12,7 @@ const ProfileSetupForm = dynamic(() => import("@/components/auth/ProfileSetupFor
 });
 
 export default async function ProfileSetupPage() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect("/auth/login");
 

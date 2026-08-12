@@ -8,7 +8,7 @@ import { relationshipLabelForContact } from '@/lib/relationship-tags'
 async function getAuthedUserId(req: NextRequest): Promise<string | null> {
   const extUserId = await getExtensionUserId(req)
   if (extUserId) return extUserId
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { data: { session } } = await supabase.auth.getSession()
   return session?.user.id ?? null
 }
@@ -20,7 +20,7 @@ export async function POST(
   const userId = await getAuthedUserId(req)
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   // Verify ownership and get contact info
   const { data: contact } = await supabase

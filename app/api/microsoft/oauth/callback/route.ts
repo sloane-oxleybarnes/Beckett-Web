@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   const providerError = url.searchParams.get("error_description") || url.searchParams.get("error");
   if (providerError) return redirectToApps(url, providerError);
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return redirectToApps(url, "sign-in-required");
 

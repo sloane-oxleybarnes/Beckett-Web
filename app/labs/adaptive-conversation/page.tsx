@@ -5,10 +5,10 @@ import AdaptiveConversationSimulator from './AdaptiveConversationSimulator'
 
 export default async function AdaptiveConversationPage() {
   const supabase = await createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/auth/login')
-  const { data: profile } = await supabase.from('profiles').select('plan').eq('id', session.user.id).maybeSingle()
-  if (!(await hasApprovedBetaAccess({ email: session.user.email, plan: profile?.plan }))) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth/login')
+  const { data: profile } = await supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle()
+  if (!(await hasApprovedBetaAccess({ email: user.email, plan: profile?.plan }))) {
     redirect('/beta?access=approval-required')
   }
   return <AdaptiveConversationSimulator />

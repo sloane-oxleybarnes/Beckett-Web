@@ -20,7 +20,7 @@ function truncate(value: unknown, max = 4000) {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

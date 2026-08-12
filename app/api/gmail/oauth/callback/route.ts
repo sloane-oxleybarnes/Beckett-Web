@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     return completeRedirect(origin, "authorization-failed", returnTo);
   }
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

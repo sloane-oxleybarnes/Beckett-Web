@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   const origin = new URL(request.url).origin;
   const requestedReturnTo = request.nextUrl.searchParams.get("next");
   const returnTo = requestedReturnTo === SETTINGS_PATH ? SETTINGS_PATH : requestedReturnTo === APPS_PATH ? APPS_PATH : "/dashboard/calendar";
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

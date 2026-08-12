@@ -15,7 +15,7 @@ function isOneOf<T extends readonly string[]>(values: T, value: unknown): value 
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 

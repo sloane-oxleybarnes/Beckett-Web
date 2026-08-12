@@ -15,7 +15,7 @@ function base64Url(value: Buffer) {
 export async function GET(request: NextRequest) {
   const origin = new URL(request.url).origin;
   const returnTo = request.nextUrl.searchParams.get("next") === APPS_PATH ? APPS_PATH : SETTINGS_PATH;
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
