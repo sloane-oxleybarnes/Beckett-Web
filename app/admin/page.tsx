@@ -76,7 +76,29 @@ export default async function AdminPage() {
   ]);
 
   const pendingSignups = (signups || []).filter((signup) => !signup.approved);
-  const feedbackRows = (feedback || []) as AdminFeedbackRow[];
+  const screenshotPaths = Array.from(new Set((feedback || []).flatMap((row) => {
+    const screenshots = Array.isArray(row.metadata?.screenshots) ? row.metadata.screenshots : [];
+    return screenshots.flatMap((screenshot: { path?: unknown }) =>
+      typeof screenshot.path === "string" ? [screenshot.path] : []
+    );
+  })));
+  const { data: signedScreenshots } = screenshotPaths.length
+    ? await supabase.storage.from("feedback-screenshots").createSignedUrls(screenshotPaths, 60 * 60)
+    : { data: [] };
+  const signedUrlByPath = new Map(
+    (signedScreenshots || []).flatMap((item, index) =>
+      item.signedUrl ? [[screenshotPaths[index], item.signedUrl] as const] : []
+    )
+  );
+  const feedbackRows = (feedback || []).map((row) => {
+    const screenshots = Array.isArray(row.metadata?.screenshots) ? row.metadata.screenshots : [];
+    const screenshotUrls = screenshots.flatMap((screenshot: { path?: unknown; name?: unknown }) => {
+      if (typeof screenshot.path !== "string") return [];
+      const url = signedUrlByPath.get(screenshot.path);
+      return url ? [{ url, name: typeof screenshot.name === "string" ? screenshot.name : "Screenshot" }] : [];
+    });
+    return { ...row, screenshotUrls };
+  }) as AdminFeedbackRow[];
   const signupEmails = new Set((signups || []).map((signup) => signup.email.toLowerCase()));
   const trackerProfiles = (profiles || []).filter(
     (profile) =>

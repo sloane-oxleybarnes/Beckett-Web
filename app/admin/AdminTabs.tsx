@@ -42,7 +42,7 @@ export default function AdminTabs({
 
   return (
     <div className="min-h-screen w-full bg-bg px-5 py-6 sm:px-8">
-      <div className="w-full min-w-0">
+      <div className="mx-auto w-full max-w-[1600px] min-w-0">
         <div className="mb-6 flex flex-col gap-2 border-b border-border pb-5">
           <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Beckett admin</p>
           <h1 className="text-2xl font-semibold text-ink">Admin panel</h1>
