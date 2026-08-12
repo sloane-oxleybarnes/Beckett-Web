@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import test from "node:test";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+
+function sourceFiles(path) {
+  const root = new URL(`../${path}`, import.meta.url);
+  return readdirSync(root, { recursive: true })
+    .filter((entry) => /\.(?:ts|tsx)$/.test(entry))
+    .map((entry) => new URL(entry, root))
+    .filter((entry) => statSync(entry).isFile());
+}
 
 test("Conventional Commit validator accepts policy and rejects legacy subjects", () => {
   const valid = spawnSync(process.execPath, [
@@ -44,4 +52,17 @@ test("course content is loaded on the server rather than bundled as client fallb
 test("the auth proxy only runs for protected dashboard routes", () => {
   assert.match(read("proxy.ts"), /matcher: \['\/dashboard\/:path\*'\]/);
   assert.match(read("proxy.ts"), /auth\.getClaims\(\)/);
+});
+
+test("server boundaries use verified users and expose no generic CRM mutation proxies", () => {
+  const serverSource = sourceFiles("app/api/").map((file) => readFileSync(file, "utf8")).join("\n");
+  assert.doesNotMatch(serverSource, /auth\.getSession\(/);
+  assert.equal(existsSync(new URL("../app/api/loops/route.ts", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../app/api/hubspot/route.ts", import.meta.url)), false);
+});
+
+test("release migrations include private feedback, indexed Microsoft subscriptions, and foreign-key indexes", () => {
+  assert.match(read("supabase/migrations/20260812002201_feedback_screenshots.sql"), /public, file_size_limit[\s\S]*false/);
+  assert.match(read("supabase/migrations/20260812002212_microsoft_subscriptions.sql"), /enable row level security/);
+  assert.match(read("supabase/migrations/20260812002409_index_foreign_keys.sql"), /contacts_user_id_idx/);
 });
