@@ -5,7 +5,10 @@ import { profileSetupPath, safeInternalPath } from "../lib/auth-next.ts";
 test("preserves an internal Gmail account-link return path", () => {
   const next = "/auth/google-workspace-addon/connect?token=abc123";
   assert.equal(safeInternalPath(next), next);
-  assert.equal(profileSetupPath(next), `/auth/profile-setup?next=${encodeURIComponent(next)}`);
+  assert.equal(
+    profileSetupPath(next),
+    `/auth/profile-setup?next=${encodeURIComponent(next)}`,
+  );
 });
 
 test("rejects external and protocol-relative auth redirects", () => {
