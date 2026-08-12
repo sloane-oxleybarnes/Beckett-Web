@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { logError } from "@/lib/structured-logger";
 import { callAnthropic } from "@/lib/anthropic";
 import { AiUsageLimitError } from "@/lib/ai-usage";
 import { withAiMetering } from "@/lib/ai-metering";
@@ -167,7 +168,7 @@ export async function POST(request: NextRequest) {
         return cardResponse(errorCard("Credit limit reached", error.message));
       }
       const message = error instanceof Error ? error.message : "reply_draft_failed";
-      console.error("Google Workspace Gmail reply coaching failed", { message, userId: profile.id });
+      logError("google_workspace.reply_coaching_failed", error, { provider: "gmail", operation: "reply_coaching" });
       const friendly = message.startsWith("gmail_api_error:403")
         ? "Google did not grant access to this message. Reopen Beckett and approve the requested Gmail permission."
         : "Beckett could not prepare reply ideas. Please reopen the email and try again.";

@@ -3,6 +3,22 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import {
+  callCourseApi as callAPI,
+  CLARITY_FORMULA_STEPS,
+  DATING_FORMULA_STEPS,
+  INTRO_FORMULA_STEPS,
+  PAIR_COLORS,
+  type CourseActivityState,
+  type CourseApiError,
+  type CourseMessage as Message,
+  type CoursePhase as Phase,
+  type CourseProgressRow,
+  type DebriefData,
+  type ReviewBlock,
+  type ToolkitItem,
+  type WrongAnswer,
+} from '@/features/courses/course-client-model'
 import type {
   AccordionSlide, ReadThroughSlide, FlipCardsSlide,
   MatchingSlide, InteractiveReadSlide, DraftPracticeSlide,
@@ -10,73 +26,6 @@ import type {
   VisualFormulaSlide, ReflectionChoiceSlide, GuidedBuilderSlide,
   MultiSelectQuizSlide, ScenarioMessage, Course,
 } from '@/lib/courses'
-
-type Phase = 'confidence-start' | 'slides' | 'guided-practice' | 'open-practice-intro' | 'open-practice' | 'debrief' | 'confidence-end' | 'completion' | 'review'
-type Message = { role: 'user' | 'assistant'; content: string; timestamp?: string }
-type CourseApiError = Error & { status?: number; data?: { error?: string; limit?: number; remaining?: number } }
-type CourseActivityState = {
-  completedSlides?: Record<string, true>
-}
-type CourseProgressRow = {
-  phase: Phase
-  current_slide_index: number | null
-  pre_confidence: number | null
-  progress_percent: number | null
-  saved_at: string | null
-  activity_state: CourseActivityState | null
-}
-type ReviewBlock = {
-  heading?: string
-  lines: string[]
-}
-type WrongAnswer = {
-  slideIndex: number
-  itemIndex: number
-  slideTitle: string
-  scenario: string
-  userAnswer: string
-  correctAnswer: string
-  explanation: string
-}
-type DebriefData = { other_person_felt: string; how_you_came_across: string; what_went_well: string; things_to_work_on: string }
-type ToolkitItem = {
-  id: string
-  course_id: string
-  category: string
-  label: string
-  content: string
-  created_at: string
-  updated_at?: string
-}
-
-const PAIR_COLORS = [
-  { bg: 'bg-sky-100', border: 'border-sky-400', text: 'text-sky-700' },
-  { bg: 'bg-emerald-100', border: 'border-emerald-400', text: 'text-emerald-700' },
-  { bg: 'bg-amber-100', border: 'border-amber-400', text: 'text-amber-700' },
-  { bg: 'bg-violet-100', border: 'border-violet-400', text: 'text-violet-700' },
-  { bg: 'bg-rose-100', border: 'border-rose-400', text: 'text-rose-700' },
-]
-
-const CLARITY_FORMULA_STEPS = ['What I understand', 'What is unclear', 'Specific question', 'Why it helps']
-const INTRO_FORMULA_STEPS = ['Who you are', 'What you do', 'How you collaborate']
-const DATING_FORMULA_STEPS = ['Warm signal', 'Specific plan', 'Easy out']
-
-async function callAPI(body: Record<string, unknown>): Promise<unknown> {
-  const res = await fetch('/api/courses', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const data = await res.json().catch(() => ({})) as { error?: string; limit?: number; remaining?: number }
-  if (!res.ok) {
-    const message = typeof data?.error === 'string' ? data.error : 'Beckett could not complete that request.'
-    const error = new Error(message) as CourseApiError
-    error.status = res.status
-    error.data = data
-    throw error
-  }
-  return data
-}
 
 export default function CourseClient({ initialCourse }: { initialCourse: Course }) {
   const router = useRouter()

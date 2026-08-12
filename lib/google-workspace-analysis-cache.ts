@@ -5,6 +5,7 @@ import {
   type WorkspaceAnalysisSections,
 } from "@/lib/google-workspace-analysis-card";
 import type { SelectedGmailThread } from "@/lib/google-workspace-gmail";
+import { logError } from "@/lib/structured-logger";
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 
@@ -32,11 +33,7 @@ export async function loadWorkspaceAnalysisCache({
     .maybeSingle();
 
   if (error) {
-    console.error("Google Workspace analysis cache read failed", {
-      userId,
-      threadId: thread.id,
-      message: error.message,
-    });
+    logError("google_workspace.cache_read_failed", error, { provider: "gmail", operation: "cache_read" });
     return null;
   }
 
@@ -61,11 +58,7 @@ export async function loadWorkspaceAnalysisCacheByThreadId({
     .maybeSingle();
 
   if (error) {
-    console.error("Google Workspace analysis cache thread lookup failed", {
-      userId,
-      threadId,
-      message: error.message,
-    });
+    logError("google_workspace.cache_thread_lookup_failed", error, { provider: "gmail", operation: "cache_lookup" });
     return null;
   }
 
@@ -94,11 +87,7 @@ export async function loadWorkspaceAnalysisCacheByMessageId({
     .maybeSingle();
 
   if (error) {
-    console.error("Google Workspace analysis cache message lookup failed", {
-      userId,
-      messageId,
-      message: error.message,
-    });
+    logError("google_workspace.cache_message_lookup_failed", error, { provider: "gmail", operation: "cache_lookup" });
     return null;
   }
 

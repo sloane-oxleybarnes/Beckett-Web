@@ -35,7 +35,7 @@ const personById = new Map([
 ]);
 
 function usage() {
-  console.log("Usage: node scripts/demo-seed.js [--plan] [--gmail] [--slack] [--contacts] [--all] [--dry-run]");
+  console.log("Usage: node scripts/demo-seed.cjs [--plan] [--gmail] [--slack] [--contacts] [--all] [--dry-run]");
 }
 
 function requireEnv(name) {

@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "17 16 * * 1"
 
 concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
@@ -42,12 +44,17 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm run test:architecture
-      - run: npm run test:onboarding
-      - run: npm run test:google-workspace-addon
-      - run: npm run test:slack
+      - run: npm run migrations:check
+      - run: npm run test:all
       - run: npm audit --audit-level=high
       - run: npm run build
+        env:
+          NEXT_PUBLIC_SITE_URL: https://example.com
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
         env:
           NEXT_PUBLIC_SITE_URL: https://example.com
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
