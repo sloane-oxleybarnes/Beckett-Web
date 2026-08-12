@@ -3,7 +3,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/server-admin";
 import type { CoachingTone } from "@/lib/onboarding";
 import { trackBetaEvent } from "@/lib/beta-events";
-import { triggerLoopsEvent, updateLoopsContact } from "@/lib/loops";
+import { addLoopsContact, triggerLoopsEvent, updateLoopsContact } from "@/lib/loops";
+import { createOrUpdateHubSpotContact } from "@/lib/hubspot";
 import {
   BETA_CONSENT_VERSIONS,
   hasRequiredBetaConsentSubmission,
@@ -28,11 +29,9 @@ type OnboardingBody = BetaConsentSubmission & {
 
 export async function POST(req: NextRequest) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -48,8 +47,8 @@ export async function POST(req: NextRequest) {
 
   const { error } = await supabaseAdmin.from("profiles").upsert(
     {
-      id: session.user.id,
-      email: body.email || session.user.email,
+      id: user.id,
+      email: body.email || user.email,
       full_name: body.full_name,
       first_name: body.first_name,
       last_name: body.last_name,
@@ -82,25 +81,39 @@ export async function POST(req: NextRequest) {
   const workApps = Array.isArray(body.work_apps) ? Array.from(new Set(body.work_apps.filter(isConnectedAppId))) : [];
   if (workApps.length) {
     const { error: appError } = await supabaseAdmin.from("user_app_preferences").upsert(
-      workApps.map((appId) => ({ user_id: session.user.id, app_id: appId, added_source: "onboarding", updated_at: now })),
+      workApps.map((appId) => ({ user_id: user.id, app_id: appId, added_source: "onboarding", updated_at: now })),
       { onConflict: "user_id,app_id" },
     );
     if (appError) return NextResponse.json({ error: "Your profile was saved, but Your Apps could not be updated." }, { status: 500 });
   }
 
-  const email = body.email || session.user.email || null;
+  const email = body.email || user.email || null;
   if (email) {
     await supabaseAdmin
       .from("beta_signups")
       .update({ lifecycle_stage: "onboarded", last_activity_at: now })
       .eq("email", email.toLowerCase());
 
+    await addLoopsContact({
+      email,
+      firstName: body.first_name,
+      lastName: body.last_name,
+      plan: "beta",
+      source: "onboarding",
+    });
     await updateLoopsContact(email, { onboarded: true });
     await triggerLoopsEvent(email, "onboarding_completed");
+    await createOrUpdateHubSpotContact({
+      email,
+      firstname: body.first_name,
+      lastname: body.last_name,
+      plan: "beta",
+      source: "onboarding",
+    });
   }
 
   await trackBetaEvent({
-    userId: session.user.id,
+    userId: user.id,
     email,
     eventName: "onboarding_completed",
     source: "web_app",

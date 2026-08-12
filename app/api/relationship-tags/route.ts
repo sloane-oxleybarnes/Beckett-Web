@@ -8,10 +8,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 async function getAuthedSupabase() {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return { supabase, userId: session?.user.id ?? null };
+  const { data: { user } } = await supabase.auth.getUser();
+  return { supabase, userId: user?.id ?? null };
 }
 
 function labelFromBody(value: unknown) {

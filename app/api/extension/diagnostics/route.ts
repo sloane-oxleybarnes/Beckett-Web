@@ -7,15 +7,13 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = session.user.id;
+  const userId = user.id;
   const [{ data: profile }, { data: integrations }, used] = await Promise.all([
     supabaseAdmin
       .from("profiles")
@@ -38,7 +36,7 @@ export async function GET() {
   return NextResponse.json({
     beckett: {
       authenticated: true,
-      email: profile?.email || session.user.email || null,
+      email: profile?.email || user.email || null,
       plan: profile?.plan || "free",
     },
     extension: {

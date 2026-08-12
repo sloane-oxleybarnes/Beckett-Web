@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { upsertRelationshipSummary } from '@/lib/contact-relationship-context'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { getExtensionUserId } from '@/lib/extension-auth'
+import { getRequestUserId } from '@/lib/server-auth'
 import { callAnthropic } from '@/lib/anthropic'
 import { relationshipLabelForContact } from '@/lib/relationship-tags'
 
 async function getAuthedUserId(req: NextRequest): Promise<string | null> {
-  const extUserId = await getExtensionUserId(req)
-  if (extUserId) return extUserId
-  const supabase = await createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.user.id ?? null
+  return getRequestUserId(req, { allowExtension: true })
 }
 
 export async function POST(

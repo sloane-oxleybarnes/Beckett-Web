@@ -38,16 +38,13 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ prov
   }
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
   const { data: integration, error: readError } = await supabaseAdmin
     .from("user_integrations")
     .select("access_token")
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .eq("provider", provider)
     .maybeSingle();
 
@@ -60,14 +57,14 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ prov
   const { error: deleteError } = await supabaseAdmin
     .from("user_integrations")
     .delete()
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .eq("provider", provider);
 
   if (deleteError) return NextResponse.json({ error: "Could not disconnect the integration." }, { status: 500 });
 
   await trackBetaEvent({
-    userId: session.user.id,
-    email: session.user.email,
+    userId: user.id,
+    email: user.email,
     eventName: `${provider}_disconnected`,
     source: "web_app",
   });

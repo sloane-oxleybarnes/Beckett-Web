@@ -48,11 +48,8 @@ function mergeText(primary: string | null, duplicate: string | null) {
 
 export async function POST(req: NextRequest) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  const userId = session?.user.id;
+  const { data: { user } } = await supabase.auth.getUser();
+  const userId = user?.id;
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = (await req.json()) as {
