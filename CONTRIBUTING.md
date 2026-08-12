@@ -1,5 +1,26 @@
 # Contributing
 
+## Branch workflow
+
+- `main` is the protected production branch. Start new work from an up-to-date
+  `main` and merge through a pull request.
+- `staging` is the shared preview baseline. Keep it aligned with the latest
+  verified release; do not use it as a long-lived development branch.
+- Use short-lived, purpose-specific branches such as `codex/feedback-upload`.
+  Delete them after merge; GitHub is configured to do this automatically.
+- Pull requests to `main` must pass `conventional-commits` and `verify`, resolve
+  review conversations, and use squash or rebase merge.
+- Tags under `archive/YYYY-MM-DD/` preserve retired divergent branch tips.
+  Treat these tags as read-only recovery points rather than active branches.
+
+Before starting work:
+
+```sh
+git switch main
+git pull --ff-only
+git switch -c codex/<short-description>
+```
+
 ## Commit messages
 
 All new commits and squash-merge pull request titles use Conventional Commits:
