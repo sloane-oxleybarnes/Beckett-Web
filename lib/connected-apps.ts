@@ -1,3 +1,5 @@
+import { CHROME_WEB_STORE_URL, GOOGLE_WORKSPACE_MARKETPLACE_URL } from "@/lib/app-links";
+
 export const CONNECTED_APP_IDS = [
   "gmail",
   "google_calendar",
@@ -28,12 +30,12 @@ export const CONNECTED_APPS: ConnectedAppDefinition[] = [
     shortName: "Gmail™",
     description: "Analyze selected email conversations and draft replies.",
     iconSrc: "/brand/connected-apps/gmail.png",
-    connectHref: "/api/gmail/oauth/start?next=/dashboard/apps",
-    connectLabel: "Continue with Google",
+    connectHref: GOOGLE_WORKSPACE_MARKETPLACE_URL,
+    connectLabel: "Install Gmail™ add-on",
     steps: [
-      "Choose Continue with Google and approve Gmail read access.",
-      "Install Beckett from Google Workspace Marketplace when it becomes publicly available.",
+      "Install Beckett from Google Workspace™ Marketplace.",
       "In Gmail, open a conversation and choose Beckett from the right sidebar.",
+      "Connect your Beckett account when prompted. Beckett only processes conversations you explicitly analyze.",
     ],
   },
   {
@@ -98,14 +100,14 @@ export const CONNECTED_APPS: ConnectedAppDefinition[] = [
     id: "chrome",
     name: "Beckett for Chrome",
     shortName: "Chrome",
-    description: "Use Beckett from supported pages in your browser.",
+    description: "Use Beckett from supported non-email pages in your browser.",
     iconSrc: "/brand/connected-apps/chrome.png",
-    connectHref: "https://chromewebstore.google.com/detail/beckett/calejchnmkljjkgchnodpdojmammmddk",
+    connectHref: CHROME_WEB_STORE_URL,
     connectLabel: "Open Chrome Web Store",
     steps: [
       "Install Beckett from the Chrome Web Store.",
       "Open the Beckett side panel and choose Log in with Beckett.",
-      "Finish the secure account connection in the new tab, then return to the extension.",
+      "Finish the secure account connection in the new tab, then use Beckett on a supported non-email page.",
     ],
   },
 ];

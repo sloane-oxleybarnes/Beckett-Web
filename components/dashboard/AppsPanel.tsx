@@ -123,7 +123,7 @@ export default function AppsPanel() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const hasConnectionResult = ["gmail", "calendar", "microsoft", "microsoft_error", "slack"].some((key) => params.has(key));
+    const hasConnectionResult = ["calendar", "microsoft", "microsoft_error", "slack"].some((key) => params.has(key));
     if (!hasConnectionResult) return;
     void load();
     window.history.replaceState({}, "", "/dashboard/apps");
@@ -206,7 +206,7 @@ export default function AppsPanel() {
     setBusyAppId(app.id);
     setError(null);
     try {
-      const provider = app.id === "gmail" ? "google"
+      const provider = app.id === "gmail" ? "google_workspace_addon"
         : app.id === "google_calendar" ? "google_calendar"
         : app.id === "slack" ? "slack"
         : app.id === "chrome" ? "chrome"

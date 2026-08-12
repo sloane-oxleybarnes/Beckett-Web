@@ -22,7 +22,7 @@ test("shared context exposes only safe account-level status to the web", () => {
       meeting_retention_preference: "notes_only",
     },
     toolkitItems: [{ label: "Clarifying question", content: "Can you share the decision owner?" }],
-    integrations: [{ provider: "google" }, { provider: "google_calendar" }],
+    integrations: [{ provider: "google_workspace_addon" }, { provider: "google_calendar" }],
     contactCount: 3,
     activeSupportPlanCount: 1,
   });
@@ -59,7 +59,7 @@ test("private learning controls gate downstream recommendations", () => {
 test("the AI prompt never claims access to integrations or raw service data", () => {
   const context = buildSharedWebContext({
     profile: { full_name: "Avery Example" },
-    integrations: [{ provider: "google" }, { provider: "google_calendar" }],
+    integrations: [{ provider: "google_workspace_addon" }, { provider: "google_calendar" }],
   });
 
   assert.doesNotMatch(context.promptContext, /gmail|calendar|oauth|token/i);

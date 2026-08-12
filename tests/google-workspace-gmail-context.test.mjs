@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  gmailCounterparts,
   gmailInteractionDedupeKey,
   gmailParticipantEmails,
   gmailPrimaryCounterpartEmail,
@@ -59,8 +60,24 @@ test("labels the verified Gmail user only as You", () => {
 });
 
 test("finds the other Gmail participant and ignores the signed-in user", () => {
+  assert.deepEqual(gmailCounterparts(thread, "sloane@meetbeckett.co"), [
+    { email: "jordan@example.com", name: "Jordan" },
+  ]);
   assert.deepEqual(gmailParticipantEmails(thread, "sloane@meetbeckett.co"), ["jordan@example.com"]);
   assert.equal(gmailPrimaryCounterpartEmail(thread, "sloane@meetbeckett.co"), "jordan@example.com");
+});
+
+test("returns distinct named choices for a group conversation", () => {
+  const groupThread = {
+    ...thread,
+    messages: thread.messages.map((message, index) => index === 0
+      ? { ...message, to: "Sloane <sloane@meetbeckett.co>, Casey <casey@example.com>" }
+      : message),
+  };
+  assert.deepEqual(gmailCounterparts(groupThread, "sloane@meetbeckett.co"), [
+    { email: "jordan@example.com", name: "Jordan" },
+    { email: "casey@example.com", name: "Casey" },
+  ]);
 });
 
 test("creates a stable non-raw interaction dedupe key", () => {

@@ -135,6 +135,14 @@ export async function resolveWorkspaceAddOnProfile(
   const googleSubject = user.sub;
   const email = user.email!.trim().toLowerCase();
 
+  const { data: disabledIntegration } = await integrationsRepository
+    .from("user_integrations")
+    .select("user_id")
+    .eq("provider", "google_workspace_addon_disabled")
+    .eq("external_user_id", googleSubject)
+    .maybeSingle();
+  if (disabledIntegration) return resolved(null);
+
   const { data: mappedIntegration } = await integrationsRepository
     .from("user_integrations")
     .select("user_id")

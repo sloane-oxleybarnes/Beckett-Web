@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import type { EmailOtpType } from '@supabase/supabase-js'
-import { platformRepository } from "@/lib/repositories/platform-repository"
-import { trackBetaEvent } from '@/lib/beta-events'
-import { encryptGoogleAccessToken } from '@/lib/google-token-security'
 import { safeInternalPath } from '@/lib/auth-next'
 
 function createCallbackClient(request: NextRequest, response: NextResponse) {
@@ -40,7 +37,6 @@ export async function GET(request: NextRequest) {
     type === 'recovery' || type === 'invite' || requestedNext === '/auth/set-password'
   // Reject protocol-relative and otherwise external redirect targets.
   const next = safeInternalPath(requestedNext) ?? (isPasswordAction ? '/auth/set-password' : '/dashboard')
-  const integration = searchParams.get('integration')
   const errorParam = searchParams.get('error')
   const errorDesc  = searchParams.get('error_description')
 
@@ -59,47 +55,8 @@ export async function GET(request: NextRequest) {
   const supabase = createCallbackClient(request, successResponse)
 
   if (code) {
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      if ((integration === 'google' || integration === 'calendar') && data.session?.user) {
-        if (!data.session.provider_token) {
-          return NextResponse.redirect(
-            new URL(`${next}?calendar=connection-token-missing`, origin)
-          )
-        }
-        const now = new Date().toISOString()
-        const isCalendarConnection = integration === 'calendar'
-        await platformRepository.from('user_integrations').upsert(
-          {
-            user_id: data.session.user.id,
-            provider: isCalendarConnection ? 'google_calendar' : 'google',
-            access_token: encryptGoogleAccessToken(data.session.provider_token),
-            external_user_id: data.session.user.email || null,
-            external_team_id: null,
-            external_team_name: null,
-            metadata: {
-              provider: isCalendarConnection ? 'google_calendar' : 'google',
-              email: data.session.user.email || null,
-              scopes: isCalendarConnection
-                ? 'calendar.events.readonly'
-                : 'gmail.readonly',
-              token_encryption: 'aes-256-gcm:v1',
-            },
-            connected_at: now,
-            updated_at: now,
-          },
-          { onConflict: 'user_id,provider' }
-        )
-
-        await trackBetaEvent({
-          userId: data.session.user.id,
-          email: data.session.user.email,
-          eventName: isCalendarConnection ? 'calendar_connected' : 'gmail_connected',
-          source: 'web_app',
-          metadata: { integration: isCalendarConnection ? 'calendar' : 'google' },
-        })
-      }
-
       return successResponse
     }
     return NextResponse.redirect(

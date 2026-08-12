@@ -98,6 +98,13 @@ export async function connectWorkspaceAddOnAccount({
   if (error) throw error;
 
   await integrationsRepository
+    .from("user_integrations")
+    .delete()
+    .eq("user_id", userId)
+    .eq("provider", "google_workspace_addon_disabled")
+    .eq("external_user_id", session.google_subject);
+
+  await integrationsRepository
     .from("google_workspace_addon_link_sessions")
     .delete()
     .eq("id", session.id);

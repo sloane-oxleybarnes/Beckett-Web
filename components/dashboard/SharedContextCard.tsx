@@ -59,13 +59,14 @@ export default function SharedContextCard() {
           />
           <Detail
             label="Connected tools"
-            value={`${context.connectedTools.gmail ? "Gmail connected" : "Gmail not connected"} · ${context.connectedTools.calendar ? "Calendar connected" : "Calendar not connected"}. Connections can be changed below.`}
+            value={`${context.connectedTools.gmail ? "Gmail™ add-on linked" : "Gmail™ add-on not linked"} · ${context.connectedTools.calendar ? "Calendar connected" : "Calendar not connected"}. Connections are managed in Your Apps.`}
           />
         </div>
       )}
       <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-ink-light">
         <Link href="/dashboard/settings" className="hover:text-primary hover:underline">Edit Settings &amp; About Me</Link>
         <Link href="/dashboard/contacts" className="hover:text-primary hover:underline">Manage contacts</Link>
+        <Link href="/dashboard/apps" className="hover:text-primary hover:underline">Manage apps</Link>
         <Link href="/dashboard/workday" className="hover:text-primary hover:underline">Review support plans</Link>
       </div>
     </section>
