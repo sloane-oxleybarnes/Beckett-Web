@@ -13,6 +13,19 @@
 - Tags under `archive/YYYY-MM-DD/` preserve retired divergent branch tips.
   Treat these tags as read-only recovery points rather than active branches.
 
+### Archive tag retention
+
+- Keep `archive/YYYY-MM-DD/*` safety tags for 90 days from the date embedded in
+  the tag name.
+- Review archive tags monthly. Before deleting one, confirm that its related
+  work is merged, intentionally retired, or preserved by a newer archive tag.
+- Delete expired tags in a focused maintenance change using explicit tag names;
+  never delete archive tags with an unreviewed wildcard.
+- Release, incident, legal-hold, and audit records must use a purpose-specific
+  tag prefix and are exempt from this 90-day policy.
+- Record archive-tag deletions in the maintenance pull request or operations
+  log so the removed recovery points remain auditable.
+
 Before starting work:
 
 ```sh
