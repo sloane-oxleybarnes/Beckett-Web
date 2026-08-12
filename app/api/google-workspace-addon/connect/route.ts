@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/structured-logger";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { connectWorkspaceAddOnAccount } from "@/lib/google-workspace-addon-link";
 import { trackBetaEvent } from "@/lib/beta-events";
@@ -31,10 +32,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, googleEmail: result.googleEmail });
   } catch (error) {
-    console.error("Google Workspace add-on account link failed", {
-      userId: user.id,
-      message: error instanceof Error ? error.message : "link_failed",
-    });
+    logError("google_workspace.account_link_failed", error, { provider: "gmail", operation: "account_link" });
     return NextResponse.json({ error: "link_failed" }, { status: 500 });
   }
 }

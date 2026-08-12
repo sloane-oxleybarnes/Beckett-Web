@@ -1,5 +1,6 @@
 import { createHmac } from "crypto";
 import { NextResponse } from "next/server";
+import { logError } from "@/lib/structured-logger";
 import { callAnthropic } from "@/lib/anthropic";
 import { AiUsageLimitError } from "@/lib/ai-usage";
 import { trackBetaEvent } from "@/lib/beta-events";
@@ -518,12 +519,17 @@ export async function postSlackResponse(responseUrl: string, text: string, optio
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  await settleSlackCreditForPayload(payload, response.ok).catch((error) => console.error("Slack response credit settlement failed", error));
+  await settleSlackCreditForPayload(payload, response.ok).catch((error) => {
+    logError("slack.credit_settlement_failed", error, { provider: "slack", operation: "credit_settlement" });
+  });
 }
 
 export function scheduleSlackBackgroundTask(label: string, task: Promise<void>) {
   const handledTask = task.catch((error) => {
-    console.error(label, error);
+    logError("slack.background_task_failed", error, {
+      provider: "slack",
+      operation: label.replace(/[^a-z0-9]+/gi, "_").toLowerCase().slice(0, 60),
+    });
   });
   const requestContext = (globalThis as { [key: symbol]: VercelRequestContext | undefined })[
     Symbol.for("@vercel/request-context")

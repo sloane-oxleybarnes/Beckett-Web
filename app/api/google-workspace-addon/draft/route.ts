@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/structured-logger";
 import { trackBetaEvent } from "@/lib/beta-events";
 import {
   cardResponse,
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(gmailOpenCreatedDraftAction(draftId, draftThreadId));
     } catch (error) {
       const message = error instanceof Error ? error.message : "gmail_draft_failed";
-      console.error("Google Workspace Gmail draft creation failed", { message, userId: profile.id });
+      logError("google_workspace.draft_creation_failed", error, { provider: "gmail", operation: "draft_create" });
       const friendly =
         message === "gmail_reply_recipient_missing"
           ? "Beckett could not identify a recipient for this reply."
