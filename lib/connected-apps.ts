@@ -70,7 +70,7 @@ export const CONNECTED_APPS: ConnectedAppDefinition[] = [
     shortName: "Outlook",
     description: "Analyze a selected Outlook message and insert coached wording.",
     iconSrc: "/brand/connected-apps/outlook.png",
-    connectHref: "/api/microsoft/connect",
+    connectHref: "/api/microsoft/connect?kind=mail",
     connectLabel: "Connect Microsoft 365",
     sharedProvider: "microsoft",
     steps: [

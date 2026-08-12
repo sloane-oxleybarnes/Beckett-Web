@@ -6,6 +6,10 @@ import {
   createMicrosoftCodeChallenge,
   getMicrosoftRedirectUri,
   isMicrosoftConfigured,
+  MICROSOFT_CALENDAR_WRITE_SCOPES,
+  MICROSOFT_MAIL_SCOPES,
+  MICROSOFT_MAIL_WRITE_SCOPES,
+  MICROSOFT_SCOPES,
 } from "@/lib/microsoft-oauth";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +22,7 @@ export async function GET(request: NextRequest) {
     // Without this, a successful login lands on the dashboard and never
     // creates the Microsoft identity record that the Outlook add-in needs.
     const login = new URL("/auth/login", request.url);
-    login.searchParams.set("next", "/api/microsoft/connect");
+    login.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(login);
   }
 
@@ -30,8 +34,19 @@ export async function GET(request: NextRequest) {
 
   const state = randomBytes(32).toString("base64url");
   const codeVerifier = randomBytes(64).toString("base64url");
+  const kindParam = request.nextUrl.searchParams.get("kind");
+  const requestedKind = kindParam === "mail" || kindParam === "calendar-write" || kindParam === "mail-write"
+    ? kindParam
+    : "calendar";
+  const scopes = requestedKind === "mail"
+    ? MICROSOFT_MAIL_SCOPES
+    : requestedKind === "calendar-write"
+      ? MICROSOFT_CALENDAR_WRITE_SCOPES
+      : requestedKind === "mail-write"
+        ? MICROSOFT_MAIL_WRITE_SCOPES
+        : MICROSOFT_SCOPES;
   const response = NextResponse.redirect(
-    buildMicrosoftAuthorizationUrl(state, redirectUri, createMicrosoftCodeChallenge(codeVerifier)),
+    buildMicrosoftAuthorizationUrl(state, redirectUri, createMicrosoftCodeChallenge(codeVerifier), scopes),
   );
   const cookieOptions = {
     httpOnly: true,
@@ -42,5 +57,6 @@ export async function GET(request: NextRequest) {
   };
   response.cookies.set("beckett_microsoft_oauth_state", state, cookieOptions);
   response.cookies.set("beckett_microsoft_oauth_verifier", codeVerifier, cookieOptions);
+  response.cookies.set("beckett_microsoft_oauth_kind", requestedKind, cookieOptions);
   return response;
 }

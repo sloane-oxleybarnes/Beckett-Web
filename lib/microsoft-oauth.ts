@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { decryptOAuthToken, encryptOAuthToken } from "@/lib/oauth-token-crypto";
 import { supabaseAdmin } from "@/lib/server-admin";
 import type { CalendarEvent } from "@/lib/calendar-insights";
@@ -10,8 +10,12 @@ export const MICROSOFT_CALENDAR_SCOPES = [
   "offline_access",
   "User.Read",
   "Calendars.ReadBasic",
-  "Mail.Read",
 ].join(" ");
+
+export const MICROSOFT_MAIL_SCOPES = `${MICROSOFT_CALENDAR_SCOPES} Mail.Read`;
+export const MICROSOFT_CALENDAR_WRITE_SCOPES = `${MICROSOFT_CALENDAR_SCOPES} Calendars.ReadWrite`;
+export const MICROSOFT_MAIL_WRITE_SCOPES = `${MICROSOFT_CALENDAR_SCOPES} Mail.ReadWrite`;
+export const MICROSOFT_SCOPES = MICROSOFT_CALENDAR_SCOPES;
 
 const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
 
@@ -69,6 +73,10 @@ export type MicrosoftThreadMessage = {
   sentAt: string | null;
 };
 
+function mergeMicrosoftScopes(...values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.flatMap((value) => String(value || "").split(/\s+/).filter(Boolean)))).join(" ") || MICROSOFT_SCOPES;
+}
+
 function authority() {
   const tenant = process.env.MICROSOFT_TENANT_ID?.trim() || "common";
   return `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0`;
@@ -105,20 +113,30 @@ export function createMicrosoftCodeChallenge(verifier: string) {
   return createHash("sha256").update(verifier).digest("base64url");
 }
 
-export function buildMicrosoftAuthorizationUrl(state: string, redirectUri: string, codeChallenge: string) {
+export function buildMicrosoftAuthorizationUrl(
+  state: string,
+  redirectUri: string,
+  codeChallenge: string,
+  scopes = MICROSOFT_SCOPES,
+) {
   const url = new URL(`${authority()}/authorize`);
   url.searchParams.set("client_id", getMicrosoftClientId());
   url.searchParams.set("response_type", "code");
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_mode", "query");
-  url.searchParams.set("scope", MICROSOFT_CALENDAR_SCOPES);
+  url.searchParams.set("scope", scopes);
   url.searchParams.set("state", state);
   url.searchParams.set("code_challenge", codeChallenge);
   url.searchParams.set("code_challenge_method", "S256");
   return url;
 }
 
-export async function exchangeMicrosoftCode(code: string, redirectUri: string, codeVerifier: string) {
+export async function exchangeMicrosoftCode(
+  code: string,
+  redirectUri: string,
+  codeVerifier: string,
+  scopes = MICROSOFT_SCOPES,
+) {
   const response = await fetch(`${authority()}/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -128,7 +146,7 @@ export async function exchangeMicrosoftCode(code: string, redirectUri: string, c
       code,
       redirect_uri: redirectUri,
       grant_type: "authorization_code",
-      scope: MICROSOFT_CALENDAR_SCOPES,
+      scope: scopes,
       code_verifier: codeVerifier,
     }),
     cache: "no-store",
@@ -184,7 +202,7 @@ export async function saveMicrosoftConnection(
     provider: "microsoft",
     email,
     display_name: profile.displayName || null,
-    scopes: token.scope || previous.scopes || MICROSOFT_CALENDAR_SCOPES,
+    scopes: mergeMicrosoftScopes(previous.scopes, token.scope),
     token_type: token.token_type || previous.token_type || "Bearer",
     expires_at: new Date(Date.now() + Math.max(token.expires_in || 3600, 60) * 1000).toISOString(),
     refresh_token_encrypted: token.refresh_token
@@ -369,4 +387,97 @@ export async function listMicrosoftCalendarEvents(
     }));
   }));
   return groups.flat().sort((first, second) => new Date(first.start).getTime() - new Date(second.start).getTime());
+}
+
+export async function getMicrosoftCalendarEvent(userId: string, eventId: string, calendarId = "default") {
+  const token = await getMicrosoftAccessToken(userId);
+  if (!token) return null;
+  const params = new URLSearchParams({
+    "$select": "id,subject,bodyPreview,start,end,location,organizer,attendees,isAllDay,isCancelled,webLink,onlineMeeting",
+  });
+  const path = calendarId === "default"
+    ? `/me/events/${encodeURIComponent(eventId)}`
+    : `/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`;
+  return graphFetch<Record<string, unknown>>(token, `${path}?${params.toString()}`);
+}
+
+export async function listMicrosoftMailMessages(userId: string, search?: string, top = 20) {
+  const token = await getMicrosoftAccessToken(userId);
+  if (!token) return null;
+  const params = new URLSearchParams({
+    "$select": "id,conversationId,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,webLink",
+    "$top": String(Math.min(Math.max(top, 1), 50)),
+    "$orderby": "receivedDateTime DESC",
+  });
+  if (search?.trim()) params.set("$search", `"${search.trim().replace(/"/g, "")}"`);
+  return graphFetch<{ value?: Array<Record<string, unknown>> }>(token, `/me/messages?${params.toString()}`);
+}
+
+export async function getMicrosoftMailMessage(userId: string, messageId: string) {
+  const token = await getMicrosoftAccessToken(userId);
+  if (!token) return null;
+  const params = new URLSearchParams({
+    "$select": "id,conversationId,subject,from,toRecipients,ccRecipients,receivedDateTime,body,bodyPreview,isRead,webLink",
+  });
+  return graphFetch<Record<string, unknown>>(token, `/me/messages/${encodeURIComponent(messageId)}?${params.toString()}`);
+}
+
+export async function microsoftGraphRequest<T>(userId: string, path: string, init?: RequestInit) {
+  const token = await getMicrosoftAccessToken(userId);
+  if (!token) return null;
+  const response = await fetch(`${GRAPH_ROOT}${path}`, {
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, ...(init?.headers || {}) },
+    cache: "no-store",
+  });
+  const data = await response.json().catch(() => ({})) as T & { error?: { message?: string } };
+  if (!response.ok) throw new Error(data.error?.message || `Microsoft Graph request failed (${response.status})`);
+  return data;
+}
+
+export function newMicrosoftClientState() {
+  return randomBytes(32).toString("base64url");
+}
+
+export async function createMicrosoftCalendarEvent(userId: string, calendarId: string, input: {
+  subject: string;
+  start: string;
+  end: string;
+  timeZone?: string;
+}) {
+  const path = calendarId === "default" ? "/me/events" : `/me/calendars/${encodeURIComponent(calendarId)}/events`;
+  return microsoftGraphRequest<Record<string, unknown>>(userId, path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      subject: input.subject,
+      start: { dateTime: input.start, timeZone: input.timeZone || "UTC" },
+      end: { dateTime: input.end, timeZone: input.timeZone || "UTC" },
+      showAs: "free",
+      isReminderOn: false,
+    }),
+  });
+}
+
+export async function createMicrosoftDraft(userId: string, input: {
+  subject: string;
+  body: string;
+  to?: string[];
+}) {
+  return microsoftGraphRequest<Record<string, unknown>>(userId, "/me/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      subject: input.subject,
+      body: { contentType: "Text", content: input.body.slice(0, 18_000) },
+      toRecipients: (input.to || []).slice(0, 20).map((address) => ({ emailAddress: { address } })),
+      isDraft: true,
+    }),
+  });
+}
+
+export function microsoftMetadataScopes(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object") return MICROSOFT_SCOPES;
+  const scopes = (metadata as { scopes?: unknown }).scopes;
+  return typeof scopes === "string" && scopes.trim() ? scopes : MICROSOFT_SCOPES;
 }

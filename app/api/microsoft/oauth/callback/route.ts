@@ -5,6 +5,10 @@ import {
   getMicrosoftProfile,
   getMicrosoftRedirectUri,
   isMicrosoftConfigured,
+  MICROSOFT_CALENDAR_WRITE_SCOPES,
+  MICROSOFT_MAIL_SCOPES,
+  MICROSOFT_MAIL_WRITE_SCOPES,
+  MICROSOFT_SCOPES,
   saveMicrosoftConnection,
 } from "@/lib/microsoft-oauth";
 
@@ -17,6 +21,7 @@ function redirectToApps(url: URL, error?: string) {
   const response = NextResponse.redirect(target);
   response.cookies.delete("beckett_microsoft_oauth_state");
   response.cookies.delete("beckett_microsoft_oauth_verifier");
+  response.cookies.delete("beckett_microsoft_oauth_kind");
   return response;
 }
 
@@ -32,6 +37,14 @@ export async function GET(request: NextRequest) {
   const state = url.searchParams.get("state");
   const expectedState = request.cookies.get("beckett_microsoft_oauth_state")?.value;
   const codeVerifier = request.cookies.get("beckett_microsoft_oauth_verifier")?.value;
+  const oauthKind = request.cookies.get("beckett_microsoft_oauth_kind")?.value || "calendar";
+  const scopes = oauthKind === "mail"
+    ? MICROSOFT_MAIL_SCOPES
+    : oauthKind === "calendar-write"
+      ? MICROSOFT_CALENDAR_WRITE_SCOPES
+      : oauthKind === "mail-write"
+        ? MICROSOFT_MAIL_WRITE_SCOPES
+        : MICROSOFT_SCOPES;
   if (!state || !expectedState || state !== expectedState || !codeVerifier) {
     return redirectToApps(url, "invalid-state");
   }
@@ -42,7 +55,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const token = await exchangeMicrosoftCode(code, getMicrosoftRedirectUri(url.origin), codeVerifier);
+    const token = await exchangeMicrosoftCode(code, getMicrosoftRedirectUri(url.origin), codeVerifier, scopes);
     const profile = await getMicrosoftProfile(token.access_token || "");
     await saveMicrosoftConnection(user.id, token, profile);
     return redirectToApps(url);
