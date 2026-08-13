@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callAnthropic } from "@/lib/anthropic";
-import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
+import { AiUsageLimitError } from "@/lib/ai-usage";
+import { metering } from "@/lib/metering";
 import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { getOutlookAddinUser, hasUnlinkedMicrosoftAccount } from "@/lib/outlook-addin-auth";
 
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
   const sender = typeof body?.sender === "string" ? body.sender.trim().slice(0, 500) : "Unknown sender";
 
   try {
-    await recordAiUsage(user.id, { source: "outlook_addin", action: "decode_selected_item" });
+    await metering.ai.record({ userId: user.id, source: "outlook_addin", action: "decode_selected_item" });
     const result = await callAnthropic(
       `You are Beckett, a private communication coach. Explain only what the selected text supports, state uncertainty clearly, and never claim to know the sender's hidden intent. Never send or save a message.\n\n${beckettBoundaryPrompt()}`,
       [{ role: "user", content: `Analyze this user-selected Outlook ${thread.length ? "conversation" : "message"}.\n\n${thread.length ? `Full conversation, oldest to newest:\n${thread.map((message) => `[${message.sentAt || "unknown time"}] ${message.sender}: ${message.body}`).join("\n\n")}` : `Subject: ${subject}\nFrom: ${sender}\n\nMessage:\n${content}`}\n\nOnly use the visible content. Keep every field concise and scannable. Respond ONLY with valid JSON, no markdown:\n{\n  "intent": "what the sender likely means or wants",\n  "tone": "the emotional tone, stated with appropriate uncertainty",\n  "want": "what the sender likely wants the user to do or say next",\n  "responses": [\n    { "label": "Direct and clear", "tag": "direct", "text": "ready-to-send reply, max 35 words" },\n    { "label": "Warm and collaborative", "tag": "warm", "text": "ready-to-send reply, max 35 words" },\n    { "label": "Sets a gentle limit", "tag": "boundary", "text": "ready-to-send reply, max 35 words" }\n  ]\n}` }],

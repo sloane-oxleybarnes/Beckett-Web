@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callAnthropic } from "@/lib/anthropic";
-import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
+import { AiUsageLimitError } from "@/lib/ai-usage";
+import { metering } from "@/lib/metering";
 import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSafetyResponse } from "@/lib/safety-resources";
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
   const prompt = `Task: ${task}\nPreferred tone: ${tone}.\n\nUser-provided context:\n${text}`;
 
   try {
-    await recordAiUsage(user.id, { source: "personal_coach", action: `personal_${body.intent}`, metadata: { pillar: body.pillar } });
+    await metering.ai.record({ userId: user.id, source: "personal_coach", action: `personal_${body.intent}`, metadata: { pillar: body.pillar } });
     const response = await callAnthropic(system, [{ role: "user", content: prompt }], 700);
     return NextResponse.json({ response: response.trim(), safety: null });
   } catch (error) {

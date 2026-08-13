@@ -1,10 +1,5 @@
-import { recordAiUsage } from "@/lib/ai-usage";
-import {
-  WEB_CREDITS_ENABLED,
-  commitWebCredit,
-  releaseWebCredit,
-  reserveWebCredit,
-} from "@/lib/web-credits";
+import { metering } from "@/lib/metering";
+import { WEB_CREDITS_ENABLED } from "@/lib/web-credits";
 
 type AiMeteringInput = {
   userId: string;
@@ -25,7 +20,8 @@ export async function withAiMetering<T>(
   if (input.metered === false) return execute();
 
   if (!WEB_CREDITS_ENABLED) {
-    await recordAiUsage(input.userId, {
+    await metering.ai.record({
+      userId: input.userId,
       source: input.source,
       action: input.action,
       metadata: input.metadata,
@@ -33,7 +29,8 @@ export async function withAiMetering<T>(
     return execute();
   }
 
-  const reservation = await reserveWebCredit(input.userId, {
+  const reservation = await metering.web.reserve({
+    userId: input.userId,
     requestId: crypto.randomUUID(),
     source: input.source,
     action: input.action,
@@ -42,10 +39,10 @@ export async function withAiMetering<T>(
 
   try {
     const result = await execute();
-    if (reservation) await commitWebCredit(reservation.id);
+    if (reservation) await metering.web.commit(reservation, undefined);
     return result;
   } catch (error) {
-    if (reservation) await releaseWebCredit(reservation.id).catch(() => undefined);
+    if (reservation) await metering.web.release(reservation).catch(() => undefined);
     throw error;
   }
 }

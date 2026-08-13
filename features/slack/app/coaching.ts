@@ -5,7 +5,8 @@ import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
 import { formatCoachingProfileForPrompt } from '@/lib/coaching-profile'
 import { selectSlackAgentTool, slackAgentToolInstruction } from '@/lib/slack-agent-tools'
 import { formatSlackPrepAssessment } from '@/lib/slack-prep-copy'
-import { registerSlackCreditForResponse, releaseSlackCredit, reserveSlackCredit } from '@/lib/slack-credits'
+import { registerSlackCreditForResponse } from '@/lib/slack-credits'
+import { metering } from '@/lib/metering'
 import { isRelationshipHistoryPrompt, slackNoContextPromptInstruction, SLACK_RELATIONSHIP_LIMITATION_NOTE } from './context'
 import {
   MAX_LONGER_SLACK_ANSWER_LENGTH, MAX_QUICK_SLACK_ANSWER_LENGTH,
@@ -50,12 +51,13 @@ export async function runSlackCoaching({
     });
   }
 
-  const credit = await reserveSlackCredit({
+  const credit = await metering.slack.reserve({
     requestId: slackCreditRequestId([user.slackTeamId, user.slackUserId, action, prompt, messageText]),
     teamId: user.slackTeamId,
     slackUserId: user.slackUserId,
     beckettUserId: user.id,
   });
+  if (!credit) throw new Error("Slack credit reservation was not created");
 
   const agentTool = selectSlackAgentTool({
     intent,
@@ -156,7 +158,7 @@ ${prompt}${relationshipLine}${messageLine}`;
   try {
     text = await callAnthropic(system, [{ role: "user", content: userPrompt }], maxTokens);
   } catch (error) {
-    await releaseSlackCredit(credit.id).catch(() => undefined);
+    await metering.slack.release(credit).catch(() => undefined);
     throw error;
   }
 
@@ -228,11 +230,12 @@ export async function runSlackGuestCoaching({
     ].join("\n");
   }
 
-  const credit = await reserveSlackCredit({
+  const credit = await metering.slack.reserve({
     requestId: slackCreditRequestId([teamId, slackUserId, action, prompt, cleanMessageText]),
     teamId,
     slackUserId,
   });
+  if (!credit) throw new Error("Slack credit reservation was not created");
 
   const agentTool = selectSlackAgentTool({
     intent,
@@ -283,7 +286,7 @@ ${beckettBoundaryPrompt()}`;
   try {
     text = await callAnthropic(system, [{ role: "user", content: userPrompt }], 420);
   } catch (error) {
-    await releaseSlackCredit(credit.id).catch(() => undefined);
+    await metering.slack.release(credit).catch(() => undefined);
     throw error;
   }
   const final = fitSlackAnswer(
