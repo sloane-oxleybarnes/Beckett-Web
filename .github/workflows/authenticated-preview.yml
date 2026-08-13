@@ -1,0 +1,35 @@
+name: Authenticated Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Preview or staging URL to test
+        required: true
+        default: https://beckett-staging.vercel.app
+
+permissions:
+  contents: read
+
+jobs:
+  authenticated-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ inputs.base_url }}
+      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+      E2E_FOREIGN_CONTACT_ID: ${{ secrets.E2E_FOREIGN_CONTACT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require the dedicated staging account
+        run: |
+          test -n "$E2E_EMAIL" || (echo "Missing E2E_EMAIL repository secret" && exit 1)
+          test -n "$E2E_PASSWORD" || (echo "Missing E2E_PASSWORD repository secret" && exit 1)
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test tests/e2e/authenticated.spec.ts

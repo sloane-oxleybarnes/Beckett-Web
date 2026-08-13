@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
+    "bundle:check": "node scripts/check-bundle-size.mjs",
     "analyze": "ANALYZE=true next build --webpack",
     "start": "next start",
     "lint": "eslint .",
@@ -30,6 +31,7 @@
     "hooks:install": "git config core.hooksPath .githooks",
     "security:audit": "npm audit --audit-level=high",
     "db:types": "npx supabase@2.113.0 gen types typescript --project-id $SUPABASE_PROJECT_ID --schema public > lib/database.types.ts",
+    "db:types:check": "node scripts/check-database-types.mjs",
     "verify": "npm run lint && npm run typecheck && npm run migrations:check && npm run test:all && npm run build"
   },
   "dependencies": {
