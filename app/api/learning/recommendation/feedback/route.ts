@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLearningRecommendationForUser } from "@/lib/server-learning-recommendation";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { learningRepository } from "@/lib/repositories/learning-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 type FeedbackAction = "save" | "dismiss";
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   const { recommendation } = await getLearningRecommendationForUser(user.id);
   if (!recommendation) return NextResponse.json({ error: "This suggestion is no longer available." }, { status: 409 });
 
-  const { error } = await supabaseAdmin.from("learning_recommendation_feedback").upsert({
+  const { error } = await learningRepository.from("learning_recommendation_feedback").upsert({
     user_id: user.id,
     recommendation_key: recommendation.key,
     status: action === "save" ? "saved" : "dismissed",

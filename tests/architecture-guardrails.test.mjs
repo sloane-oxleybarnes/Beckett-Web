@@ -56,7 +56,17 @@ test("the auth proxy only runs for protected dashboard routes", () => {
 
 test("server boundaries use verified users and expose no generic CRM mutation proxies", () => {
   const serverSource = sourceFiles("app/api/").map((file) => readFileSync(file, "utf8")).join("\n");
+  const routeSource = sourceFiles("app/")
+    .filter((file) => file.pathname.endsWith("/route.ts"))
+    .map((file) => readFileSync(file, "utf8"))
+    .join("\n");
   assert.doesNotMatch(serverSource, /auth\.getSession\(/);
+  assert.doesNotMatch(routeSource, /from ["'][^"']*server-admin["']/);
+  assert.match(read("lib/repositories/server-repositories.ts"), /contactsRepository/);
+  assert.match(read("lib/repositories/server-repositories.ts"), /integrationsRepository/);
+  assert.match(read("lib/repositories/server-repositories.ts"), /learningRepository/);
+  assert.match(read("lib/repositories/server-repositories.ts"), /slackRepository/);
+  assert.match(read("lib/repositories/server-repositories.ts"), /workdayRepository/);
   assert.equal(existsSync(new URL("../app/api/loops/route.ts", import.meta.url)), false);
   assert.equal(existsSync(new URL("../app/api/hubspot/route.ts", import.meta.url)), false);
 });

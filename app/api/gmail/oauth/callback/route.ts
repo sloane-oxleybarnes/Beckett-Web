@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { encryptGoogleAccessToken } from "@/lib/google-token-security";
 import { GOOGLE_GMAIL_SCOPE, getGoogleGmailOAuthConfig } from "@/lib/google-gmail-oauth";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { trackBetaEvent } from "@/lib/beta-events";
 
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
   });
   const profile = profileResponse.ok ? (await profileResponse.json()) as { emailAddress?: string } : null;
   const now = new Date().toISOString();
-  const { error: upsertError } = await supabaseAdmin.from("user_integrations").upsert(
+  const { error: upsertError } = await integrationsRepository.from("user_integrations").upsert(
     {
       user_id: user.id,
       provider: "google",

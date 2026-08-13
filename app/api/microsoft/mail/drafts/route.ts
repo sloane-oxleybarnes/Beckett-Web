@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { createMicrosoftDraft } from "@/lib/microsoft-oauth";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   const content = typeof body.content === "string" ? body.content.trim().slice(0, 18_000) : "";
   const to = Array.isArray(body.to) ? body.to.filter((value): value is string => typeof value === "string" && value.includes("@")).slice(0, 20) : [];
   if (!subject || !content) return NextResponse.json({ error: "Subject and draft content are required." }, { status: 400 });
-  const { data: integration } = await supabaseAdmin.from("user_integrations").select("metadata").eq("user_id", user.id).eq("provider", "microsoft").maybeSingle();
+  const { data: integration } = await integrationsRepository.from("user_integrations").select("metadata").eq("user_id", user.id).eq("provider", "microsoft").maybeSingle();
   const metadata = integration?.metadata && typeof integration.metadata === "object" ? integration.metadata as Record<string, unknown> : {};
   if (!String(metadata.scopes || "").split(" ").includes("Mail.ReadWrite")) return NextResponse.json({ error: "microsoft_mail_write_consent_required" }, { status: 403 });
   try {

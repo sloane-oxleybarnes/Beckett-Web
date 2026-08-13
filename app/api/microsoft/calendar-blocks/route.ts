@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { createMicrosoftCalendarEvent } from "@/lib/microsoft-oauth";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   const start = typeof body.start === "string" ? body.start : "";
   const end = typeof body.end === "string" ? body.end : "";
   if (!start || !end || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end)) || Date.parse(end) <= Date.parse(start)) return NextResponse.json({ error: "Valid start and end times are required." }, { status: 400 });
-  const { data: integration } = await supabaseAdmin.from("user_integrations").select("metadata").eq("user_id", user.id).eq("provider", "microsoft").maybeSingle();
+  const { data: integration } = await integrationsRepository.from("user_integrations").select("metadata").eq("user_id", user.id).eq("provider", "microsoft").maybeSingle();
   const metadata = integration?.metadata && typeof integration.metadata === "object" ? integration.metadata as Record<string, unknown> : {};
   if (!String(metadata.scopes || "").split(" ").includes("Calendars.ReadWrite")) return NextResponse.json({ error: "microsoft_calendar_write_consent_required" }, { status: 403 });
   try {

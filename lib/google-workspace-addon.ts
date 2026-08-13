@@ -1,6 +1,6 @@
 import { OAuth2Client, type TokenPayload } from "google-auth-library";
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { WEB_CREDITS_ENABLED } from "@/lib/web-credits";
 import {
   workspaceAddOnErrorCode,
@@ -135,7 +135,7 @@ export async function resolveWorkspaceAddOnProfile(
   const googleSubject = user.sub;
   const email = user.email!.trim().toLowerCase();
 
-  const { data: mappedIntegration } = await supabaseAdmin
+  const { data: mappedIntegration } = await integrationsRepository
     .from("user_integrations")
     .select("user_id")
     .eq("provider", "google_workspace_addon")
@@ -144,7 +144,7 @@ export async function resolveWorkspaceAddOnProfile(
 
   let userId = mappedIntegration?.user_id || null;
   if (!userId) {
-    const { data: profileByEmail } = await supabaseAdmin
+    const { data: profileByEmail } = await integrationsRepository
       .from("profiles")
       .select("id")
       .ilike("email", email)
@@ -153,7 +153,7 @@ export async function resolveWorkspaceAddOnProfile(
   }
   if (!userId) return resolved(null);
 
-  const { data: profile } = await supabaseAdmin
+  const { data: profile } = await integrationsRepository
     .from("profiles")
     .select("id,email,plan,pattern_model_enabled")
     .eq("id", userId)
@@ -162,7 +162,7 @@ export async function resolveWorkspaceAddOnProfile(
 
   if (!mappedIntegration) {
     const now = new Date().toISOString();
-    await supabaseAdmin.from("user_integrations").upsert(
+    await integrationsRepository.from("user_integrations").upsert(
       {
         user_id: profile.id,
         provider: "google_workspace_addon",

@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/server-admin";
+import { slackRepository } from "@/lib/repositories/slack-repository";
 import {
   appendSlackCoachingMessage,
   buildSlackThreadArchiveAction,
@@ -894,7 +894,7 @@ async function findActiveSession({
   accessToken?: string | null;
   latestUserText?: string | null;
 }) {
-  let query = supabaseAdmin
+  let query = slackRepository
     .from("slack_agent_sessions")
     .select("*")
     .eq("slack_team_id", teamId)
@@ -1002,7 +1002,7 @@ async function createSession({
         status: "active",
         expiresAt,
       });
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("slack_agent_sessions")
     .insert({
       user_id: user.id,
@@ -1042,7 +1042,7 @@ async function updateSession(sessionId: string, patch: Partial<SlackAgentSession
     ...(patch.status !== undefined ? { status: patch.status } : {}),
     updated_at: new Date().toISOString(),
   };
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("slack_agent_sessions")
     .update(safePatch)
     .eq("id", sessionId)

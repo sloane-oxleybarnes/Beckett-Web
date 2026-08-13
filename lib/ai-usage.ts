@@ -1,4 +1,4 @@
-import { supabaseAdmin } from './server-admin'
+import { platformRepository } from "@/lib/repositories/platform-repository"
 
 const DEFAULT_BETA_DAILY_LIMIT = 30
 const DEFAULT_BETA_DAILY_COURSE_LIMIT = 40
@@ -51,7 +51,7 @@ export async function isUnlimitedAiUser(userId: string) {
   const allowedEmails = getUnlimitedAiEmails()
   if (!allowedEmails.length) return false
 
-  const { data: profile } = await supabaseAdmin
+  const { data: profile } = await platformRepository
     .from('profiles')
     .select('email')
     .eq('id', userId)
@@ -60,7 +60,7 @@ export async function isUnlimitedAiUser(userId: string) {
   const profileEmail = typeof profile?.email === 'string' ? profile.email.toLowerCase() : null
   if (profileEmail && allowedEmails.includes(profileEmail)) return true
 
-  const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId)
+  const { data: authUser } = await platformRepository.auth.admin.getUserById(userId)
   const authEmail = authUser.user?.email?.toLowerCase()
 
   return Boolean(authEmail && allowedEmails.includes(authEmail))
@@ -72,7 +72,7 @@ function startOfUtcDay() {
 }
 
 export async function getAiUsageToday(userId: string, source?: string) {
-  let query = supabaseAdmin
+  let query = platformRepository
     .from('ai_usage_events')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
@@ -111,7 +111,7 @@ export async function recordAiUsage(userId: string, input: {
   const limit = isCourse ? getDailyCourseAiLimit() : getDailyAiLimit()
   const unlimited = await isUnlimitedAiUser(userId)
   const effectiveLimit = unlimited ? UNLIMITED_AI_LIMIT : limit
-  const { data, error } = await supabaseAdmin.rpc('consume_ai_usage', {
+  const { data, error } = await platformRepository.rpc('consume_ai_usage', {
     p_user_id: userId,
     p_source: input.source,
     p_action: input.action,

@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { supabaseAdmin } from "./server-admin";
+import { platformRepository } from "@/lib/repositories/platform-repository";
 
 const FROM_EMAIL = "Beckett <hello@meetbeckett.co>";
 const REPLY_TO_EMAIL = "hello@meetbeckett.co";
@@ -257,7 +257,7 @@ export async function sendFeedbackThankYouIfFirst(params: {
 }) {
   if (!params.email) return false;
 
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await platformRepository
     .from("beta_events")
     .select("id")
     .eq("email", params.email.toLowerCase())
@@ -279,7 +279,7 @@ export async function sendFeedbackThankYouIfFirst(params: {
   });
 
   if (sent) {
-    await supabaseAdmin.from("beta_events").insert({
+    await platformRepository.from("beta_events").insert({
       user_id: params.userId || null,
       email: params.email.toLowerCase(),
       event_name: "feedback_thank_you_sent",

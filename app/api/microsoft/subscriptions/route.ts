@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { microsoftGraphRequest, newMicrosoftClientState } from "@/lib/microsoft-oauth";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,7 @@ export async function GET() {
   const user = await requireMicrosoftUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await integrationsRepository
     .from("microsoft_subscriptions")
     .select("id,kind,resource,expiration_at,last_notification_at")
     .eq("user_id", user.id)
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
   try {
     if (typeof body.renewId === "string") {
-      const { data: existing } = await supabaseAdmin
+      const { data: existing } = await integrationsRepository
         .from("microsoft_subscriptions")
         .select("id,kind,resource")
         .eq("id", body.renewId)
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({ expirationDateTime }),
       });
       const nextExpiration = renewed?.expirationDateTime || expirationDateTime;
-      await supabaseAdmin.from("microsoft_subscriptions").update({
+      await integrationsRepository.from("microsoft_subscriptions").update({
         expiration_at: nextExpiration,
         updated_at: new Date().toISOString(),
       }).eq("id", existing.id).eq("user_id", user.id);
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!kind) return NextResponse.json({ error: "kind must be calendar or mail" }, { status: 400 });
-    const { data: integration } = await supabaseAdmin
+    const { data: integration } = await integrationsRepository
       .from("user_integrations")
       .select("metadata")
       .eq("user_id", user.id)
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "microsoft_mail_consent_required" }, { status: 403 });
     }
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await integrationsRepository
       .from("microsoft_subscriptions")
       .select("id,kind,resource,expiration_at")
       .eq("user_id", user.id)
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     if (!created?.id) throw new Error("Microsoft did not return a subscription id");
 
     const nextExpiration = created.expirationDateTime || expirationDateTime;
-    const { error } = await supabaseAdmin.from("microsoft_subscriptions").insert({
+    const { error } = await integrationsRepository.from("microsoft_subscriptions").insert({
       id: created.id,
       user_id: user.id,
       kind,

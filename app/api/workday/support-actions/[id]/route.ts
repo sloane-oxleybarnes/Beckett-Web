@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { workdayRepository } from "@/lib/repositories/workday-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 const outcomes = ["helped", "a_little", "not_helpful", "skipped"] as const;
@@ -14,7 +14,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: "Choose how the support action felt." }, { status: 400 });
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await workdayRepository
     .from("workday_support_actions")
     .update({ outcome: body.outcome, remember_for_learning: body.remember_for_learning === true, followed_up_at: new Date().toISOString() })
     .eq("id", (await params).id)

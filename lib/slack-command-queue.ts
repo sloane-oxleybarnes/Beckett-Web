@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/server-admin";
+import { slackRepository } from "@/lib/repositories/slack-repository";
 
 type SlackCommandIntent = "respond" | "rewrite" | "decode" | "prep" | "practice";
 type SlackCommandJobStatus = "processing" | "completed" | "failed";
@@ -35,7 +35,7 @@ export async function runQueuedSlackCommand({
   intent: SlackCommandIntent;
   task: () => Promise<void>;
 }) {
-  const { data, error } = await supabaseAdmin.rpc("reserve_slack_command_job", {
+  const { data, error } = await slackRepository.rpc("reserve_slack_command_job", {
     p_request_key: requestKey,
     p_slack_team_id: teamId,
     p_slack_user_id: slackUserId,
@@ -91,7 +91,7 @@ async function updateJob(jobId: string, status: SlackCommandJobStatus, errorMess
   if (status === "processing") values.started_at = now;
   if (status === "completed" || status === "failed") values.completed_at = now;
 
-  const { error } = await supabaseAdmin
+  const { error } = await slackRepository
     .from("slack_command_jobs")
     .update(values)
     .eq("id", jobId);

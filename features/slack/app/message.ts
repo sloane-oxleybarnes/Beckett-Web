@@ -2,7 +2,7 @@ import { createHmac } from "crypto";
 import { NextResponse } from "next/server";
 import { logError } from "@/lib/structured-logger";
 import { getPublicSiteUrl } from "@/lib/deployment-env";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { slackRepository } from "@/lib/repositories/slack-repository";
 import type { SlackThreadTurn } from "@/lib/slack-thread-rehydration";
 import { settleSlackCreditForPayload } from "@/lib/slack-credits";
 
@@ -220,14 +220,14 @@ export function slackUserIdsFromMessages(messages: Array<SlackHistoryMessage | u
 }
 
 export async function noteSlackContextValidation(userId: string, failureReason: SlackContextFailureReason | null) {
-  const { data } = await supabaseAdmin
+  const { data } = await slackRepository
     .from("user_integrations")
     .select("metadata")
     .eq("user_id", userId)
     .eq("provider", "slack")
     .maybeSingle();
   const metadata = metadataRecord(data?.metadata);
-  await supabaseAdmin
+  await slackRepository
     .from("user_integrations")
     .update({
       metadata: {

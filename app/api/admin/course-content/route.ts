@@ -6,7 +6,7 @@ import {
   type CourseIllustration,
   type CourseSection,
 } from "@/lib/course-content";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { learningRepository } from "@/lib/repositories/learning-repository";
 import type { Course } from "@/lib/courses";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 
@@ -36,7 +36,7 @@ function normalizeIllustration(value: unknown): CourseIllustration {
 }
 
 async function getDraftOrFallback(courseId: string) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await learningRepository
     .from("course_content")
     .select("draft_json,published_json")
     .eq("course_id", courseId)
@@ -75,7 +75,7 @@ export async function PUT(req: Request) {
   const normalizedDraft = jsonCourseCopy(draft);
   normalizedDraft.id = courseId;
 
-  const { error } = await supabaseAdmin.from("course_content").upsert({
+  const { error } = await learningRepository.from("course_content").upsert({
     course_id: courseId,
     title: normalizedDraft.title,
     section: normalizeSection(body.section),
@@ -113,13 +113,13 @@ export async function POST(req: Request) {
     const published = jsonCourseCopy(draft);
     published.id = courseId;
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await learningRepository
       .from("course_content")
       .select("section,illustration,is_listed,sort_order,source_course_id")
       .eq("course_id", courseId)
       .maybeSingle();
 
-    const { error } = await supabaseAdmin.from("course_content").upsert({
+    const { error } = await learningRepository.from("course_content").upsert({
       course_id: courseId,
       title: published.title,
       section: normalizeSection(existing?.section),
@@ -159,7 +159,7 @@ export async function POST(req: Request) {
     draft.id = requestedCourseId;
     draft.title = title;
 
-    const { error } = await supabaseAdmin.from("course_content").insert({
+    const { error } = await learningRepository.from("course_content").insert({
       course_id: requestedCourseId,
       title,
       section: normalizeSection(body.section),

@@ -1,5 +1,5 @@
 import { COURSES, getCourse, type Course } from "@/lib/courses";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { platformRepository } from "@/lib/repositories/platform-repository";
 
 export type CourseIllustration = "date" | "colleague" | "clarity" | "no";
 export type CourseSection = "Professional" | "Personal";
@@ -166,7 +166,7 @@ function summarizeCourse(course: Course, meta?: Partial<CourseStudioItem>): Cour
 }
 
 async function listCourseContentRows() {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await platformRepository
     .from("course_content")
     .select("course_id,title,section,illustration,is_listed,sort_order,source_course_id,draft_json,published_json,created_at,updated_at,published_at")
     .order("section", { ascending: true })
@@ -210,7 +210,7 @@ export async function getCourseStudioItems(): Promise<CourseStudioItem[]> {
 
 export async function getPublishedCourse(courseId: string): Promise<Course | undefined> {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await platformRepository
       .from("course_content")
       .select("published_json")
       .eq("course_id", courseId)

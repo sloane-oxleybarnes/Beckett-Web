@@ -64,7 +64,7 @@ import {
   SlackHistoryFlowType,
   summarizeSlackCoachingResponse,
 } from "@/lib/slack-history";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { slackRepository } from "@/lib/repositories/slack-repository";
 import { startSlackGuestSession } from "@/lib/slack-guest-session";
 import { startGuestPracticeFromPrep } from "@/lib/slack-guest-practice";
 import {
@@ -213,7 +213,7 @@ export async function replaceSlackInteraction(responseUrl: string, text: string,
 }
 
 export async function loadPendingRequest(requestId: string) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("slack_pending_requests")
     .select(
       "id, user_id, slack_team_id, slack_user_id, slack_channel_id, slack_channel_name, prompt, response_url, expires_at, completed_at"
@@ -234,7 +234,7 @@ export async function loadDraftSession({
   teamId: string;
   slackUserId: string;
 }) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("slack_agent_sessions")
     .select("id, user_id, slack_team_id, slack_user_id, slack_channel_id, thread_ts, flow_type, status, answers, zero_copy_flow_session_id")
     .eq("id", sessionId)
@@ -265,7 +265,7 @@ export async function loadDraftSession({
     | null;
   if (!row) return null;
   const { data: flow, error: flowError } = row.zero_copy_flow_session_id
-    ? await supabaseAdmin
+    ? await slackRepository
         .from("slack_flow_sessions")
         .select("slack_source_channel_id, slack_source_thread_ts")
         .eq("id", row.zero_copy_flow_session_id)
@@ -347,7 +347,7 @@ export async function claimPendingRequest({
   slackUserId: string;
 }) {
   const now = new Date().toISOString();
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("slack_pending_requests")
     .update({ completed_at: now })
     .eq("id", requestId)

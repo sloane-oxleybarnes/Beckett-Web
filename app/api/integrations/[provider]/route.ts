@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { trackBetaEvent } from "@/lib/beta-events";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 const CONNECTED_PROVIDERS = ["google", "google_calendar", "microsoft", "slack"] as const;
@@ -41,7 +41,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ prov
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const { data: integration, error: readError } = await supabaseAdmin
+  const { data: integration, error: readError } = await integrationsRepository
     .from("user_integrations")
     .select("access_token")
     .eq("user_id", user.id)
@@ -54,7 +54,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ prov
     await revokeProviderToken(provider, integration.access_token);
   }
 
-  const { error: deleteError } = await supabaseAdmin
+  const { error: deleteError } = await integrationsRepository
     .from("user_integrations")
     .delete()
     .eq("user_id", user.id)

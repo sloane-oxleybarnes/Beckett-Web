@@ -64,7 +64,7 @@ import {
   SlackHistoryFlowType,
   summarizeSlackCoachingResponse,
 } from "@/lib/slack-history";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { slackRepository } from "@/lib/repositories/slack-repository";
 import { startSlackGuestSession } from "@/lib/slack-guest-session";
 import { startGuestPracticeFromPrep } from "@/lib/slack-guest-practice";
 import {

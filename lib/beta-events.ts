@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "./server-admin";
+import { platformRepository } from "@/lib/repositories/platform-repository";
 import { createOrUpdateHubSpotContact } from "./hubspot";
 import { captureProductEvent } from "./product-analytics";
 
@@ -20,7 +20,7 @@ export async function trackBetaEvent({
   try {
     const normalizedEmail = email?.trim().toLowerCase() || null;
 
-    await supabaseAdmin.from("beta_events").insert({
+    await platformRepository.from("beta_events").insert({
       user_id: userId,
       email: normalizedEmail,
       event_name: eventName,
@@ -37,7 +37,7 @@ export async function trackBetaEvent({
     });
 
     if (normalizedEmail) {
-      await supabaseAdmin
+      await platformRepository
         .from("beta_signups")
         .update({ last_activity_at: new Date().toISOString() })
         .eq("email", normalizedEmail);
@@ -74,7 +74,7 @@ function statusForEvent(eventName: string) {
 }
 
 async function countEvents(email: string, eventName: string) {
-  const { count } = await supabaseAdmin
+  const { count } = await platformRepository
     .from("beta_events")
     .select("id", { count: "exact", head: true })
     .eq("email", email)
@@ -84,7 +84,7 @@ async function countEvents(email: string, eventName: string) {
 }
 
 async function getFirstEventAt(email: string, eventName: string) {
-  const { data } = await supabaseAdmin
+  const { data } = await platformRepository
     .from("beta_events")
     .select("created_at")
     .eq("email", email)
@@ -97,7 +97,7 @@ async function getFirstEventAt(email: string, eventName: string) {
 }
 
 async function getSignup(email: string) {
-  const { data } = await supabaseAdmin
+  const { data } = await platformRepository
     .from("beta_signups")
     .select("name, source, plan, lifecycle_stage, approved_at, invite_sent_at")
     .eq("email", email)

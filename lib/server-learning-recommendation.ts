@@ -1,5 +1,5 @@
 import { findEarnedLearningRecommendation, type EarnedLearningRecommendation } from "@/lib/earned-learning-recommendations";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { platformRepository } from "@/lib/repositories/platform-repository";
 
 const periodStart = () => new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -12,13 +12,13 @@ export type LearningRecommendationResult = {
 
 export async function getLearningRecommendationForUser(userId: string): Promise<LearningRecommendationResult> {
   const [{ data: profile }, { data: sessions }, { data: completions }, { data: progress }, { data: supportPlans }, { data: rememberedPatterns }, { data: feedback }] = await Promise.all([
-    supabaseAdmin.from("profiles").select("pattern_model_enabled, skill_recommendations_enabled").eq("id", userId).maybeSingle(),
-    supabaseAdmin.from("practice_sessions").select("situation, goal, completed_at").eq("user_id", userId).eq("status", "completed").gte("completed_at", periodStart()).order("completed_at", { ascending: false }).limit(12),
-    supabaseAdmin.from("course_completions").select("course_id").eq("user_id", userId),
-    supabaseAdmin.from("course_progress").select("course_id").eq("user_id", userId),
-    supabaseAdmin.from("workday_support_plans").select("cue, support_action").eq("user_id", userId).eq("active", true),
-    supabaseAdmin.from("workday_pattern_summaries").select("summary").eq("user_id", userId).eq("active", true).eq("status", "remembered"),
-    supabaseAdmin.from("learning_recommendation_feedback").select("recommendation_key, status").eq("user_id", userId),
+    platformRepository.from("profiles").select("pattern_model_enabled, skill_recommendations_enabled").eq("id", userId).maybeSingle(),
+    platformRepository.from("practice_sessions").select("situation, goal, completed_at").eq("user_id", userId).eq("status", "completed").gte("completed_at", periodStart()).order("completed_at", { ascending: false }).limit(12),
+    platformRepository.from("course_completions").select("course_id").eq("user_id", userId),
+    platformRepository.from("course_progress").select("course_id").eq("user_id", userId),
+    platformRepository.from("workday_support_plans").select("cue, support_action").eq("user_id", userId).eq("active", true),
+    platformRepository.from("workday_pattern_summaries").select("summary").eq("user_id", userId).eq("active", true).eq("status", "remembered"),
+    platformRepository.from("learning_recommendation_feedback").select("recommendation_key, status").eq("user_id", userId),
   ]);
 
   if (!profile?.pattern_model_enabled || !profile.skill_recommendations_enabled) {

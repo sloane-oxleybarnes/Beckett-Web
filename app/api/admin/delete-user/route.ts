@@ -13,7 +13,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'signupId required' }, { status: 400 })
   }
 
-  const supabaseAdmin = createClient(
+  const platformRepository = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
@@ -21,7 +21,7 @@ export async function DELETE(request: NextRequest) {
 
   // Delete auth user if one exists (only applies to approved/invited users)
   if (userId) {
-    const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
+    const { error } = await platformRepository.auth.admin.deleteUser(userId)
     if (error) {
       console.error('deleteUser error:', error)
       return NextResponse.json({ error: error.message }, { status: 400 })
@@ -29,7 +29,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   // Remove from beta_signups
-  const { error: deleteError } = await supabaseAdmin
+  const { error: deleteError } = await platformRepository
     .from('beta_signups')
     .delete()
     .eq('id', signupId)

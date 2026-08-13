@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { decryptOAuthToken, encryptOAuthToken } from "@/lib/oauth-token-crypto";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import type { CalendarEvent } from "@/lib/calendar-insights";
 
 export const MICROSOFT_CALENDAR_SCOPES = [
@@ -184,7 +184,7 @@ export async function saveMicrosoftConnection(
   token: MicrosoftTokenResponse,
   profile: { id?: string; displayName?: string; mail?: string; userPrincipalName?: string },
 ) {
-  const { data: existing, error: readError } = await supabaseAdmin
+  const { data: existing, error: readError } = await integrationsRepository
     .from("user_integrations")
     .select("metadata")
     .eq("user_id", userId)
@@ -211,7 +211,7 @@ export async function saveMicrosoftConnection(
     token_encrypted: true,
   };
 
-  const { error } = await supabaseAdmin.from("user_integrations").upsert({
+  const { error } = await integrationsRepository.from("user_integrations").upsert({
     user_id: userId,
     provider: "microsoft",
     access_token: encryptOAuthToken(token.access_token || ""),
@@ -226,7 +226,7 @@ export async function saveMicrosoftConnection(
 }
 
 export async function getMicrosoftAccessToken(userId: string) {
-  const { data: integration, error } = await supabaseAdmin
+  const { data: integration, error } = await integrationsRepository
     .from("user_integrations")
     .select("access_token, metadata")
     .eq("user_id", userId)
@@ -267,7 +267,7 @@ export async function getMicrosoftAccessToken(userId: string) {
       : metadata.refresh_token_encrypted,
     token_encrypted: true,
   };
-  const { error: updateError } = await supabaseAdmin
+  const { error: updateError } = await integrationsRepository
     .from("user_integrations")
     .update({
       access_token: encryptOAuthToken(token.access_token),
@@ -290,7 +290,7 @@ export async function listMicrosoftCalendars(userId: string) {
 }
 
 export async function getMicrosoftMessageThread(userId: string, itemId: string) {
-  const { data: integration, error } = await supabaseAdmin
+  const { data: integration, error } = await integrationsRepository
     .from("user_integrations")
     .select("metadata")
     .eq("user_id", userId)
@@ -349,7 +349,7 @@ export async function listMicrosoftCalendarEvents(
   startDateTime: string,
   endDateTime: string,
 ) {
-  const { data: integration, error: metadataError } = await supabaseAdmin
+  const { data: integration, error: metadataError } = await integrationsRepository
     .from("user_integrations")
     .select("metadata")
     .eq("user_id", userId)

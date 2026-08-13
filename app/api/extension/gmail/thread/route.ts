@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getExtensionProfile } from "@/lib/extension-auth";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { decryptGoogleAccessToken, encryptGoogleAccessToken } from "@/lib/google-token-security";
 import {
   getGoogleGmailOAuthConfig,
@@ -217,7 +217,7 @@ export async function GET(req: NextRequest) {
   if (!profile) return jsonError("unauthorized", 401);
 
   const { searchParams } = new URL(req.url);
-  const { data: integration } = await supabaseAdmin
+  const { data: integration } = await integrationsRepository
     .from("user_integrations")
     .select("id, access_token, external_user_id, metadata")
     .eq("user_id", profile.id)
@@ -232,7 +232,7 @@ export async function GET(req: NextRequest) {
     const refreshed = await refreshGoogleGmailCredential(credential, oauthConfig.clientId, oauthConfig.clientSecret);
     if (!refreshed) return jsonError("gmail_token_expired", 401);
     credential = refreshed;
-    await supabaseAdmin
+    await integrationsRepository
       .from("user_integrations")
       .update({ access_token: encryptGoogleAccessToken(JSON.stringify(credential)), updated_at: new Date().toISOString() })
       .eq("id", integration.id);

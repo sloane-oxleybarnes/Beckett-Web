@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { platformRepository } from "@/lib/repositories/platform-repository";
 import { trackBetaEvent } from "@/lib/beta-events";
 
 export async function POST() {
@@ -12,7 +12,7 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const completedAt = new Date().toISOString();
-  const { error } = await supabaseAdmin
+  const { error } = await platformRepository
     .from("profiles")
     .update({
       dashboard_walkthrough_completed_at: completedAt,

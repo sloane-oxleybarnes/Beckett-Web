@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   )));
   if (!ids.length) return NextResponse.json({ received: true });
 
-  const { data: subscriptions, error } = await supabaseAdmin
+  const { data: subscriptions, error } = await integrationsRepository
     .from("microsoft_subscriptions")
     .select("id,client_state_hash")
     .in("id", ids);
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     return hashes.get(item.subscriptionId) === hashClientState(item.clientState) ? [item.subscriptionId] : [];
   })));
   if (verifiedIds.length) {
-    await supabaseAdmin.from("microsoft_subscriptions").update({
+    await integrationsRepository.from("microsoft_subscriptions").update({
       last_notification_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).in("id", verifiedIds);
