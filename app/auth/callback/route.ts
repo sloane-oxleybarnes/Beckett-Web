@@ -4,6 +4,7 @@ import type { EmailOtpType } from '@supabase/supabase-js'
 import { platformRepository } from "@/lib/repositories/platform-repository"
 import { trackBetaEvent } from '@/lib/beta-events'
 import { encryptGoogleAccessToken } from '@/lib/google-token-security'
+import { safeInternalPath } from '@/lib/auth-next'
 
 function createCallbackClient(request: NextRequest, response: NextResponse) {
   return createServerClient(
@@ -37,12 +38,8 @@ export async function GET(request: NextRequest) {
   // Do not apply normal beta-login gating before a user can reset their password.
   const isPasswordAction =
     type === 'recovery' || type === 'invite' || requestedNext === '/auth/set-password'
-  const next =
-    requestedNext?.startsWith('/')
-      ? requestedNext
-      : isPasswordAction
-        ? '/auth/set-password'
-        : '/dashboard'
+  // Reject protocol-relative and otherwise external redirect targets.
+  const next = safeInternalPath(requestedNext) ?? (isPasswordAction ? '/auth/set-password' : '/dashboard')
   const integration = searchParams.get('integration')
   const errorParam = searchParams.get('error')
   const errorDesc  = searchParams.get('error_description')

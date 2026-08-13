@@ -9,7 +9,12 @@ const projectId = process.env.SUPABASE_PROJECT_ID;
 const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
 
 if (!projectId || !accessToken) {
-  console.log("Database type drift check skipped: SUPABASE_PROJECT_ID and SUPABASE_ACCESS_TOKEN are not configured.");
+  const message = "Database type drift check requires SUPABASE_PROJECT_ID and SUPABASE_ACCESS_TOKEN.";
+  if (process.env.CI) {
+    console.error(message);
+    process.exit(1);
+  }
+  console.log(`${message} Skipping outside CI.`);
   process.exit(0);
 }
 

@@ -26,3 +26,8 @@ test("OTP callback returns the same cookie-bearing response after verification",
   assert.match(callbackRoute, /supabase\.auth\.verifyOtp\(\{ token_hash, type \}\)/);
   assert.match(callbackRoute, /if \(!error\) \{[\s\S]*return successResponse/);
 });
+
+test("auth callback only accepts safe internal redirect paths", () => {
+  assert.match(callbackRoute, /safeInternalPath\(requestedNext\)/);
+  assert.doesNotMatch(callbackRoute, /requestedNext\?\.startsWith\('\/'\)/);
+});
