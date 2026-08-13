@@ -4,8 +4,11 @@ import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 const staticDirectory = join(process.cwd(), ".next", "static");
-const totalBudget = Number(process.env.NEXT_BUNDLE_MAX_BYTES || 15 * 1024 * 1024);
-const chunkBudget = Number(process.env.NEXT_BUNDLE_MAX_CHUNK_BYTES || 600 * 1024);
+// Baseline captured from the production webpack build on 2026-08-13:
+// 2.49 MB total static assets and a 470.991 KB largest JavaScript chunk.
+// Keep enough headroom for normal route additions without allowing silent growth.
+const totalBudget = Number(process.env.NEXT_BUNDLE_MAX_BYTES || 3 * 1024 * 1024);
+const chunkBudget = Number(process.env.NEXT_BUNDLE_MAX_CHUNK_BYTES || 550 * 1024);
 
 async function filesIn(directory) {
   const entries = await readdir(directory, { withFileTypes: true });

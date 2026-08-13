@@ -55,6 +55,20 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
           SUPABASE_SERVICE_ROLE_KEY: ci-placeholder
       - run: npm run bundle:check
+      - name: Capture route-level bundle analyzer reports
+        run: npm run analyze
+        env:
+          NEXT_PUBLIC_SITE_URL: https://example.com
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder
+      - name: Upload bundle analyzer reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-analyzer-${{ github.sha }}
+          path: .next/analyze
+          if-no-files-found: error
+          retention-days: 14
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
         env:
