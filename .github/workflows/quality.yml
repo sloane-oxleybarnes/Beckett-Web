@@ -76,10 +76,22 @@ jobs:
       - run: npm ci
       - name: Initialize disposable Supabase project
         run: npx supabase@2.113.0 init
-      - name: Apply all migrations to a disposable local database
-        run: npx supabase@2.113.0 start
-      - name: Reset disposable database from migrations
-        run: npx supabase@2.113.0 db reset --local
+      - name: Boot disposable database from the checked-in baseline
+        run: |
+          mv supabase/migrations supabase/migrations.real
+          mkdir supabase/migrations
+          cp supabase/schema.sql supabase/migrations/00000000000000_baseline.sql
+          npx supabase@2.113.0 start
+          rm -rf supabase/migrations
+          mv supabase/migrations.real supabase/migrations
+      - name: Replay all migrations against the disposable database
+        run: |
+          db_url="$(npx supabase@2.113.0 status -o env | sed -n 's/^DB_URL=//p' | tr -d '\"')"
+          test -n "$db_url"
+          for migration in supabase/migrations/*.sql; do
+            echo "Applying $migration"
+            psql "$db_url" -v ON_ERROR_STOP=1 -f "$migration"
+          done
       - name: Lint disposable database schema
         run: npx supabase@2.113.0 db lint --local
       - name: Check generated database types for drift
