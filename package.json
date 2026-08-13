@@ -10,6 +10,7 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "bundle:check": "node scripts/check-bundle-size.mjs",
+    "performance:baseline": "node scripts/measure-web-vitals.mjs",
     "analyze": "ANALYZE=true next build --webpack",
     "start": "next start",
     "lint": "eslint .",

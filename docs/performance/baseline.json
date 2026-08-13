@@ -1,0 +1,83 @@
+{
+  "capturedAt": "2026-08-13T21:31:18.212Z",
+  "baseURL": "http://127.0.0.1:3100",
+  "authenticated": false,
+  "note": "Protected routes were measured as unauthenticated redirects. Set E2E_EMAIL and E2E_PASSWORD for authenticated measurements.",
+  "routes": [
+    {
+      "name": "dashboard",
+      "path": "/dashboard",
+      "status": 200,
+      "finalPath": "/auth/login",
+      "ttfb": 13.599999994039536,
+      "domContentLoaded": 34,
+      "load": 91.69999998807907,
+      "jsBytes": 307417,
+      "jsFiles": 13,
+      "cls": 0,
+      "lcp": 120,
+      "fcp": 120,
+      "inp": null
+    },
+    {
+      "name": "skills",
+      "path": "/dashboard/skills",
+      "status": 200,
+      "finalPath": "/auth/login",
+      "ttfb": 10.099999994039536,
+      "domContentLoaded": 16.19999998807907,
+      "load": 28,
+      "jsBytes": 303517,
+      "jsFiles": 13,
+      "cls": 0,
+      "lcp": 48,
+      "fcp": 48,
+      "inp": null
+    },
+    {
+      "name": "course",
+      "path": "/dashboard/courses/asking-for-clarity",
+      "status": 200,
+      "finalPath": "/auth/login",
+      "ttfb": 8.899999976158142,
+      "domContentLoaded": 15.799999982118607,
+      "load": 21.799999982118607,
+      "jsBytes": 303517,
+      "jsFiles": 13,
+      "cls": 0,
+      "lcp": 48,
+      "fcp": 48,
+      "inp": null
+    },
+    {
+      "name": "contacts",
+      "path": "/dashboard/contacts",
+      "status": 200,
+      "finalPath": "/auth/login",
+      "ttfb": 4.600000023841858,
+      "domContentLoaded": 8.5,
+      "load": 13.400000005960464,
+      "jsBytes": 303517,
+      "jsFiles": 13,
+      "cls": 0,
+      "lcp": 36,
+      "fcp": 36,
+      "inp": null
+    },
+    {
+      "name": "practice",
+      "path": "/dashboard/practice",
+      "status": 200,
+      "finalPath": "/auth/login",
+      "ttfb": 14.199999988079071,
+      "domContentLoaded": 21.5,
+      "load": 27.299999982118607,
+      "jsBytes": 303517,
+      "jsFiles": 13,
+      "cls": 0,
+      "lcp": 48,
+      "fcp": 48,
+      "inp": null
+    }
+  ]
+}
