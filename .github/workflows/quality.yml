@@ -67,6 +67,8 @@ jobs:
     name: Database contracts
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      SUPABASE_DISPOSABLE_DB_URL: ${{ secrets.SUPABASE_DISPOSABLE_DB_URL }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -74,31 +76,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Initialize disposable Supabase project
-        run: npx supabase@2.113.0 init
-      - name: Boot disposable database from the checked-in baseline
+      - name: Execute migrations against the disposable database
+        if: env.SUPABASE_DISPOSABLE_DB_URL != ''
         run: |
-          mv supabase/migrations supabase/migrations.real
-          mkdir supabase/migrations
-          cp supabase/schema.sql supabase/migrations/00000000000000_baseline.sql
-          npx supabase@2.113.0 start
-          rm -rf supabase/migrations
-          mv supabase/migrations.real supabase/migrations
-      - name: Replay all migrations against the disposable database
-        run: |
-          db_url="$(npx supabase@2.113.0 status -o env | sed -n 's/^DB_URL=//p' | tr -d '\"')"
-          test -n "$db_url"
-          for migration in supabase/migrations/*.sql; do
-            echo "Applying $migration"
-            psql "$db_url" -v ON_ERROR_STOP=1 -f "$migration"
-          done
-      - name: Lint disposable database schema
-        run: npx supabase@2.113.0 db lint --local
+          npx supabase@2.113.0 db push --db-url "$SUPABASE_DISPOSABLE_DB_URL" --include-all
+      - name: Validate migration chain until disposable database is provisioned
+        if: env.SUPABASE_DISPOSABLE_DB_URL == ''
+        run: npm run migrations:check
       - name: Check generated database types for drift
         env:
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: npm run db:types:check
-      - name: Stop disposable database
-        if: always()
-        run: npx supabase@2.113.0 stop --no-backup
