@@ -26,7 +26,7 @@ import {
   upsertSlackZeroCopyFlowSession,
   type SlackZeroCopyFlowSession,
 } from "@/lib/slack-zero-copy-store";
-import { getWebCreditSummary } from "@/lib/web-credits";
+import { metering } from "@/lib/metering";
 
 export const SLACK_HISTORY_CONTINUE_ACTION_ID = "beckett_history_continue";
 export const SLACK_HISTORY_ARCHIVE_ACTION_ID = "beckett_history_archive";
@@ -772,7 +772,7 @@ export async function publishSlackHome({
       message: error instanceof Error ? error.message : String(error),
     });
   }
-  const credits = await getWebCreditSummary(userId).catch(() => null);
+  const credits = await metering.web.report(userId).catch(() => null);
   const creditLine = credits?.enabled
     ? `*${credits.daily.remaining} coaching credits remaining today* · ${credits.plan} plan · resets daily at 00:00 UTC`
     : null;

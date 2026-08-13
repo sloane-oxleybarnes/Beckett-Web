@@ -61,7 +61,7 @@ import {
 } from "@/lib/slack-guest-routing";
 import { buildSlackPracticeUrl } from "@/lib/slack-practice-link";
 import { signSlackState } from "@/lib/slack-signed-state";
-import { getSlackCreditSummary } from "@/lib/slack-credits";
+import { metering } from "@/lib/metering";
 import {
   extractSlackPermalinkContext,
   inferAssistantIntent,
@@ -329,7 +329,7 @@ export async function publishHome({
       return null;
     });
 
-    const credits = await getSlackCreditSummary({ teamId, slackUserId }).catch(() => null);
+    const credits = await metering.slack.report({ teamId, slackUserId }).catch(() => null);
     const linkToken = signSlackState({ purpose: "account_link", teamId, slackUserId }, 15 * 60);
     await publishSlackConnectHome({
       botAccessToken,
