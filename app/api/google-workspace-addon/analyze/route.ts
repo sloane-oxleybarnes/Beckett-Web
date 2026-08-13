@@ -36,6 +36,28 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+function contactCardState(personalization: Awaited<ReturnType<typeof loadWorkspaceGmailPersonalization>>) {
+  const counterparts = personalization.counterparts.slice(0, 5);
+  if (!counterparts.length) return null;
+
+  if (counterparts.length === 1) {
+    if (personalization.relationshipContext) return null;
+    const [counterpart] = counterparts;
+    return {
+      message: `This conversation appears to be with ${counterpart.name} (${counterpart.email}). Add them to Beckett Contacts and save this interaction summary?`,
+      choices: [{ email: counterpart.email, label: `Add ${counterpart.name} to Contacts` }],
+    };
+  }
+
+  return {
+    message: "This conversation includes several people. Choose who this interaction should be saved to; Beckett will not assign it automatically.",
+    choices: counterparts.map((counterpart) => ({
+      email: counterpart.email,
+      label: `Save for ${counterpart.name}`,
+    })),
+  };
+}
+
 export async function POST(request: NextRequest) {
   return workspaceAddOnRoute(request, async (event, diagnostics) => {
     const profile = await resolveWorkspaceAddOnProfile(event, diagnostics);
@@ -48,14 +70,15 @@ export async function POST(request: NextRequest) {
       const thread = await getSelectedGmailThread(event);
       const latest = thread.messages[thread.messages.length - 1];
       if (!latest?.body) return cardUpdateResponse(errorCard("Message unavailable", "Gmail did not provide readable message content."));
+      const personalization = await loadWorkspaceGmailPersonalization(profile, thread);
+      const contacts = contactCardState(personalization);
       const cachedSections = await loadWorkspaceAnalysisCache({ userId: profile.id, thread });
       if (cachedSections) {
         await storeWorkspaceAnalysisCache({ userId: profile.id, thread, sections: cachedSections }).catch((error) => {
           logError("google_workspace.cache_refresh_failed", error, { provider: "gmail", operation: "cache_refresh" });
         });
-        return cardUpdateResponse(buildWorkspaceAnalysisCard(request, cachedSections));
+        return cardUpdateResponse(buildWorkspaceAnalysisCard(request, cachedSections, contacts));
       }
-      const personalization = await loadWorkspaceGmailPersonalization(profile, thread);
 
       const metering = {
         userId: profile.id,
@@ -105,7 +128,7 @@ export async function POST(request: NextRequest) {
         logError("google_workspace.cache_write_failed", error, { provider: "gmail", operation: "cache_write" });
       });
 
-      if (personalization.relationshipContext) {
+      if (personalization.relationshipContext && personalization.counterparts.length === 1) {
         await recordSafeInteractionSummary({
           userId: profile.id,
           contactId: personalization.relationshipContext.contact.id,
@@ -121,6 +144,9 @@ export async function POST(request: NextRequest) {
             selected_message_id: thread.selectedMessageId,
             message_count: thread.messages.length,
             counterpart_email: personalization.counterpartEmail,
+            subject: latest.subject,
+            provenance: "selected_gmail_conversation",
+            derived_at: new Date().toISOString(),
           },
         }).catch((error) => {
           logError("google_workspace.interaction_summary_failed", error, { provider: "gmail", operation: "summary_store" });
@@ -149,7 +175,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return cardUpdateResponse(buildWorkspaceAnalysisCard(request, sections));
+      return cardUpdateResponse(buildWorkspaceAnalysisCard(request, sections, contacts));
     } catch (error) {
       if (error instanceof AiUsageLimitError) {
         return cardUpdateResponse(errorCard("Daily limit reached", error.message));

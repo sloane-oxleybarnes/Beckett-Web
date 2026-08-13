@@ -124,7 +124,7 @@ export function buildSharedWebContext({
       safetyRegion: profile?.safety_resource_region || "US",
     },
     connectedTools: {
-      gmail: providers.has("google"),
+      gmail: providers.has("google_workspace_addon"),
       calendar: providers.has("google_calendar") || providers.has("microsoft"),
     },
     savedContext: {

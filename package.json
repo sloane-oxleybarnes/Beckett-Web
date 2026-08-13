@@ -17,7 +17,7 @@
     "test:all": "node --test tests/*.test.mjs",
     "test:e2e": "playwright test",
     "test:onboarding": "node --test tests/beta-consent.test.mjs",
-    "test:google-workspace-addon": "node --test tests/google-workspace-addon-diagnostics.test.mjs tests/google-workspace-addon-link.test.mjs tests/google-workspace-gmail-context.test.mjs tests/google-workspace-gmail-draft-action.test.mjs",
+    "test:google-workspace-addon": "node --test tests/google-connection-boundaries.test.mjs tests/google-workspace-addon-diagnostics.test.mjs tests/google-workspace-addon-link.test.mjs tests/google-workspace-gmail-context.test.mjs tests/google-workspace-gmail-draft-action.test.mjs",
     "test:slack": "node --test tests/slack-guest-routing.test.mjs tests/slack-api-retry.test.mjs tests/slack-command-copy.test.mjs tests/slack-prep-copy.test.mjs tests/slack-guided-intent.test.mjs tests/slack-zero-copy.test.mjs tests/slack-thread-rehydration.test.mjs",
     "demo:plan": "node scripts/demo-seed.cjs --plan",
     "demo:seed:gmail": "node scripts/demo-seed.cjs --gmail",
