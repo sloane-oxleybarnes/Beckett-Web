@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { decryptGoogleAccessToken, encryptGoogleAccessToken } from "@/lib/google-token-security";
 import {
@@ -55,7 +55,7 @@ async function loadGoogleCalendar(
     const refreshed = await refreshGoogleCalendarCredential(credential, oauthConfig.clientId, oauthConfig.clientSecret);
     if (!refreshed) return { connected: true, reauthorize: true, events: [] };
     credential = refreshed;
-    const { error } = await supabaseAdmin.from("user_integrations").update({
+    const { error } = await integrationsRepository.from("user_integrations").update({
       access_token: encryptGoogleAccessToken(JSON.stringify(credential)),
       updated_at: new Date().toISOString(),
     }).eq("id", integration.id);
@@ -133,7 +133,7 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const { data: integrations, error: integrationError } = await supabaseAdmin
+  const { data: integrations, error: integrationError } = await integrationsRepository
     .from("user_integrations")
     .select("id, provider, access_token, metadata")
     .eq("user_id", user.id)

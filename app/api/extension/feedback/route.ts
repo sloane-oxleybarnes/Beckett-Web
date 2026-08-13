@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getExtensionProfile } from "@/lib/extension-auth";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { platformRepository } from "@/lib/repositories/platform-repository";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { sendFeedbackThankYouIfFirst } from "@/lib/beta-emails";
 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       ? body.metadata.threadCount
       : contextSnapshot.thread.length;
 
-  const { error } = await supabaseAdmin.from("beta_feedback").insert({
+  const { error } = await platformRepository.from("beta_feedback").insert({
     user_id: profile.id,
     rating: body.feedback,
     comment: truncate(body.improvementNote, 4000),

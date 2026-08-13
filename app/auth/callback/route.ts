@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import type { EmailOtpType } from '@supabase/supabase-js'
-import { supabaseAdmin } from '@/lib/server-admin'
+import { platformRepository } from "@/lib/repositories/platform-repository"
 import { trackBetaEvent } from '@/lib/beta-events'
 import { encryptGoogleAccessToken } from '@/lib/google-token-security'
 
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
         }
         const now = new Date().toISOString()
         const isCalendarConnection = integration === 'calendar'
-        await supabaseAdmin.from('user_integrations').upsert(
+        await platformRepository.from('user_integrations').upsert(
           {
             user_id: data.session.user.id,
             provider: isCalendarConnection ? 'google_calendar' : 'google',

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { decryptGoogleAccessToken } from "@/lib/google-token-security";
 import { trackBetaEvent } from "@/lib/beta-events";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 async function revokeGoogleToken(token: string) {
@@ -21,7 +21,7 @@ export async function DELETE() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const { data: integration, error: readError } = await supabaseAdmin
+  const { data: integration, error: readError } = await integrationsRepository
     .from("user_integrations")
     .select("access_token")
     .eq("user_id", user.id)
@@ -32,7 +32,7 @@ export async function DELETE() {
   const token = decryptGoogleAccessToken(integration?.access_token);
   if (token) await revokeGoogleToken(token);
 
-  const { error: deleteError } = await supabaseAdmin
+  const { error: deleteError } = await integrationsRepository
     .from("user_integrations")
     .delete()
     .eq("user_id", user.id)

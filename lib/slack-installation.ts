@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/server-admin";
+import { slackRepository } from "@/lib/repositories/slack-repository";
 import { decryptSlackToken, encryptSlackToken } from "@/lib/slack-token-crypto";
 import { getSlackOAuthWorkerUrl, getSlackRedirectOrigin } from "@/lib/slack-oauth";
 
@@ -12,7 +12,7 @@ export async function saveSlackInstallation(input: {
   botScopes: string[];
 }) {
   const now = new Date();
-  const { error } = await supabaseAdmin.from("slack_installations").upsert({
+  const { error } = await slackRepository.from("slack_installations").upsert({
     slack_team_id: input.teamId,
     slack_enterprise_id: input.enterpriseId || null,
     installer_user_id: input.installerUserId || null,
@@ -29,7 +29,7 @@ export async function saveSlackInstallation(input: {
 
 export async function linkSlackUser(input: { teamId: string; slackUserId: string; beckettUserId: string }) {
   const now = new Date().toISOString();
-  const { error } = await supabaseAdmin.from("slack_user_links").upsert({
+  const { error } = await slackRepository.from("slack_user_links").upsert({
     slack_team_id: input.teamId,
     slack_user_id: input.slackUserId,
     beckett_user_id: input.beckettUserId,
@@ -41,7 +41,7 @@ export async function linkSlackUser(input: { teamId: string; slackUserId: string
 }
 
 export async function getSlackInstallationToken(teamId: string) {
-  const { data, error } = await supabaseAdmin.from("slack_installations")
+  const { data, error } = await slackRepository.from("slack_installations")
     .select("encrypted_bot_access_token,encrypted_bot_refresh_token,bot_token_expires_at,uninstalled_at")
     .eq("slack_team_id", teamId)
     .maybeSingle();
@@ -63,7 +63,7 @@ export async function getSlackInstallationToken(teamId: string) {
   }).catch(() => null);
   const token = await refresh?.json().catch(() => ({})) as { ok?: boolean; access_token?: string; refresh_token?: string; expires_in?: number };
   if (!refresh?.ok || !token.ok || !token.access_token) return null;
-  const { error: updateError } = await supabaseAdmin.from("slack_installations").update({
+  const { error: updateError } = await slackRepository.from("slack_installations").update({
     encrypted_bot_access_token: encryptSlackToken(token.access_token),
     encrypted_bot_refresh_token: token.refresh_token ? encryptSlackToken(token.refresh_token) : data.encrypted_bot_refresh_token,
     bot_token_expires_at: token.expires_in ? new Date(Date.now() + token.expires_in * 1000).toISOString() : null,
@@ -75,7 +75,7 @@ export async function getSlackInstallationToken(teamId: string) {
 
 export async function markSlackInstallationUninstalled(teamId: string) {
   const now = new Date().toISOString();
-  const { error } = await supabaseAdmin.from("slack_installations").update({
+  const { error } = await slackRepository.from("slack_installations").update({
     encrypted_bot_access_token: null,
     encrypted_bot_refresh_token: null,
     bot_token_expires_at: null,

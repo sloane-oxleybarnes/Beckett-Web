@@ -8,7 +8,7 @@ import {
   gmailPrimaryCounterpartEmail,
   type SelectedGmailThread,
 } from "@/lib/google-workspace-gmail";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { logError } from "@/lib/structured-logger";
 
 export type WorkspaceGmailPersonalization = {
@@ -25,7 +25,7 @@ export async function loadWorkspaceGmailPersonalization(
 
   try {
     const [coachingProfile, relationshipContext] = await Promise.all([
-      fetchCoachingProfileContext(supabaseAdmin, profile.id, { includeToolkit: true, toolkitLimit: 5 }),
+      fetchCoachingProfileContext(integrationsRepository, profile.id, { includeToolkit: true, toolkitLimit: 5 }),
       counterpartEmail
         ? lookupRelationshipContextByEmail({ userId: profile.id, email: counterpartEmail })
         : Promise.resolve(null),

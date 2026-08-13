@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { listMicrosoftCalendars, microsoftNeedsReconnect } from "@/lib/microsoft-oauth";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ async function currentConnection() {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: "Unauthorized." }, { status: 401 }) };
-  const { data: integration, error } = await supabaseAdmin
+  const { data: integration, error } = await integrationsRepository
     .from("user_integrations")
     .select("id, metadata")
     .eq("user_id", user.id)
@@ -61,7 +61,7 @@ export async function PUT(request: NextRequest) {
     ? Array.from(new Set(body.selectedCalendarIds.filter((id): id is string => typeof id === "string" && id.length > 0))).slice(0, 10)
     : [];
   if (!selected.length) return NextResponse.json({ error: "Choose at least one calendar." }, { status: 400 });
-  const { error } = await supabaseAdmin.from("user_integrations").update({
+  const { error } = await integrationsRepository.from("user_integrations").update({
     metadata: { ...current.integration.metadata, selectedCalendarIds: selected },
     updated_at: new Date().toISOString(),
   }).eq("id", current.integration.id);

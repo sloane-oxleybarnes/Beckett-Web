@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedContext } from '@/lib/server-auth'
-import { supabaseAdmin } from '@/lib/server-admin'
+import { platformRepository } from "@/lib/repositories/platform-repository"
 
 function isAllowedRedirect(uri: string) {
   try {
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(login)
   }
 
-  const { data: profile, error } = await supabaseAdmin
+  const { data: profile, error } = await platformRepository
     .from('profiles')
     .select('id, email, full_name, first_name, display_name, plan, extension_token')
     .eq('id', user.id)
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 
   let token = profile.extension_token as string | null
   if (!token) {
-    const { data: updated, error: updateError } = await supabaseAdmin
+    const { data: updated, error: updateError } = await platformRepository
       .from('profiles')
       .update({ extension_token: crypto.randomUUID(), extension_connected_at: new Date().toISOString() })
       .eq('id', user.id)
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     }
     token = updated.extension_token
   } else {
-    await supabaseAdmin
+    await platformRepository
       .from('profiles')
       .update({ extension_connected_at: new Date().toISOString() })
       .eq('id', user.id)

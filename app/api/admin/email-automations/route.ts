@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { platformRepository } from "@/lib/repositories/platform-repository";
 import { sendBetaInviteReminderEmail, sendSetupNudgeEmail } from "@/lib/beta-emails";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
@@ -33,7 +33,7 @@ function buildPasswordSetupLink(origin: string, tokenHash: string, type: "invite
 }
 
 async function createSetupLink(email: string, origin: string) {
-  const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+  const { data, error } = await platformRepository.auth.admin.generateLink({
     type: "recovery",
     email,
     options: {
@@ -58,7 +58,7 @@ async function runEmailAutomations(req: NextRequest, dryRun: boolean) {
     errors: [],
   };
 
-  const { data: inviteCandidates } = await supabaseAdmin
+  const { data: inviteCandidates } = await platformRepository
     .from("beta_signups")
     .select("id, email, name, invite_sent_at")
     .eq("approved", true)
@@ -75,7 +75,7 @@ async function runEmailAutomations(req: NextRequest, dryRun: boolean) {
           actionLink,
         });
 
-        await supabaseAdmin
+        await platformRepository
           .from("beta_signups")
           .update({
             invite_reminder_sent_at: new Date().toISOString(),
@@ -100,7 +100,7 @@ async function runEmailAutomations(req: NextRequest, dryRun: boolean) {
     }
   }
 
-  const { data: profiles } = await supabaseAdmin
+  const { data: profiles } = await platformRepository
     .from("profiles")
     .select("id, email, full_name, first_name, onboarding_completed_at, extension_connected_at")
     .eq("plan", "beta")
@@ -111,7 +111,7 @@ async function runEmailAutomations(req: NextRequest, dryRun: boolean) {
   for (const profile of profiles || []) {
     if (!profile.email) continue;
 
-    const { data: existingNudge } = await supabaseAdmin
+    const { data: existingNudge } = await platformRepository
       .from("beta_events")
       .select("id")
       .eq("email", profile.email.toLowerCase())
@@ -121,7 +121,7 @@ async function runEmailAutomations(req: NextRequest, dryRun: boolean) {
 
     if (existingNudge) continue;
 
-    const { count: connectedTools } = await supabaseAdmin
+    const { count: connectedTools } = await platformRepository
       .from("user_integrations")
       .select("id", { count: "exact", head: true })
       .eq("user_id", profile.id);

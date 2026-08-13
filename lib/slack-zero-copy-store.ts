@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/server-admin";
+import { slackRepository } from "@/lib/repositories/slack-repository";
 import {
   buildSlackFlowSessionRow,
   buildSlackUsageEventRow,
@@ -46,7 +46,7 @@ export type SlackZeroCopyBotMessage = {
 };
 
 export async function createSlackZeroCopyFlowSession(value: SlackDurableInteractionMetadata) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("slack_flow_sessions")
     .insert(buildSlackFlowSessionRow(value))
     .select("*")
@@ -75,7 +75,7 @@ export async function upsertSlackZeroCopyFlowSession(value: SlackDurableInteract
     }
     return createSlackZeroCopyFlowSession(value);
   }
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("slack_flow_sessions")
     .upsert(row, { onConflict: "slack_team_id,slack_user_id,slack_channel_id,slack_thread_ts" })
     .select("*")
@@ -89,7 +89,7 @@ export async function findSlackZeroCopyFlowSessionByThreadReference(input: {
   slackUserId: string;
   threadTs: string;
 }) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("slack_flow_sessions")
     .select("*")
     .eq("slack_team_id", input.teamId)
@@ -126,7 +126,7 @@ export async function updateSlackZeroCopyFlowSession(
     ...(patch.archivedAt !== undefined ? { archived_at: patch.archivedAt } : {}),
     updated_at: new Date().toISOString(),
   };
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("slack_flow_sessions")
     .update(row)
     .eq("id", id)
@@ -142,7 +142,7 @@ export async function findSlackZeroCopyFlowSession(input: {
   channelId: string;
   threadTs: string;
 }) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("slack_flow_sessions")
     .select("*")
     .eq("slack_team_id", input.teamId)
@@ -157,7 +157,7 @@ export async function findSlackZeroCopyFlowSession(input: {
 }
 
 export async function loadSlackZeroCopyFlowSession(id: string, beckettUserId?: string | null) {
-  let query = supabaseAdmin.from("slack_flow_sessions").select("*").eq("id", id);
+  let query = slackRepository.from("slack_flow_sessions").select("*").eq("id", id);
   if (beckettUserId) query = query.eq("beckett_user_id", beckettUserId);
   const { data, error } = await query.maybeSingle();
   if (error) throw error;
@@ -165,7 +165,7 @@ export async function loadSlackZeroCopyFlowSession(id: string, beckettUserId?: s
 }
 
 export async function listSlackZeroCopyFlowSessions(beckettUserId: string, limit = 8) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("slack_flow_sessions")
     .select("*")
     .eq("beckett_user_id", beckettUserId)
@@ -176,7 +176,7 @@ export async function listSlackZeroCopyFlowSessions(beckettUserId: string, limit
 }
 
 export async function recordSlackZeroCopyUsage(value: SlackDurableInteractionMetadata) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("slack_usage_events")
     .insert(buildSlackUsageEventRow(value))
     .select("*")
@@ -192,7 +192,7 @@ export async function recordSlackZeroCopyBotMessage(input: {
   messageTs: string;
   kind?: string | null;
 }) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("slack_flow_bot_messages")
     .upsert({
       flow_session_id: input.flowSessionId,
@@ -208,7 +208,7 @@ export async function recordSlackZeroCopyBotMessage(input: {
 }
 
 export async function listSlackZeroCopyBotMessages(flowSessionId: string, beckettUserId?: string | null) {
-  let query = supabaseAdmin
+  let query = slackRepository
     .from("slack_flow_bot_messages")
     .select("*")
     .eq("flow_session_id", flowSessionId)
@@ -220,7 +220,7 @@ export async function listSlackZeroCopyBotMessages(flowSessionId: string, becket
 }
 
 export async function markSlackZeroCopyBotMessageDeleted(id: string) {
-  const { error } = await supabaseAdmin
+  const { error } = await slackRepository
     .from("slack_flow_bot_messages")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", id);

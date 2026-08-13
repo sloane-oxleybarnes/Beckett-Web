@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { decryptGoogleAccessToken } from "@/lib/google-token-security";
 import { parseGoogleCalendarCredential } from "@/lib/google-calendar-oauth";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { trackBetaEvent } from "@/lib/beta-events";
 
@@ -25,7 +25,7 @@ export async function DELETE() {
 
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const { data: integration, error: readError } = await supabaseAdmin
+  const { data: integration, error: readError } = await integrationsRepository
     .from("user_integrations")
     .select("access_token")
     .eq("user_id", user.id)
@@ -37,7 +37,7 @@ export async function DELETE() {
   const credential = parseGoogleCalendarCredential(decryptGoogleAccessToken(integration?.access_token));
   if (credential) await revokeGoogleToken(credential.refreshToken);
 
-  const { error: deleteError } = await supabaseAdmin
+  const { error: deleteError } = await integrationsRepository
     .from("user_integrations")
     .delete()
     .eq("user_id", user.id)

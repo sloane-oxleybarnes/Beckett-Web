@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { learningRepository } from "@/lib/repositories/learning-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { sendFeedbackThankYouIfFirst } from "@/lib/beta-emails";
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     wouldUse ? `Would use before real situation: ${wouldUse}` : null,
   ].filter(Boolean).join("\n\n");
 
-  const { error } = await supabaseAdmin.from("beta_feedback").insert({
+  const { error } = await learningRepository.from("beta_feedback").insert({
     user_id: user.id,
     rating: body.rating,
     comment,

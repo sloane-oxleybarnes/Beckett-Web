@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/server-admin'
+import { slackRepository } from "@/lib/repositories/slack-repository"
 import { slackUserIdentifier } from '@/lib/contact-identifiers'
 import { lookupRelationshipContextByIdentifier } from '@/lib/contact-relationship-context'
 import { getSlackInstallationToken } from '@/lib/slack-installation'
@@ -17,7 +17,7 @@ import {
 } from './message'
 
 export async function lookupSlackConnectedUser(teamId: string, slackUserId: string) {
-  const { data: link, error: linkError } = await supabaseAdmin
+  const { data: link, error: linkError } = await slackRepository
     .from("slack_user_links")
     .select("beckett_user_id")
     .eq("slack_team_id", teamId)
@@ -35,7 +35,7 @@ export async function lookupSlackConnectedUser(teamId: string, slackUserId: stri
       metadata: { access_token: await getSlackInstallationToken(teamId), granted_user_scopes: [] },
     };
   } else {
-    const legacy = await supabaseAdmin
+    const legacy = await slackRepository
       .from("user_integrations")
       .select("user_id, access_token, external_team_name, metadata")
       .eq("provider", "slack")
@@ -48,7 +48,7 @@ export async function lookupSlackConnectedUser(teamId: string, slackUserId: stri
 
   if (!integration?.user_id) return null;
 
-  const { data: profile, error: profileError } = await supabaseAdmin
+  const { data: profile, error: profileError } = await slackRepository
     .from("profiles")
     .select(
       "id, email, display_name, first_name, full_name, plan, communication_preferences, coaching_tone, strengths, workplace_triggers, neurodivergent_context, neurodivergent_context_other"
@@ -63,7 +63,7 @@ export async function lookupSlackConnectedUser(teamId: string, slackUserId: stri
   const authedUser = metadataRecord(metadata.authed_user);
   const grantedUserScopes = splitSlackScopes(metadata.granted_user_scopes || authedUser.scope || metadata.user_scope);
   const missingUserScopes = REQUIRED_SLACK_USER_SCOPES.filter((scope) => !grantedUserScopes.includes(scope));
-  const { data: toolkitItems } = await supabaseAdmin
+  const { data: toolkitItems } = await slackRepository
     .from("course_toolkit_items")
     .select("course_id, category, label, content, updated_at")
     .eq("user_id", profile.id)
@@ -109,7 +109,7 @@ export async function lookupSlackWorkspaceBotToken(teamId: string) {
   const installationToken = await getSlackInstallationToken(teamId).catch(() => null);
   if (installationToken) return installationToken;
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await slackRepository
     .from("user_integrations")
     .select("metadata")
     .eq("provider", "slack")

@@ -5,7 +5,7 @@ import {
 } from '@/lib/contact-relationship-context'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { callAnthropic } from '@/lib/anthropic'
-import { supabaseAdmin } from '@/lib/server-admin'
+import { integrationsRepository } from "@/lib/repositories/integrations-repository"
 import { decryptGoogleAccessToken } from '@/lib/google-token-security'
 
 export async function GET(req: NextRequest) {
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const email = req.nextUrl.searchParams.get('email')
   if (!email) return NextResponse.json({ error: 'email required' }, { status: 400 })
 
-  const { data: integration } = await supabaseAdmin
+  const { data: integration } = await integrationsRepository
     .from('user_integrations')
     .select('access_token')
     .eq('user_id', user.id)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { workdayRepository } from "@/lib/repositories/workday-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
   breakStatusValues,
@@ -27,9 +27,9 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
   const [{ data: checkins, error: checkinsError }, { data: summaries, error: summariesError }, { data: pendingAction, error: pendingActionError }] = await Promise.all([
-    supabaseAdmin.from("workday_checkins").select("*").eq("user_id", user.id).gte("checked_in_at", periodStart()).order("checked_in_at", { ascending: false }),
-    supabaseAdmin.from("workday_pattern_summaries").select("*").eq("user_id", user.id).eq("active", true).neq("status", "dismissed").order("generated_at", { ascending: false }),
-    supabaseAdmin.from("workday_support_actions").select("*").eq("user_id", user.id).is("outcome", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    workdayRepository.from("workday_checkins").select("*").eq("user_id", user.id).gte("checked_in_at", periodStart()).order("checked_in_at", { ascending: false }),
+    workdayRepository.from("workday_pattern_summaries").select("*").eq("user_id", user.id).eq("active", true).neq("status", "dismissed").order("generated_at", { ascending: false }),
+    workdayRepository.from("workday_support_actions").select("*").eq("user_id", user.id).is("outcome", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   if (checkinsError || summariesError || pendingActionError) {
     return NextResponse.json({ error: "Workday coaching is not set up yet. Please try again shortly." }, { status: 503 });
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Please complete each structured check-in field." }, { status: 400 });
   }
 
-  const { data: inserted, error: insertError } = await supabaseAdmin.from("workday_checkins").insert({
+  const { data: inserted, error: insertError } = await workdayRepository.from("workday_checkins").insert({
     user_id: user.id,
     time_of_day: body.time_of_day,
     workload_level: body.workload_level,
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
   if (insertError) return NextResponse.json({ error: "Could not save your check-in." }, { status: 500 });
 
   if (body.support_action) {
-    const { error: actionError } = await supabaseAdmin.from("workday_support_actions").insert({
+    const { error: actionError } = await workdayRepository.from("workday_support_actions").insert({
       user_id: user.id,
       checkin_id: inserted.id,
       action_type: body.support_action,
@@ -77,19 +77,19 @@ export async function POST(request: NextRequest) {
     if (actionError) return NextResponse.json({ error: "Your check-in saved, but the support action could not be recorded." }, { status: 500 });
   }
 
-  const { data: profile } = await supabaseAdmin.from("profiles").select("pattern_model_enabled").eq("id", user.id).maybeSingle();
+  const { data: profile } = await workdayRepository.from("profiles").select("pattern_model_enabled").eq("id", user.id).maybeSingle();
   let summaries: ReturnType<typeof makePatternSummaries> = [];
   if (profile?.pattern_model_enabled) {
     const [{ data: recent }, { data: actions }] = await Promise.all([
-      supabaseAdmin.from("workday_checkins").select("*").eq("user_id", user.id).gte("checked_in_at", periodStart()),
-      supabaseAdmin.from("workday_support_actions").select("action_type, outcome, remember_for_learning").eq("user_id", user.id).gte("created_at", periodStart()),
+      workdayRepository.from("workday_checkins").select("*").eq("user_id", user.id).gte("checked_in_at", periodStart()),
+      workdayRepository.from("workday_support_actions").select("action_type, outcome, remember_for_learning").eq("user_id", user.id).gte("created_at", periodStart()),
     ]);
     summaries = makePatternSummaries((recent || []) as WorkdayCheckin[], (actions || []) as SupportActionRecord[]);
-    const { data: existing } = await supabaseAdmin.from("workday_pattern_summaries").select("pattern_key, status, acknowledged_at").eq("user_id", user.id);
-    await supabaseAdmin.from("workday_pattern_summaries").update({ active: false }).eq("user_id", user.id).eq("status", "proposed");
+    const { data: existing } = await workdayRepository.from("workday_pattern_summaries").select("pattern_key, status, acknowledged_at").eq("user_id", user.id);
+    await workdayRepository.from("workday_pattern_summaries").update({ active: false }).eq("user_id", user.id).eq("status", "proposed");
     if (summaries.length) {
       const existingByKey = new Map((existing || []).map((item) => [item.pattern_key, item]));
-      await supabaseAdmin.from("workday_pattern_summaries").upsert(summaries.map((summary) => {
+      await workdayRepository.from("workday_pattern_summaries").upsert(summaries.map((summary) => {
         const prior = existingByKey.get(summary.pattern_key);
         return {
           ...summary,

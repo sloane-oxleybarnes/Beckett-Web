@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(login);
   }
 
-  const { data: link, error } = await supabaseAdmin
+  const { data: link, error } = await integrationsRepository
     .from("outlook_sso_link_attempts")
     .select("microsoft_user_id, expires_at, user_id")
     .eq("id", attempt)
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   if (error || !link || Date.parse(link.expires_at) < Date.now()) return NextResponse.redirect(destination(request, "expired"));
   if (link.user_id && link.user_id !== user.id) return NextResponse.redirect(destination(request, "error"));
 
-  const { data: owner, error: ownerError } = await supabaseAdmin
+  const { data: owner, error: ownerError } = await integrationsRepository
     .from("user_integrations")
     .select("user_id")
     .eq("provider", "microsoft")
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
   if (ownerError || (owner?.user_id && owner.user_id !== user.id)) return NextResponse.redirect(destination(request, "error"));
 
   const now = new Date().toISOString();
-  const { data: existing, error: existingError } = await supabaseAdmin
+  const { data: existing, error: existingError } = await integrationsRepository
     .from("user_integrations")
     .select("external_user_id")
     .eq("user_id", user.id)
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(destination(request, "error"));
   }
   if (!existing) {
-    const { error: integrationError } = await supabaseAdmin.from("user_integrations").insert({
+    const { error: integrationError } = await integrationsRepository.from("user_integrations").insert({
       user_id: user.id,
       provider: "microsoft",
       access_token: null,
@@ -63,6 +63,6 @@ export async function GET(request: NextRequest) {
     if (integrationError) return NextResponse.redirect(destination(request, "error"));
   }
 
-  await supabaseAdmin.from("outlook_sso_link_attempts").update({ user_id: user.id, updated_at: now }).eq("id", attempt);
+  await integrationsRepository.from("outlook_sso_link_attempts").update({ user_id: user.id, updated_at: now }).eq("id", attempt);
   return NextResponse.redirect(destination(request, "linked"));
 }

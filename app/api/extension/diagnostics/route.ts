@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAiUsageToday, getDailyAiLimit, isUnlimitedAiUser, UNLIMITED_AI_LIMIT } from "@/lib/ai-usage";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
@@ -15,12 +15,12 @@ export async function GET() {
 
   const userId = user.id;
   const [{ data: profile }, { data: integrations }, used] = await Promise.all([
-    supabaseAdmin
+    integrationsRepository
       .from("profiles")
       .select("id, email, plan, extension_token, extension_connected_at, updated_at")
       .eq("id", userId)
       .single(),
-    supabaseAdmin
+    integrationsRepository
       .from("user_integrations")
       .select("provider, external_user_id, external_team_id, external_team_name, metadata, connected_at, updated_at")
       .eq("user_id", userId),

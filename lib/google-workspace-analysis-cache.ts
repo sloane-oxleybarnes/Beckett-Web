@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import {
   normalizeWorkspaceAnalysisSections,
   type WorkspaceAnalysisSections,
@@ -23,7 +23,7 @@ export async function loadWorkspaceAnalysisCache({
   thread: SelectedGmailThread;
 }) {
   const revision = workspaceAnalysisThreadRevision(thread);
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await integrationsRepository
     .from("google_workspace_analysis_cache")
     .select("sections")
     .eq("user_id", userId)
@@ -49,7 +49,7 @@ export async function loadWorkspaceAnalysisCacheByThreadId({
 }) {
   if (!threadId) return null;
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await integrationsRepository
     .from("google_workspace_analysis_cache")
     .select("sections")
     .eq("user_id", userId)
@@ -78,7 +78,7 @@ export async function loadWorkspaceAnalysisCacheByMessageId({
     ? BigInt(legacyMessageId[1]).toString(16)
     : messageId;
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await integrationsRepository
     .from("google_workspace_analysis_cache")
     .select("sections")
     .eq("user_id", userId)
@@ -105,7 +105,7 @@ export async function storeWorkspaceAnalysisCache({
 }) {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + CACHE_TTL_MS);
-  const { error } = await supabaseAdmin.from("google_workspace_analysis_cache").upsert(
+  const { error } = await integrationsRepository.from("google_workspace_analysis_cache").upsert(
     {
       user_id: userId,
       thread_id: thread.id,
@@ -120,7 +120,7 @@ export async function storeWorkspaceAnalysisCache({
 
   if (error) throw error;
 
-  await supabaseAdmin
+  await integrationsRepository
     .from("google_workspace_analysis_cache")
     .delete()
     .eq("user_id", userId)
