@@ -26,7 +26,7 @@ export default function Footer() {
               Pricing
             </Link>
             <Link href="/beta" className="hover:text-ink transition-colors">
-              Beta
+              Public beta
             </Link>
             <Link href="/privacy" className="hover:text-ink transition-colors">
               Privacy Policy

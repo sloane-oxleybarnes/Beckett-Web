@@ -19,19 +19,27 @@ export default function Nav() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-bg/90 backdrop-blur border-b border-border">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        <Link
-          href="/"
-          className="relative block h-8 w-32"
-        >
-          <Image
-            src="/brand/beckett-horizontal-logo.png"
-            alt="Beckett"
-            fill
-            sizes="128px"
-            className="object-contain object-left"
-            priority
-          />
-        </Link>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            href="/"
+            className="relative block h-8 w-28 sm:w-32"
+          >
+            <Image
+              src="/brand/beckett-horizontal-logo.png"
+              alt="Beckett"
+              fill
+              sizes="(min-width: 640px) 128px, 112px"
+              className="object-contain object-left"
+              priority
+            />
+          </Link>
+          <Link
+            href="/beta"
+            className="rounded-pill border border-primary/25 bg-primary-light/60 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:border-primary/40 hover:bg-primary-light"
+          >
+            Public beta
+          </Link>
+        </div>
 
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-6">

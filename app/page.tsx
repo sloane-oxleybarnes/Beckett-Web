@@ -108,7 +108,7 @@ export default function HomePage() {
 
       <div className="beta-wrap" id="beta"><div className="container"><div className="sec-label">Public beta</div><h2>Try Beckett now.<br /><em>Help shape what comes next.</em></h2><p className="sec-sub">Create an account immediately. Beta includes 60 successful coaching actions per day, 500 per month, full Practice, and every currently available skill course.</p><a href="/auth/signup" className="btn-primary">Create your free beta account</a><p className="beta-note">No approval wait · No credit card · Course activities do not use coaching credits</p></div></div>
 
-      <footer className="hn-footer"><div className="f-logo f-logo-img"><Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={118} height={30} /></div><div className="f-copy">© 2026 Beckett. For brains that work differently.</div><nav aria-label="Footer navigation" className="f-links"><a href="/features">Features</a><a href="/slack">Slack</a><a href="/pricing">Pricing</a><a href="/beta">Beta</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a><a href="mailto:hello@meetbeckett.co">Contact</a></nav></footer>
+      <footer className="hn-footer"><div className="f-logo f-logo-img"><Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={118} height={30} /></div><div className="f-copy">© 2026 Beckett. For brains that work differently.</div><nav aria-label="Footer navigation" className="f-links"><a href="/features">Features</a><a href="/slack">Slack</a><a href="/pricing">Pricing</a><a href="/beta">Public beta</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a><a href="mailto:hello@meetbeckett.co">Contact</a></nav></footer>
     </main>
   );
 }

@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     template: "%s | Beckett",
   },
   description:
-    "Beckett is a neurodivergent communication coach for ADHD workplace communication, autism workplace support, clearer replies, and difficult conversations.",
+    "Beckett is a public-beta neurodivergent communication coach for clearer workplace replies, difficult conversations, ADHD communication, and autism support.",
   alternates: {
     canonical: "/",
   },
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Beckett - Neurodivergent Workplace Communication Coach",
     description:
-      "Decode Gmail and Slack, draft clearer replies, and practice difficult workplace conversations with Beckett.",
+      "Try Beckett's public beta to decode Gmail and Slack, draft clearer replies, and practice difficult workplace conversations.",
     url: "/",
     siteName: "Beckett",
     images: [
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Beckett - Neurodivergent Workplace Communication Coach",
     description:
-      "Workplace communication coaching for neurodivergent professionals in Gmail, Slack, and practice sessions.",
+      "Public-beta workplace communication coaching for neurodivergent professionals in Gmail, Slack, and practice sessions.",
     images: ["/brand/beckett-og.png"],
   },
 };
