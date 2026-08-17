@@ -18,7 +18,7 @@ export const SITE_CONTENT_FIELDS = [
     label: "Homepage headline",
     group: "Homepage",
     defaultValue:
-      "Communication coaching\ninside the apps where you work.",
+      "Communication coaching for neurodivergent professionals\ninside the apps where you work.",
     inputType: "textarea",
   },
   {

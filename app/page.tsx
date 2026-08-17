@@ -8,10 +8,9 @@ import "./home.css";
 const features = [
   { n: "01", title: "Coaching in your work apps", text: "Decode and respond from Gmail, Slack, Outlook, and supported pages in Chrome. Bring Beckett into the conversation instead of copying your work into another app.", action: "Connect your apps →" },
   { n: "02", title: "Message decoder", text: "Separate what a message clearly says from uncertain tone, possible interpretations, and useful next steps.", action: "Decode a message →" },
-  { n: "03", title: "Draft clearer replies", text: "Start with a response in your voice, adjust the tone, and decide what to send. Beckett never sends on your behalf.", action: "Draft a reply →" },
-  { n: "04", title: "Conversation practice", text: "Rehearse the difficult conversation before it happens, including realistic questions, resistance, and follow-up.", action: "Practice a conversation →" },
-  { n: "05", title: "Calendar and meeting prep", text: "Connect only the calendars you want Beckett to read and prepare for meetings with other attendees. Beckett never edits events.", action: "Prepare for a meeting →" },
-  { n: "06", title: "Skills and support plans", text: "Build practical workplace communication skills in short courses, with more modules arriving during beta.", action: "Explore skills →" },
+  { n: "03", title: "Conversation practice", text: "Rehearse the difficult conversation before it happens, including realistic questions, resistance, and follow-up.", action: "Practice a conversation →" },
+  { n: "04", title: "Calendar and meeting prep", text: "Connect only the calendars you want Beckett to read and prepare for meetings with other attendees. Beckett never edits events.", action: "Prepare for a meeting →" },
+  { n: "05", title: "Skills and support plans", text: "Build practical workplace communication skills in short courses, with more modules arriving during beta.", action: "Explore skills →" },
 ];
 
 const workPatterns = [
@@ -79,9 +78,9 @@ export default function HomePage() {
 
       <section className="hero">
         <div className="beta-badge"><span className="bb-dot" aria-hidden="true" />Public beta · Everything included · No credit card</div>
-        <h1>Communication coaching<br /><em>inside the apps where you work.</em></h1>
+        <h1>Communication coaching for neurodivergent professionals<br /><em>inside the apps where you work.</em></h1>
         <p className="hero-sub">Beckett helps you decode tone, draft replies, and prepare for difficult conversations in Gmail, Slack, Outlook, and Chrome—without pulling every conversation into another app.</p>
-        <div className="hero-actions"><a href="/auth/signup" className="btn-primary">Create your free beta account</a><a href="/slack" className="btn-secondary">Install Beckett for Slack</a></div>
+        <div className="hero-actions"><a href="/auth/signup" className="btn-primary">Create your free beta account</a></div>
         <div className="hero-visual">
           <div className="browser-frame">
             <div className="browser-chrome"><div className="b-dots"><span className="dot-r" /><span className="dot-y" /><span className="dot-g" /></div><div className="b-url">mail.google.com — Inbox</div></div>
@@ -104,7 +103,7 @@ export default function HomePage() {
         { icon: "pi-zoom", letter: "C", name: "Chrome", desc: "Open Beckett from supported work pages without starting over in a separate tab.", status: "Available in beta" },
       ].map((platform) => <div key={platform.name} className="plat-card"><div className={`plat-icon ${platform.icon}`}>{platform.letter}</div><div className="plat-name">{platform.name}</div><div className="plat-desc">{platform.desc}</div><div className="plat-live">{platform.status}</div></div>)}</div></div></div>
 
-      <section id="skills"><div className="container"><div className="sec-label">Conversations you can practice</div><h2>Rehearse before the words<br /><em>have to count.</em></h2><p className="sec-sub">Choose a real workplace situation, practice with realistic pushback, and debrief what worked. These are examples—not customer testimonials.</p><div className="skills-grid">{practiceConversations.map((scenario) => <div key={scenario.situation} className="skill-card"><div className="sk-diff d-med">{scenario.label}</div><div className="sk-situation">&ldquo;{scenario.situation}&rdquo;</div><div className="sk-action">Practice this conversation →</div></div>)}</div></div></section>
+      <section id="skills"><div className="container"><div className="sec-label">Conversations you can practice</div><h2>Rehearse before the words<br /><em>have to count.</em></h2><p className="sec-sub">Choose a real workplace situation, practice with realistic pushback, and debrief what worked. These are examples—not customer testimonials.</p><div className="skills-grid">{practiceConversations.map((scenario) => <div key={scenario.situation} className="skill-card"><div className="sk-diff d-med">{scenario.label}</div><div className="sk-situation">{scenario.situation}</div><div className="sk-action">Practice this conversation →</div></div>)}</div></div></section>
 
       <div className="beta-wrap" id="beta"><div className="container"><div className="sec-label">Public beta</div><h2>Try Beckett now.<br /><em>Help shape what comes next.</em></h2><p className="sec-sub">Create an account immediately. Beta includes 60 successful coaching actions per day, 500 per month, full Practice, and every currently available skill course.</p><a href="/auth/signup" className="btn-primary">Create your free beta account</a><p className="beta-note">No approval wait · No credit card · Course activities do not use coaching credits</p></div></div>
 
