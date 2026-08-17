@@ -712,7 +712,7 @@ export async function sendMessageShortcutResponse({
           "",
           response,
         ].join("\n"),
-        footer: "Guest mode is on for judging. Connecting Slack adds profile, contacts, history, and saved conversations.",
+        footer: "Guest mode uses only the context supplied in this request. Connect Beckett to apply your coaching profile.",
         hideTitle: true,
       });
       await postSlackResponse(responseUrl, responsePayload.text, {

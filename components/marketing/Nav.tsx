@@ -58,7 +58,7 @@ export default function Nav() {
             Sign in
           </Link>
           <Link
-            href="/beta"
+            href="/auth/signup"
             className="bg-primary text-white text-sm rounded-pill px-4 py-2 hover:bg-primary-dark transition-colors"
           >
             Join the beta
@@ -109,7 +109,7 @@ export default function Nav() {
               Sign in
             </Link>
             <Link
-              href="/beta"
+              href="/auth/signup"
               className="bg-primary text-white text-sm rounded-pill px-4 py-2 text-center hover:bg-primary-dark transition-colors"
               onClick={() => setOpen(false)}
             >

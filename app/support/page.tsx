@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata = {
   title: "Support - Beckett",
   description:
-    "Get help with Beckett for Gmail and Outlook, including setup, account access, analysis, drafts, and privacy.",
+    "Get help with Beckett in Google Workspace, Slack, Microsoft 365, and Chrome, including connection status, analysis, drafts, and privacy.",
   alternates: { canonical: "/support" },
 };
 
@@ -23,6 +23,20 @@ const outlookSteps = [
   "Select Read selected item. Beckett does not read the item before this step.",
   "Select Decode with Beckett to request coaching.",
   "In a draft, choose Insert into current draft if you want to use the result. Beckett never sends the message.",
+];
+
+const slackSteps = [
+  "From Beckett Apps, choose Slack and add Beckett to the workspace you use for work.",
+  "Review the requested Slack permissions and finish the secure account connection.",
+  "Use /beckett or a Beckett message action for private decoding, response help, preparation, or practice.",
+  "Return to Beckett Apps to add another workspace, reconnect a degraded connection, or unlink your account.",
+];
+
+const calendarSteps = [
+  "Open Beckett Apps and choose Google Workspace or Microsoft Calendar.",
+  "Connect only the calendar capability you want. Gmail and Google Calendar can be connected independently.",
+  "Choose which calendars Beckett may read. Beckett does not edit events.",
+  "Open Calendar in Beckett to view your week and prepare for meetings with other attendees.",
 ];
 
 const troubleshooting = [
@@ -44,7 +58,7 @@ const troubleshooting = [
   },
   {
     title: "Outlook asks you to sign in",
-    body: "Use Sign in in a new tab, finish signing in to your approved Beckett account, return to Outlook, and select Refresh sign-in.",
+    body: "Use Sign in in a new tab, finish signing in to your Beckett account, return to Outlook, and select Refresh sign-in.",
   },
   {
     title: "Read selected item is unavailable",
@@ -57,6 +71,14 @@ const troubleshooting = [
   {
     title: "The pane does not appear after installation",
     body: "Restart Outlook, then look for Beckett under Apps or the message ribbon. Organization-managed installations can take time to appear.",
+  },
+  {
+    title: "An app shows the wrong connection state",
+    body: "Return to Beckett Apps and refresh the page. Google Workspace may be partially connected, so Gmail and Calendar can show different capability states inside one app card.",
+  },
+  {
+    title: "Slack says reconnect or degraded",
+    body: "Open Beckett Apps, choose Manage workspaces on the Slack card, and reconnect the affected workspace. You can unlink an old connection without uninstalling Beckett for anyone else.",
   },
 ];
 
@@ -98,7 +120,7 @@ export default function SupportPage() {
           <a className="text-primary hover:underline" href="mailto:hello@meetbeckett.co">
             hello@meetbeckett.co
           </a>{" "}
-          for account, privacy, security, or Beckett for Gmail and Outlook
+          for account, privacy, security, or connected-app
           support. Please
           do not include private message content unless our support team asks
           for a redacted example.
@@ -123,6 +145,16 @@ export default function SupportPage() {
               </li>
             ))}
           </ol>
+        </article>
+
+        <article className="rounded-card border border-border bg-white p-6">
+          <h2 className="mb-3 text-2xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Using Beckett in Slack</h2>
+          <ol className="space-y-3">{slackSteps.map((step, index) => <li key={step} className="flex gap-3 text-sm leading-relaxed text-ink-mid"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-xs font-medium text-primary">{index + 1}</span><span>{step}</span></li>)}</ol>
+        </article>
+
+        <article className="rounded-card border border-border bg-white p-6">
+          <h2 className="mb-3 text-2xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Connecting calendars</h2>
+          <ol className="space-y-3">{calendarSteps.map((step, index) => <li key={step} className="flex gap-3 text-sm leading-relaxed text-ink-mid"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-xs font-medium text-primary">{index + 1}</span><span>{step}</span></li>)}</ol>
         </article>
 
         <article className="rounded-card border border-border bg-white p-6">
@@ -175,6 +207,11 @@ export default function SupportPage() {
             emailing support.
           </p>
         </article>
+
+        <div className="flex flex-wrap gap-3">
+          <Link href="/dashboard/apps" className="rounded-pill bg-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-dark">Return to Apps</Link>
+          <Link href="/dashboard" className="rounded-pill border border-border bg-white px-5 py-2.5 text-sm font-medium text-ink hover:bg-primary-light">Return to dashboard</Link>
+        </div>
       </section>
     </main>
   );

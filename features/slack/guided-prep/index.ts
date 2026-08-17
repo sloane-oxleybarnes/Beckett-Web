@@ -30,8 +30,13 @@ import {
   SlackConversationContext,
   type SlackThreadTurn,
 } from "@/lib/slack-app";
-import { extractGuestPrepOutcomeAndConcern } from "@/lib/slack-guest-routing";
+import {
+  extractGuestPrepOutcomeAndConcern,
+  initialPrepOutcomeAndConcern,
+  nextMissingPrepDetail,
+} from "@/lib/slack-guest-routing";
 import { isUserCorrectingWrongFlow } from "@/lib/slack-guided-intent";
+import { slackPracticeGoalQuestion } from "@/lib/slack-practice-copy";
 import type { GuidedAnswers, GuidedFlowType, GuidedStep, PrepScenario, SlackAgentSession, SlackDraftOption } from './schema';
 export type { SlackDraftOption } from './schema';
 import {
@@ -463,7 +468,7 @@ function initialAnswers(
 ): GuidedAnswers {
   const initialRequest = normalizeText(text);
   const initialPrepDetails = flowType === "prep"
-    ? extractGuestPrepOutcomeAndConcern(initialRequest)
+    ? initialPrepOutcomeAndConcern(initialRequest, inferPrepOutcomeFromInitialRequest(initialRequest))
     : { outcome: null, concern: null };
   const prepTopic = flowType === "prep" || flowType === "practice" ? prepTopicFromInitialRequest(initialRequest) : "";
   const sourceAudience =
@@ -484,9 +489,7 @@ function initialAnswers(
     source_channel_name: source?.channelName || undefined,
     source_thread_ts: source?.threadTs || undefined,
     audience: sourceAudience || undefined,
-    outcome: flowType === "prep"
-      ? (initialPrepDetails.concern ? initialPrepDetails.outcome : null) || inferPrepOutcomeFromInitialRequest(initialRequest) || undefined
-      : undefined,
+    outcome: flowType === "prep" ? initialPrepDetails.outcome || undefined : undefined,
     concern: flowType === "prep" ? initialPrepDetails.concern || undefined : undefined,
     extra_context: prepTopic ? [`Initial prep topic: ${prepTopic}.`] : [],
   };
@@ -511,10 +514,16 @@ function nextStepForAnswers(flowType: GuidedFlowType, answers: GuidedAnswers): G
     if (!answers.practice_pushback) return "ask_practice_pushback";
     return null;
   }
-  if (!answers.person) return "ask_person";
-  if (!answers.conversation_location) return "ask_location";
-  if (!answers.outcome) return "ask_outcome";
-  if (!answers.concern) return "ask_concern";
+  const missingPrepDetail = nextMissingPrepDetail({
+    person: answers.person,
+    location: answers.conversation_location,
+    outcome: answers.outcome,
+    concern: answers.concern,
+  });
+  if (missingPrepDetail === "person") return "ask_person";
+  if (missingPrepDetail === "location") return "ask_location";
+  if (missingPrepDetail === "outcome") return "ask_outcome";
+  if (missingPrepDetail === "concern") return "ask_concern";
   return null;
 }
 
@@ -1207,12 +1216,7 @@ function askForStep(session: SlackAgentSession) {
         concernExampleForScenario(scenario),
       ].filter(Boolean).join("\n");
     case "ask_practice_goal":
-      return [
-        `Got it. I’ll role-play as ${normalizePersonForUserDisplay(answers.person) || "the other person"}.`,
-        "",
-        "What do you want to practice getting better at?",
-        "For example: staying direct, not over-apologizing, handling pushback, or asking for clarity.",
-      ].join("\n");
+      return slackPracticeGoalQuestion(normalizePersonForUserDisplay(answers.person));
     case "ask_practice_pushback":
       return [
         "Good. Last setup question:",
@@ -1497,6 +1501,11 @@ async function completeSession(input: GuidedFlowInput, session: SlackAgentSessio
     relationshipContext: input.relationshipContext || null,
     responseDetail: session.flow_type === "prep" || session.flow_type === "practice" || isCompactSlackIntent(session.flow_type) ? "quick" : "longer",
     intent: session.flow_type,
+    initialTemplate:
+      session.flow_type === "respond" ||
+      session.flow_type === "rewrite" ||
+      (session.flow_type === "decode" && !followupText) ||
+      (session.flow_type === "prep" && prompt.startsWith("Create final guided prep")),
   });
   await updateSession(session.id, {
     status:
@@ -1661,7 +1670,10 @@ export async function startGuidedSlackFlow({
   const seededPrompt = sourceChannelName
     ? `${prompt}\n\nStarted from Slack channel: #${sourceChannelName}`
     : prompt;
-  const answers = initialAnswers(seededPrompt, intent, {
+  // Infer details only from what the user actually wrote. `seededPrompt` also
+  // contains Slack source metadata, which must not be mistaken for the medium
+  // of the future conversation the user is preparing for.
+  const answers = initialAnswers(prompt, intent, {
     channelId: sourceChannelId,
     channelName: sourceChannelName,
     threadTs: sourceThreadTs,

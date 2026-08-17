@@ -48,23 +48,6 @@ const SECTIONS: { label: string; description: string; cards: SkillCard[] }[] = [
       },
     ],
   },
-  {
-    label: 'Personal',
-    description: 'A small look at where Beckett will go beyond work later.',
-    cards: [
-      {
-        id: 'ask-someone-out-text',
-        title: 'Asking someone out on a dating app',
-        description: 'Move from chatting to a clear, low-pressure ask with Beckett coaching you through the wording and practice.',
-        href: '/dashboard/courses/ask-someone-out',
-        status: 'live',
-        level: 'Foundational',
-        estimatedMinutes: 45,
-        courseId: 'ask-someone-out',
-        illustration: 'date',
-      },
-    ],
-  },
 ]
 
 function LineIllustration({ type }: { type: SkillCard['illustration'] }) {
@@ -139,7 +122,7 @@ function SkillModuleCard({
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <h2 className="text-base font-medium text-ink">{card.title}</h2>
           {!isLive && (
-            <span className="rounded-pill bg-bg px-2 py-0.5 text-xs text-ink-light">Coming soon</span>
+            <span className="rounded-pill bg-bg px-2 py-0.5 text-xs text-ink-light">Coming during beta</span>
           )}
           {isCompleted && (
             <span className="rounded-pill border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700">Course completed</span>
@@ -183,11 +166,6 @@ export default function SkillsPage() {
                 description: 'Foundational workplace courses we are building for beta.',
                 cards: catalogData.courses.filter((course) => course.section === 'Professional'),
               },
-              {
-                label: 'Personal',
-                description: 'A small look at where Beckett will go beyond work later.',
-                cards: catalogData.courses.filter((course) => course.section === 'Personal'),
-              },
             ].filter((section) => section.cards.length > 0))
           } else {
             setSections(SECTIONS)
@@ -222,13 +200,6 @@ export default function SkillsPage() {
       <p className="mb-10 text-sm text-ink-mid">
         Beckett coaches you through real situations, then gives you space to practice before you try it live.
       </p>
-
-      <div className="mb-10 rounded-card border border-border bg-white p-5 sm:p-6">
-        <p className="text-xs font-medium uppercase tracking-wide text-primary">From learning to real life</p>
-        <h2 className="mt-1 text-2xl text-ink" style={{ fontFamily: 'var(--font-dm-serif), Georgia, serif' }}>Learn it, then try it in your own words.</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-mid">Courses offer a practical strategy. Practice lets you rehearse it before a conversation feels urgent.</p>
-        <Link href="/dashboard/practice?mode=professional" className="mt-4 inline-flex rounded-pill border border-primary/30 px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light">Open Practice</Link>
-      </div>
 
       <SavedLearningRecommendations />
 

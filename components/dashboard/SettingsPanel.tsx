@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import type { Profile } from "@/lib/supabase";
 import {
@@ -131,72 +131,6 @@ function CustomPreferenceControls({
   );
 }
 
-type Diagnostics = {
-  beckett: {
-    authenticated: boolean;
-    email: string | null;
-    plan: string;
-  };
-  extension: {
-    tokenIssued: boolean;
-    lastProfileSyncAt: string | null;
-  };
-  integrations: {
-    slack: {
-      connected: boolean;
-      userId?: string | null;
-      teamId?: string | null;
-      teamName?: string | null;
-      connectedAt?: string | null;
-      updatedAt?: string | null;
-    };
-    google: {
-      connected: boolean;
-      email?: string | null;
-      connectedAt?: string | null;
-      updatedAt?: string | null;
-    };
-    microsoft: {
-      connected: boolean;
-      email?: string | null;
-      connectedAt?: string | null;
-      updatedAt?: string | null;
-    };
-  };
-  aiUsage: {
-    limit: number;
-    used: number;
-    remaining: number;
-    unlimited?: boolean;
-  };
-  api: {
-    reachable: boolean;
-    checkedAt: string;
-  };
-};
-
-function HealthPill({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-pill px-2.5 py-1 text-xs font-medium ${
-        ok ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
-      }`}
-    >
-      {ok ? "OK" : "!"} {label}
-    </span>
-  );
-}
-
-function formatDiagnosticDate(value?: string | null) {
-  if (!value) return "Not recorded";
-  return new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 export default function SettingsPage() {
   const supabase = createClient();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -211,11 +145,9 @@ export default function SettingsPage() {
   const [preferences, setPreferences] = useState<string[]>([]);
   const [coachingTone, setCoachingTone] = useState<CoachingTone>("direct_kind");
   const [customPreferences, setCustomPreferences] = useState("");
+  const [coachingSettingsEditing, setCoachingSettingsEditing] = useState(false);
   const [deletionNotes, setDeletionNotes] = useState("");
   const [deletionStatus, setDeletionStatus] = useState<"idle" | "loading" | "requested" | "error">("idle");
-  const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
-  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
-  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -234,24 +166,6 @@ export default function SettingsPage() {
         });
     });
   }, [supabase]);
-
-  const loadDiagnostics = useCallback(async () => {
-    setDiagnosticsLoading(true);
-    setDiagnosticsError(null);
-    try {
-      const res = await fetch("/api/extension/diagnostics", { cache: "no-store" });
-      if (!res.ok) throw new Error("Could not load diagnostics.");
-      setDiagnostics((await res.json()) as Diagnostics);
-    } catch (error) {
-      setDiagnosticsError(error instanceof Error ? error.message : "Could not load diagnostics.");
-    } finally {
-      setDiagnosticsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadDiagnostics();
-  }, [loadDiagnostics]);
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -279,6 +193,7 @@ export default function SettingsPage() {
 
     await supabase.from("profiles").update(update).eq("id", user.id);
     setProfile((current) => current ? { ...current, ...update } : current);
+    setCoachingSettingsEditing(false);
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 3000);
   }
@@ -302,6 +217,19 @@ export default function SettingsPage() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id);
+    setProfile((current) => current ? {
+      ...current,
+      communication_preferences: [],
+      coaching_tone: "direct_kind",
+    } : current);
+    setCoachingSettingsEditing(false);
+  }
+
+  function cancelCoachingSettingsEdit() {
+    setPreferences(profile?.communication_preferences || []);
+    setCoachingTone(profile?.coaching_tone || "direct_kind");
+    setCustomPreferences("");
+    setCoachingSettingsEditing(false);
   }
 
   function addCustomPreferences() {
@@ -368,6 +296,9 @@ export default function SettingsPage() {
       </div>
     );
   }
+
+  const selectedCoachingTone = coachingToneOptions.find((option) => option.value === coachingTone)
+    || coachingToneOptions[0];
 
   return (
     <div className="max-w-xl">
@@ -475,17 +406,54 @@ export default function SettingsPage() {
 
       {/* Beckett coaching settings */}
       <section className="bg-white rounded-card border border-border p-6 mb-5">
-        <h2
-          className="text-lg text-ink mb-1"
-          style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-        >
-          Beckett&apos;s Coaching Settings
-        </h2>
-        <p className="text-sm text-ink-mid mb-5">
-          Choose how Beckett coaches, explains, and drafts with you. Personal profile details
-          live in About Me.
-        </p>
-        <form onSubmit={saveCoachingSettings} className="space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <h2
+            className="text-lg text-ink"
+            style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
+          >
+            Beckett&apos;s Coaching Settings
+          </h2>
+          {!coachingSettingsEditing && (
+            <button
+              type="button"
+              onClick={() => setCoachingSettingsEditing(true)}
+              aria-controls="coaching-settings-editor"
+              aria-expanded="false"
+              className="shrink-0 rounded-pill border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-primary-mid hover:bg-primary-light"
+            >
+              Edit
+            </button>
+          )}
+        </div>
+
+        {!coachingSettingsEditing ? (
+          <div className="mt-5 space-y-5">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">What Beckett helps with</p>
+              {preferences.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {preferences.map((preference) => (
+                    <span key={preference} className="rounded-pill border border-primary/20 bg-primary-light px-3 py-1.5 text-xs text-primary">
+                      {preference}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-ink-light">Nothing selected</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Coaching tone</p>
+              <p className="mt-2 text-sm font-medium text-ink">{selectedCoachingTone.label}</p>
+              <p className="mt-1 text-xs leading-relaxed text-ink-mid">{selectedCoachingTone.description}</p>
+            </div>
+          </div>
+        ) : (
+        <form id="coaching-settings-editor" onSubmit={saveCoachingSettings} className="mt-5 space-y-6">
+          <p className="text-sm text-ink-mid">
+            Choose how Beckett coaches, explains, and drafts with you. Personal profile details
+            live in About Me.
+          </p>
           <div>
             <label className="block text-sm font-medium text-ink mb-2">What I Want Beckett to Help Me With</label>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -542,114 +510,16 @@ export default function SettingsPage() {
             >
               Clear settings
             </button>
+            <button
+              type="button"
+              onClick={cancelCoachingSettingsEdit}
+              className="text-sm px-2 py-2 text-ink-mid hover:text-ink transition-colors"
+            >
+              Cancel
+            </button>
           </div>
         </form>
-      </section>
-
-      {/* Beta diagnostics */}
-      <section className="bg-white rounded-card border border-border p-6 mb-5">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div>
-            <h2
-              className="text-lg text-ink mb-1"
-              style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-            >
-              Beta diagnostics
-            </h2>
-            <p className="text-sm text-ink-mid">
-              Quick health check for account access, integrations, and beta AI usage.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadDiagnostics()}
-            disabled={diagnosticsLoading}
-            className="shrink-0 text-xs border border-border rounded-pill px-4 py-1.5 text-ink hover:bg-bg transition-colors disabled:opacity-50"
-          >
-            {diagnosticsLoading ? "Checking..." : "Refresh"}
-          </button>
-        </div>
-
-        {diagnosticsError && (
-          <div
-            className="rounded-sm border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"
-            role="alert"
-          >
-            {diagnosticsError}
-          </div>
         )}
-
-        {diagnostics ? (
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <HealthPill ok={diagnostics.beckett.authenticated} label="Beckett login" />
-              <HealthPill ok={diagnostics.extension.tokenIssued} label="Extension token" />
-              <HealthPill ok={diagnostics.integrations.slack.connected} label="Slack" />
-              <HealthPill ok={diagnostics.integrations.google.connected} label="Google" />
-              <HealthPill ok={diagnostics.integrations.microsoft.connected} label="Microsoft 365" />
-              <HealthPill ok={diagnostics.api.reachable} label="API reachable" />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Account</p>
-                <p className="mt-1 text-sm text-ink">{diagnostics.beckett.email || profile.email}</p>
-                <p className="text-xs text-ink-light capitalize">Plan: {diagnostics.beckett.plan}</p>
-              </div>
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">AI usage today</p>
-                {diagnostics.aiUsage.unlimited ? (
-                  <>
-                    <p className="mt-1 text-sm text-ink">Unlimited tester access</p>
-                    <p className="text-xs text-ink-light">{diagnostics.aiUsage.used} calls logged today</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-1 text-sm text-ink">
-                      {diagnostics.aiUsage.used}/{diagnostics.aiUsage.limit} used
-                    </p>
-                    <p className="text-xs text-ink-light">{diagnostics.aiUsage.remaining} remaining</p>
-                  </>
-                )}
-              </div>
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Slack</p>
-                {diagnostics.integrations.slack.connected ? (
-                  <>
-                    <p className="mt-1 text-sm text-ink">
-                      {diagnostics.integrations.slack.teamName || "Workspace connected"}
-                    </p>
-                    <p className="text-xs text-ink-light">
-                      User: {diagnostics.integrations.slack.userId || "unknown"}
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-1 text-sm text-amber-700">Not connected in web app settings</p>
-                )}
-              </div>
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Last check</p>
-                <p className="mt-1 text-sm text-ink">{formatDiagnosticDate(diagnostics.api.checkedAt)}</p>
-                <p className="text-xs text-ink-light">
-                  Extension sync: {formatDiagnosticDate(diagnostics.extension.lastProfileSyncAt)}
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs text-ink-light">
-              If Slack shows connected here but analysis still fails, reload the Chrome extension and reconnect
-              Slack from the extension popup so the local browser token is refreshed too.
-            </p>
-          </div>
-        ) : !diagnosticsError ? (
-          <div
-            className="rounded-sm border border-border bg-bg/60 p-4 text-sm text-ink-light"
-            role="status"
-            aria-live="polite"
-          >
-            {diagnosticsLoading ? "Checking beta systems..." : "Run a health check to see current status."}
-          </div>
-        ) : null}
       </section>
 
       {/* Beta code */}

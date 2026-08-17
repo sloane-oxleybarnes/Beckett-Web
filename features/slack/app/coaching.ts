@@ -2,10 +2,12 @@ import { callAnthropic } from '@/lib/anthropic'
 import { AiUsageLimitError } from '@/lib/ai-usage'
 import { trackBetaEvent } from '@/lib/beta-events'
 import { beckettBoundaryPrompt } from '@/lib/beckett-boundaries'
-import { formatCoachingProfileForPrompt } from '@/lib/coaching-profile'
+import { buildCoachingProfileBehavior, coachingToneContract, formatCoachingProfileForPrompt } from '@/lib/coaching-profile'
 import { selectSlackAgentTool, slackAgentToolInstruction } from '@/lib/slack-agent-tools'
 import { formatSlackPrepAssessment } from '@/lib/slack-prep-copy'
 import { registerSlackCreditForResponse } from '@/lib/slack-credits'
+import { SLACK_PRACTICE_INTENT_RULE } from '@/lib/slack-practice-copy'
+import { formatSlackInitialResponse, limitSlackDecodeWords, normalizeSlackPracticeCopy } from '@/lib/slack-response-format'
 import { metering } from '@/lib/metering'
 import { isRelationshipHistoryPrompt, slackNoContextPromptInstruction, SLACK_RELATIONSHIP_LIMITATION_NOTE } from './context'
 import {
@@ -27,6 +29,7 @@ export async function runSlackCoaching({
   relationshipContext,
   responseDetail,
   intent = "general",
+  initialTemplate = action !== "agent_message",
 }: {
   user: SlackConnectedUser;
   action: "slash_command" | "message_shortcut" | "agent_message";
@@ -40,6 +43,7 @@ export async function runSlackCoaching({
   relationshipContext?: string | null;
   responseDetail?: SlackResponseDetail;
   intent?: SlackCoachingIntent;
+  initialTemplate?: boolean;
 }) {
   void sourceLabel;
   if (contextStatus) {
@@ -67,6 +71,24 @@ export async function runSlackCoaching({
   const isRelationshipRequest = isRelationshipHistoryPrompt(prompt);
   const shouldShowRelationshipLimitation =
     isRelationshipRequest && contextStatus === "available" && !broaderSearchUsed;
+
+  const profileInput = {
+    display_name: user.name,
+    communication_preferences: user.communicationPreferences,
+    coaching_tone: user.coachingTone,
+    strengths: user.strengths,
+    workplace_triggers: user.workplaceTriggers,
+    neurodivergent_context: user.neurodivergentContext,
+    neurodivergent_context_other: user.neurodivergentContextOther,
+  };
+  const profileBehavior = buildCoachingProfileBehavior(profileInput);
+  const toneContract = coachingToneContract(user.coachingTone);
+  const presentationConstraint =
+    profileBehavior.instrumentation.responseLengthClass === "detailed"
+      ? "For an initial Decode, detailed coaching must use the available space to explain evidence, uncertainty, social logic, and why the next move works. Target 170-210 words and keep it scannable with compact bullets. Suggested user messages must still follow any saved concision preference."
+      : profileBehavior.instrumentation.responseLengthClass === "short"
+        ? "For an initial Decode, target 25-45 words and never exceed 60. Keep only the most defensible read and immediate action; add suggested wording only when requested or clearly useful."
+        : "For compact Slack flows, normally use no more than 140 words and 9 nonblank lines. Keep the response scannable without flattening the selected coaching style.";
 
   const system = `You are Beckett, a workplace and workplace-adjacent communication coach for neurodivergent professionals.
 	You are responding inside Slack, so be concise, practical, and easy to scan.
@@ -103,8 +125,10 @@ During an active Respond task, additional context refines the existing drafts. D
 When the user asks to shorten or revise a named draft option, revise only that option and preserve the original selected-message context.
 	For Rewrite, do not restate the user's draft or request before the answer. Start directly with “Here are three options:” when offering variants. Preserve the original meaning and boundary, apply the requested tone change, and make the options meaningfully different rather than near-duplicates.
 	For Decode, lead with a short likely read, then concise visible evidence, one or two possible interpretations, and a practical next step. Always name ambiguity or an alternative interpretation; never present inferred intent as fact. Use visible reactions and surrounding channel context when provided. Avoid walls of text.
-	For compact Slack flows, use no more than 100 words and no more than 5 nonblank lines. For final Prep assessments, return exactly three nonblank lines—Goal, Say this first, and If they push back—using no more than 110 words total. Include the user's concrete outcome, a complete usable opening, and both the likely concern and a practical response to it. Never omit the pushback line.
+${presentationConstraint}
+For final Prep assessments, return exactly three sections—Goal, Say this first, and If they push back—using no more than 140 words total. Include the user's concrete outcome, a complete usable opening, and both the likely concern and a practical response to it. Never omit the pushback section.
 For difficult conversation prep, keep the answer focused on the goal, first sentence, likely pushback, what to watch for, and one next practice step.
+${SLACK_PRACTICE_INTENT_RULE}
 Beckett suggests and coaches; it does not tell the user to act automatically.
 Do not add generic privacy or shared-channel warnings just because Slack context includes both personal and work topics.
 Only mention privacy, shared-channel, or workplace policy risk when the user's request is about posting in a public/shared channel, the context clearly includes sensitive personal information, or the requested message could create a concrete workplace safety or policy concern.
@@ -112,20 +136,29 @@ ${slackAgentToolInstruction(agentTool)}
 ${beckettBoundaryPrompt()}`;
 
   const coachingProfileContext = formatCoachingProfileForPrompt(
-    {
-      display_name: user.name,
-      communication_preferences: user.communicationPreferences,
-      coaching_tone: user.coachingTone,
-      strengths: user.strengths,
-      workplace_triggers: user.workplaceTriggers,
-      neurodivergent_context: user.neurodivergentContext,
-      neurodivergent_context_other: user.neurodivergentContextOther,
-    },
+    profileInput,
     user.toolkitItems
   );
+  const initialTemplateLine = initialTemplate
+    ? intent === "decode"
+      ? "Initial result format: use exactly Possible read and Next move. Keep social-context explanation inside those sections."
+      : intent === "respond"
+        ? "Initial result format: return exactly three parallel Slack-ready options labeled Confirm, Negotiate, and Clarify."
+        : intent === "rewrite"
+          ? "Initial result format: start with Here are three options, then return exactly Direct but kind, Warm and collaborative, and Concise."
+          : intent === "prep"
+            ? "Initial result format: return exactly Goal, Say this first, and If they push back."
+            : ""
+    : "This is a conversational follow-up. Respond naturally instead of forcing the initial-result template.";
   const responseDetailLine =
     responseDetail === "quick"
-      ? "Response length: Quick answer. Keep it concise: 2-4 practical bullets, plus suggested wording only if useful. Keep the complete answer under 500 characters."
+      ? profileBehavior.instrumentation.responseLengthClass === "detailed"
+        ? "Response length: Scannable detailed answer. For Decode, materially explain the visible evidence, uncertainty, useful social logic, and why the next step works; target 170-210 words and stay under 1750 characters. Keep suggested user wording concise when that preference is selected."
+        : profileBehavior.instrumentation.responseLengthClass === "short"
+          ? "Response length: Short answer. For Decode, target 25-45 words, never exceed 60, and stay under 450 characters. Give only the defensible read and immediate action, with no secondary theory."
+          : toneContract
+            ? `Response length: For an initial Decode, target ${toneContract.targetWords[0]}-${toneContract.targetWords[1]} words, never exceed ${toneContract.maximumWords}, and stay under ${toneContract.quickCharacterLimit} characters. Preserve the selected profile's required behavior instead of defaulting every profile to the same compact answer.`
+            : "Response length: Quick answer. Keep it concise: 2-4 practical bullets, plus suggested wording only if useful. Keep the complete answer under 800 characters."
       : responseDetail === "longer"
         ? "Response length: Longer explanation. Give more context about likely tone/subtext, what to watch for, next steps, and suggested wording. Keep it scannable in Slack and under 1700 characters."
         : "Response length: Default Slack coaching response. Be concise but useful.";
@@ -145,6 +178,7 @@ ${beckettBoundaryPrompt()}`;
     : "";
   const userPrompt = `Requester identity: ${user.name || "connected Slack user"}.
 ${coachingProfileContext || "The user has not set specific Beckett coaching preferences yet."}
+${initialTemplateLine}
 ${responseDetailLine}
 ${contextLine}
 ${relationshipLimitationLine}
@@ -153,7 +187,11 @@ ${slackIntentInstruction(intent)}
 User request:
 ${prompt}${relationshipLine}${messageLine}`;
 
-  const maxTokens = responseDetail === "longer" ? 700 : responseDetail === "quick" ? 240 : 800;
+  const maxTokens = profileBehavior.instrumentation.responseLengthClass === "detailed"
+    ? responseDetail === "quick" ? 520 : 900
+    : profileBehavior.instrumentation.responseLengthClass === "short"
+      ? 220
+      : responseDetail === "longer" ? 700 : responseDetail === "quick" ? 320 : 800;
   let text: string;
   try {
     text = await callAnthropic(system, [{ role: "user", content: userPrompt }], maxTokens);
@@ -184,24 +222,35 @@ ${prompt}${relationshipLine}${messageLine}`;
     shouldShowRelationshipLimitation && !text.includes(SLACK_RELATIONSHIP_LIMITATION_NOTE)
       ? `${text.trim()}\n\n${SLACK_RELATIONSHIP_LIMITATION_NOTE}`
       : text;
-  const cleaned = withRelationshipLimitation.trim() || "I could not generate a response for that Slack request.";
+  const rawCleaned = withRelationshipLimitation.trim() || "I could not generate a response for that Slack request.";
+  const cleaned = initialTemplate && (intent === "decode" || intent === "respond" || intent === "rewrite" || intent === "prep")
+    ? formatSlackInitialResponse(rawCleaned, intent)
+    : intent === "practice"
+      ? normalizeSlackPracticeCopy(rawCleaned)
+      : rawCleaned;
+  const contractLimited = initialTemplate && intent === "decode" && toneContract
+    ? limitSlackDecodeWords(cleaned, toneContract.maximumWords)
+    : cleaned;
   if (broaderSearchUsed && intent === "general") {
-    const directResult = cleaned
+    const directResult = contractLimited
       .split("\n")
       .map((line) => line.trim())
       .find((line) => line && !/^~?\s*(?:result|answer|source)\s*~?:?$/i.test(line));
-    const final = fitSlackAnswer(directResult || cleaned, 220);
+    const final = fitSlackAnswer(directResult || contractLimited, 220);
     registerSlackCreditForResponse(final, { reservationId: credit.id, eventType: action, flowType: intent });
     return final;
   }
   if (responseDetail === "quick" && intent === "prep") {
-    const final = compactSlackPrepAssessment(cleaned);
+    const final = compactSlackPrepAssessment(contractLimited);
     registerSlackCreditForResponse(final, { reservationId: credit.id, eventType: action, flowType: intent });
     return final;
   }
   const final = responseDetail === "quick"
-    ? fitSlackAnswer(compactSlackResponseLayout(cleaned), compactSlackLimit(intent))
-    : responseDetail === "longer" ? fitSlackAnswer(cleaned, MAX_LONGER_SLACK_ANSWER_LENGTH) : truncateSlackText(cleaned);
+    ? fitSlackAnswer(
+        compactSlackResponseLayout(contractLimited),
+        compactSlackLimit(intent, profileBehavior.instrumentation.responseLengthClass, toneContract?.quickCharacterLimit)
+      )
+    : responseDetail === "longer" ? fitSlackAnswer(contractLimited, MAX_LONGER_SLACK_ANSWER_LENGTH) : truncateSlackText(contractLimited);
   registerSlackCreditForResponse(final, { reservationId: credit.id, eventType: action, flowType: intent });
   return final;
 }
@@ -263,7 +312,8 @@ During an active Respond task, additional context refines the existing drafts. D
 When the user asks to shorten or revise a named draft option, revise only that option and preserve the original selected-message context.
 For Rewrite, do not restate the user's draft or request before the answer. Start directly with “Here are three options:” when offering variants. Preserve the original meaning and boundary, apply the requested tone change, and make the options meaningfully different rather than near-duplicates.
 For Decode, lead with a short likely read, then concise visible evidence, one or two possible interpretations, and a practical next step. Use visible reactions and surrounding channel context when provided. Avoid walls of text.
-For prep or practice, give a useful lightweight coaching response from the user request without asking them to connect a Beckett profile.
+For prep, give useful lightweight preparation from the user request without asking them to connect a Beckett profile.
+For practice, give a useful lightweight role-play response from the user request without asking them to connect a Beckett profile. ${SLACK_PRACTICE_INTENT_RULE}
 For prep, enforce this guided order inside the exact Slack thread: person and situation, conversation location or medium, desired outcome, concern or likely pushback, then concise final prep. Infer and skip the location question when the user already clearly says Slack/written message, video/phone call, or in person. Ask only the earliest unanswered question. If the user directly requests intros, drafts, or another concrete deliverable, answer that request immediately using the thread context.
 For final prep, tailor the advice to the conversation medium and use only concise sections that help: Goal, Say this first, If they push back. Do not recap the whole conversation, give a long menu, repeat information the user already supplied, or ask which portion they want to practice.
 For practice, start with a short setup and one realistic first line only when the Slack thread does not show that role-play has already started.
@@ -289,8 +339,14 @@ ${beckettBoundaryPrompt()}`;
     await metering.slack.release(credit).catch(() => undefined);
     throw error;
   }
+  const guestRaw = text.trim() || "I could not generate a response for that Slack request.";
+  const guestFormatted = intent === "decode" || intent === "respond" || intent === "rewrite" || intent === "prep"
+    ? formatSlackInitialResponse(guestRaw, intent)
+    : intent === "practice"
+      ? normalizeSlackPracticeCopy(guestRaw)
+      : guestRaw;
   const final = fitSlackAnswer(
-    text.trim() || "I could not generate a response for that Slack request.",
+    guestFormatted,
     intent === "practice" ? 800 : intent === "prep" ? 1200 : MAX_QUICK_SLACK_ANSWER_LENGTH
   );
   registerSlackCreditForResponse(final, { reservationId: credit.id, eventType: action, flowType: intent });
@@ -306,7 +362,14 @@ export function handleSlackAiError(error: unknown) {
   return "Slack coaching failed.";
 }
 
-function compactSlackLimit(intent: SlackCoachingIntent) {
+function compactSlackLimit(
+  intent: SlackCoachingIntent,
+  profileLength: "short" | "standard" | "detailed" = "standard",
+  toneCharacterLimit?: number,
+) {
+  if (toneCharacterLimit && intent === "decode") return toneCharacterLimit;
+  if (profileLength === "detailed" && (intent === "respond" || intent === "rewrite")) return 1200;
+  if (profileLength === "short") return 420;
   if (intent === "practice") return 420;
   if (intent === "decode" || intent === "relationship") return 500;
   if (intent === "rewrite" || intent === "respond") return 540;

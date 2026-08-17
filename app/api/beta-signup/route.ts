@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
   const normalizedEmail = email.trim().toLowerCase();
   const sourceValue = source || "landing_page";
   const planValue = plan || "beta";
+  const now = new Date().toISOString();
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,8 +27,10 @@ export async function POST(req: NextRequest) {
     name,
     source: sourceValue,
     plan: planValue,
-    lifecycle_stage: "requested_access",
-    last_activity_at: new Date().toISOString(),
+    lifecycle_stage: "approved",
+    approved: true,
+    approved_at: now,
+    last_activity_at: now,
   }, { onConflict: "email" });
 
   if (error && error.code !== "23505") {
@@ -41,10 +44,11 @@ export async function POST(req: NextRequest) {
     plan: planValue,
     source: sourceValue,
     properties: {
-      beckett_beta_status: "requested_access",
+      beckett_beta_status: "approved",
       beckett_plan: planValue,
       beckett_source: sourceValue,
-      beckett_last_active_at: new Date().toISOString(),
+      beckett_approved_at: now,
+      beckett_last_active_at: now,
     },
   });
 

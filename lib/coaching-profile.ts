@@ -1,4 +1,3 @@
-import { coachingToneOptions } from "@/lib/onboarding";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type CoachingProfileRow = {
@@ -27,7 +26,205 @@ type PatternObservationRow = {
   coaching_note?: string | null;
 };
 
-const toneLabels = new Map(coachingToneOptions.map((option) => [option.value, option.label]));
+export type CoachingProfileDirectiveId =
+  | "social_context"
+  | "next_steps"
+  | "advocacy"
+  | "warmer_drafts"
+  | "concise_drafts"
+  | "direct_drafts";
+
+export type CoachingProfileLengthClass = "short" | "standard" | "detailed";
+
+export type CoachingToneContract = {
+  label: string;
+  minimumWords: number;
+  targetWords: readonly [number, number];
+  maximumWords: number;
+  quickCharacterLimit: number;
+  requirements: readonly string[];
+};
+
+export type CoachingProfileInstrumentation = {
+  profileIncluded: boolean;
+  tone: string | null;
+  directiveIds: CoachingProfileDirectiveId[];
+  preferenceCount: number;
+  responseLengthClass: CoachingProfileLengthClass;
+};
+
+const toneLabels = new Map<string, string>([
+  ["direct_kind", "Direct but kind"],
+  ["gentle_reassuring", "Gentle and reassuring"],
+  ["blunt_practical", "Blunt and practical"],
+  ["detailed_explanatory", "Detailed and explanatory"],
+  ["short_concise", "Short and concise"],
+]);
+
+export const coachingToneContracts: Record<string, CoachingToneContract> = {
+  direct_kind: {
+    label: "Direct but kind",
+    minimumWords: 65,
+    targetWords: [70, 95],
+    maximumWords: 120,
+    quickCharacterLimit: 950,
+    requirements: [
+      "State the defensible read clearly.",
+      "Correct over-reading with respectful, low-shame language.",
+      "Give one concrete action and one short example when useful.",
+    ],
+  },
+  gentle_reassuring: {
+    label: "Gentle and reassuring",
+    minimumWords: 80,
+    targetWords: [90, 115],
+    maximumWords: 140,
+    quickCharacterLimit: 1100,
+    requirements: [
+      "Explicitly validate why the uncertainty is understandable.",
+      "Use noticeable emotional cushioning and grounded encouragement.",
+      "Preserve uncertainty and never invent reassurance.",
+      "End with one manageable next action.",
+    ],
+  },
+  blunt_practical: {
+    label: "Blunt and practical",
+    minimumWords: 45,
+    targetWords: [50, 70],
+    maximumWords: 90,
+    quickCharacterLimit: 700,
+    requirements: [
+      "Lead with the bottom line.",
+      "Use minimal reassurance and no unnecessary explanation.",
+      "Give the immediate action.",
+    ],
+  },
+  detailed_explanatory: {
+    label: "Detailed and explanatory",
+    minimumWords: 150,
+    targetWords: [170, 210],
+    maximumWords: 235,
+    quickCharacterLimit: 1750,
+    requirements: [
+      "Explain the visible evidence and what remains uncertain.",
+      "Explain relevant hierarchy, timing, ownership, or social logic.",
+      "Explain why the recommended action works.",
+      "Use compact bullets when they improve scanning.",
+    ],
+  },
+  short_concise: {
+    label: "Short and concise",
+    minimumWords: 20,
+    targetWords: [25, 45],
+    maximumWords: 60,
+    quickCharacterLimit: 450,
+    requirements: [
+      "Include only the most defensible interpretation and immediate action.",
+      "Do not add secondary theories or extra speculation, including upstream pressure, stakeholders, protective cover, or an unmentioned motive.",
+      "Include suggested wording only when requested or clearly useful.",
+    ],
+  },
+};
+
+export function coachingToneContract(tone?: string | null): CoachingToneContract | null {
+  return tone ? coachingToneContracts[tone] || null : null;
+}
+
+export function formatCoachingToneContract(tone?: string | null) {
+  const contract = coachingToneContract(tone);
+  if (!contract) return "";
+  return [
+    `Output contract for ${contract.label}: target ${contract.targetWords[0]}-${contract.targetWords[1]} words for an initial Decode and never exceed ${contract.maximumWords} words unless safety requires otherwise.`,
+    ...contract.requirements.map((requirement) => `- ${requirement}`),
+  ].join("\n");
+}
+
+const toneInstructions = new Map<string, string>([
+  [
+    "direct_kind",
+    "Coaching style: be clear and specific while using respectful, low-shame language. Name the practical issue directly, then give a kind, usable next step.",
+  ],
+  [
+    "gentle_reassuring",
+    "Coaching style: add noticeable emotional cushioning, validation, and low-shame framing. Acknowledge that ambiguity or tension can feel difficult, then give a concrete next step. Do not become vague, invent reassurance, or soften factual uncertainty.",
+  ],
+  [
+    "blunt_practical",
+    "Coaching style: lead with the bottom line. Be direct, action-focused, and economical; use minimal reassurance and move quickly to what the user can do next.",
+  ],
+  [
+    "detailed_explanatory",
+    "Coaching style: explain the visible cues, the social logic behind plausible interpretations, and why the recommended next move helps. Use compact bullets and clear structure so the added context remains easy to scan.",
+  ],
+  [
+    "short_concise",
+    "Coaching style: keep only the bottom line and the most useful next action. Remove background explanation unless it is required for safety or uncertainty.",
+  ],
+]);
+
+function preferenceDirectiveId(value: string): CoachingProfileDirectiveId | null {
+  const normalized = value.toLowerCase();
+  if (/social context|social logic|subtext/.test(normalized)) return "social_context";
+  if (/what to do next|choose what to do|next step/.test(normalized)) return "next_steps";
+  if (/advocat|speak up for|state my needs/.test(normalized)) return "advocacy";
+  if (/warm/.test(normalized)) return "warmer_drafts";
+  if (/concis|shorter|brief/.test(normalized)) return "concise_drafts";
+  if (/more direct|directer|less indirect/.test(normalized)) return "direct_drafts";
+  return null;
+}
+
+const preferenceInstructions: Record<CoachingProfileDirectiveId, string> = {
+  social_context:
+    "Explain relevant social context inside the normal analysis: connect wording, timing, hierarchy, or conversational norms to the likely read. Do not replace the basic Decode or Respond answer with a separate social-context essay.",
+  next_steps: "Always make the next practical choice or action explicit.",
+  advocacy:
+    "Help the user state needs, limits, or requests without apologizing away the substance. Preserve their agency and legitimate boundary.",
+  warmer_drafts:
+    "Suggested wording written for the user should sound warmer and more collaborative while preserving the request and boundary.",
+  concise_drafts:
+    "Suggested wording written for the user must be concise. This preference limits the user's drafts, not the detail of Beckett's coaching explanation.",
+  direct_drafts:
+    "Suggested wording written for the user should make the request, decision, or boundary more direct without becoming harsh.",
+};
+
+export function coachingProfileLengthClass(tone?: string | null): CoachingProfileLengthClass {
+  if (tone === "detailed_explanatory") return "detailed";
+  if (tone === "short_concise") return "short";
+  return "standard";
+}
+
+export function buildCoachingProfileBehavior(profile?: CoachingProfileRow | null) {
+  const preferences = (profile?.communication_preferences || []).filter(
+    (value): value is string => typeof value === "string" && Boolean(value.trim())
+  );
+  const directiveIds = Array.from(
+    new Set(preferences.map(preferenceDirectiveId).filter((value): value is CoachingProfileDirectiveId => Boolean(value)))
+  );
+  const tone = profile?.coaching_tone || null;
+  const responseLengthClass = coachingProfileLengthClass(tone);
+  const behaviorLines = [
+    tone
+      ? toneInstructions.get(tone) || `Coaching style: honor the user's selected tone, ${toneLabels.get(tone as never) || tone}.`
+      : null,
+    formatCoachingToneContract(tone),
+    ...directiveIds.map((id) => preferenceInstructions[id]),
+    tone === "detailed_explanatory" && directiveIds.includes("concise_drafts")
+      ? "Conflict resolution: give detailed, explanatory coaching in compact bullets, while keeping every proposed message for the user short. Do not shorten the analysis merely because the user's own drafts should be concise."
+      : null,
+    "Profile preferences never override truthfulness, uncertainty, privacy, authorization, safety, or the user's current request.",
+  ].filter(Boolean) as string[];
+
+  return {
+    behaviorLines,
+    instrumentation: {
+      profileIncluded: Boolean(tone || preferences.length),
+      tone,
+      directiveIds,
+      preferenceCount: preferences.length,
+      responseLengthClass,
+    } satisfies CoachingProfileInstrumentation,
+  };
+}
 
 export function cleanToolkitContent(value: unknown, max = 220) {
   if (typeof value !== "string") return "";
@@ -58,6 +255,8 @@ export function formatCoachingProfileForPrompt(
 ) {
   if (!profile) return formatToolkitItemsForPrompt(toolkitItems);
 
+  const behavior = buildCoachingProfileBehavior(profile);
+
   const lines = [
     profile.display_name || profile.first_name || profile.full_name
       ? `Preferred name: ${profile.display_name || profile.first_name || profile.full_name}.`
@@ -68,6 +267,7 @@ export function formatCoachingProfileForPrompt(
     profile.coaching_tone
       ? `Preferred coaching tone: ${toneLabels.get(profile.coaching_tone as never) || profile.coaching_tone}.`
       : null,
+    ...behavior.behaviorLines,
     profile.strengths?.length
       ? `Communication strengths to preserve: ${profile.strengths.join(", ")}.`
       : null,
@@ -89,7 +289,7 @@ export function formatCoachingProfileForPrompt(
   ].filter(Boolean);
 
   return lines.length
-    ? `User coaching profile. Use this to adjust tone, pacing, explanations, assumptions, and suggested wording. Do not mention this profile unless it is useful to the answer.\n${lines.join("\n")}`
+    ? `User coaching profile. These instructions have priority over generic brevity preferences, while the invariant safety and uncertainty rules still win. Apply them to the current answer without mentioning the profile.\n${lines.join("\n")}`
     : "";
 }
 

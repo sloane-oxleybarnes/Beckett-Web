@@ -12,7 +12,7 @@ export async function GET() {
       .select('id, scenario_type, channel, difficulty, status, lifecycle, setup_snapshot, transcript, assessment, created_at, updated_at, completed_at')
       .eq('user_id', session.user.id)
       .order('updated_at', { ascending: false })
-      .limit(20),
+      .limit(7),
     supabase
       .from('contacts')
       .select('id, name, notes, relationship_type, relationship_other')

@@ -7,6 +7,8 @@ import {
   guestPracticeOpening,
   guestStarterIntent,
   inferGuestPrepLocation,
+  initialPrepOutcomeAndConcern,
+  nextMissingPrepDetail,
   shouldLoadGuestConversationContext,
 } from "../lib/slack-guest-routing.ts";
 import { shouldScheduleSlackInactivityStartCard } from "../lib/slack-inactivity-policy.ts";
@@ -42,7 +44,10 @@ test("Prep extracts an explicit concern instead of asking for it again", () => {
   );
   assert.equal(result.outcome, "I want us to agree on priorities so the workload is realistic.");
   assert.equal(result.concern, "I'm worried they'll think I can't prioritize.");
-  assert.equal(extractGuestPrepOutcomeAndConcern("I want clearer priorities.").concern, null);
+  assert.deepEqual(extractGuestPrepOutcomeAndConcern("I want clearer priorities."), {
+    outcome: "I want clearer priorities.",
+    concern: null,
+  });
   assert.equal(
     extractGuestPrepOutcomeAndConcern("I want alignment. I’m concerned they’ll dismiss it.").concern,
     "I’m concerned they’ll dismiss it."
@@ -61,6 +66,41 @@ test("complete one-message Prep extracts only the requested outcome", () => {
   assert.equal(result.outcome, "I want us to agree on priorities so the workload is realistic.");
   assert.equal(result.concern, "I am worried they will think I cannot prioritize or handle my role.");
   assert.equal(inferGuestPrepLocation("during our Zoom 1:1"), "call");
+});
+
+test("Prep recognizes common concern variants independently from outcome", () => {
+  for (const concern of [
+    "I worry they will say everyone is busy.",
+    "I'm worried they will say everyone is busy.",
+    "I fear they will reject it.",
+    "They may say there is no budget.",
+    "I expect pushback about timing.",
+  ]) {
+    const result = extractGuestPrepOutcomeAndConcern(`I want agreement on new dates. ${concern}`);
+    assert.equal(result.outcome, "I want agreement on new dates.");
+    assert.ok(result.concern);
+  }
+  assert.equal(
+    initialPrepOutcomeAndConcern("I want agreement on new dates.").outcome,
+    "I want agreement on new dates."
+  );
+});
+
+test("exact Prep reproduction skips supplied outcome and concern and asks only for location", () => {
+  const details = initialPrepOutcomeAndConcern(
+    "I need to ask my manager tomorrow to move two deadlines because my workload is too high; I want agreement on new dates and I worry they will say everyone is busy."
+  );
+  assert.equal(details.outcome, "I want agreement on new dates");
+  assert.equal(details.concern, "I worry they will say everyone is busy.");
+  assert.equal(nextMissingPrepDetail({ person: "my manager", ...details }), "location");
+  assert.equal(nextMissingPrepDetail({ person: "my manager", location: "call", ...details }), null);
+});
+
+test("Prep advances to the first genuinely missing field", () => {
+  assert.equal(nextMissingPrepDetail({}), "person");
+  assert.equal(nextMissingPrepDetail({ person: "manager" }), "location");
+  assert.equal(nextMissingPrepDetail({ person: "manager", location: "call" }), "outcome");
+  assert.equal(nextMissingPrepDetail({ person: "manager", location: "call", outcome: "agreement" }), "concern");
 });
 
 test("active Slack coaching never schedules unsolicited start menus", () => {

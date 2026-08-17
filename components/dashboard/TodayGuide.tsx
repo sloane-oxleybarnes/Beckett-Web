@@ -368,7 +368,6 @@ export default function TodayGuide({ name }: { name: string }) {
           {supportFollowUpStatus === "saved" && <span className="text-primary">Thanks — Beckett will use that only in your private pattern learning.</span>}
           {supportFollowUpStatus === "error" && <span className="text-red-700">Your feedback did not save. Please try again.</span>}
           <Link href="/dashboard/about#support-preferences" className="font-medium text-primary hover:underline">View support preferences →</Link>
-          <Link href="/dashboard/settings#workday-reminders" className="font-medium text-primary hover:underline">Set up reminders to check in →</Link>
         </div>
       </div>
 

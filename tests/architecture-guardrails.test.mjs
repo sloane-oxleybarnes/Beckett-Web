@@ -76,3 +76,52 @@ test("release migrations include private feedback, indexed Microsoft subscriptio
   assert.match(read("supabase/migrations/20260812002212_microsoft_subscriptions.sql"), /enable row level security/);
   assert.match(read("supabase/migrations/20260812002409_index_foreign_keys.sql"), /contacts_user_id_idx/);
 });
+
+test("Practice history is capped at seven conversations", () => {
+  assert.match(
+    read("app/api/labs/adaptive-conversation/route.ts"),
+    /from\(['"]adaptive_conversation_sessions['"]\)[\s\S]*?order\(['"]updated_at['"],[\s\S]*?limit\(7\)/,
+  );
+
+  const retentionMigration = read("supabase/migrations/20260817171110_limit_adaptive_conversation_history.sql");
+  assert.match(retentionMigration, /history_position > 7/);
+  assert.match(retentionMigration, /offset 7/);
+  assert.match(retentionMigration, /after insert on public\.adaptive_conversation_sessions/);
+});
+
+test("dashboard cards keep secondary content compact until editing", () => {
+  const skills = read("app/dashboard/skills/page.tsx");
+  assert.doesNotMatch(skills, /From learning to real life/);
+  assert.doesNotMatch(skills, /ask-someone-out/);
+
+  assert.match(read("features/contacts/ContactsClient.tsx"), /lg:grid-cols-4/);
+
+  const settings = read("components/dashboard/SettingsPanel.tsx");
+  assert.match(settings, /coachingSettingsEditing/);
+  assert.match(settings, /aria-controls="coaching-settings-editor"/);
+  assert.match(settings, /What Beckett helps with/);
+});
+
+test("public beta positioning stays immediate, professional, and evidence-based", () => {
+  const home = read("app/page.tsx");
+  assert.match(home, /inside the apps where you work/);
+  assert.match(home, /Conversations you can practice/);
+  assert.doesNotMatch(home, /What people say|personalTestimonials|professionalTestimonials/);
+
+  assert.match(read("lib/beta-access.ts"), /return false/);
+  assert.doesNotMatch(read("app/pricing/page.tsx"), /Free after beta|welcome credits/);
+  assert.match(read("app/skills/page.tsx"), /Available now/);
+  assert.match(read("app/skills/page.tsx"), /Coming during beta/);
+});
+
+test("user settings and app connections match the beta product surface", () => {
+  const settings = read("components/dashboard/SettingsPanel.tsx");
+  assert.doesNotMatch(settings, /Beta diagnostics|loadDiagnostics/);
+
+  const apps = read("components/dashboard/AppsPanel.tsx");
+  assert.match(apps, /GoogleWorkspaceCard/);
+  assert.match(apps, /Connect Gmail coaching and read-only Calendar preparation independently/);
+
+  assert.doesNotMatch(read("components/dashboard/TodayGuide.tsx"), /workday-reminders/);
+  assert.doesNotMatch(read("components/dashboard/WorkdayCheckinCard.tsx"), /workday-reminders/);
+});

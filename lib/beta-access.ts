@@ -1,7 +1,7 @@
 import { platformRepository } from "@/lib/repositories/platform-repository";
 
 export function isBetaInviteOnly() {
-  return process.env.BETA_INVITE_ONLY !== "false";
+  return false;
 }
 
 function isInternalTester(email: string) {

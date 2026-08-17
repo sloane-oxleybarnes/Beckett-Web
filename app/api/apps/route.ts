@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CONNECTED_APP_IDS, isConnectedAppId, type ConnectedAppId } from "@/lib/connected-apps";
 import { integrationsRepository } from "@/lib/repositories/integrations-repository";
+import { loadSlackConnectionsForUser } from "@/lib/slack-connections-server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
@@ -15,10 +16,11 @@ export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const [{ data: preferences, error: preferenceError }, { data: integrations, error: integrationError }, { data: profile, error: profileError }] = await Promise.all([
+  const [{ data: preferences, error: preferenceError }, { data: integrations, error: integrationError }, { data: profile, error: profileError }, slackResult] = await Promise.all([
     integrationsRepository.from("user_app_preferences").select("app_id").eq("user_id", user.id),
     integrationsRepository.from("user_integrations").select("provider, external_user_id, external_team_name, metadata").eq("user_id", user.id),
     integrationsRepository.from("profiles").select("extension_connected_at").eq("id", user.id).maybeSingle(),
+    loadSlackConnectionsForUser(user.id),
   ]);
 
   if (preferenceError || integrationError || profileError) {
@@ -28,18 +30,17 @@ export async function GET() {
   const providers = new Map((integrations || []).map((item) => [item.provider, item]));
   const microsoft = providers.get("microsoft");
   const google = providers.get("google") || providers.get("google_workspace_addon");
-  const slack = providers.get("slack");
   const connected: Record<ConnectedAppId, boolean> = {
     gmail: Boolean(google),
     google_calendar: providers.has("google_calendar"),
-    slack: Boolean(slack),
+    slack: slackResult.summary.connected,
     outlook: Boolean(microsoft),
     microsoft_calendar: Boolean(microsoft),
     chrome: Boolean(profile?.extension_connected_at),
   };
   const details: Partial<Record<ConnectedAppId, string>> = {
     gmail: google?.external_user_id || undefined,
-    slack: slack?.external_team_name || undefined,
+    slack: slackResult.summary.label,
     outlook: microsoft?.external_user_id || undefined,
     microsoft_calendar: microsoft?.external_user_id || undefined,
   };
@@ -57,6 +58,7 @@ export async function GET() {
     selectedAppIds: CONNECTED_APP_IDS.filter((appId) => selectedAppIds.has(appId)),
     connected,
     details,
+    slack: slackResult,
   });
 }
 
