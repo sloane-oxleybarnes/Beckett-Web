@@ -26,10 +26,12 @@ const outlookSteps = [
 ];
 
 const slackSteps = [
-  "From Beckett Apps, choose Slack and add Beckett to the workspace you use for work.",
-  "Review the requested Slack permissions and finish the secure account connection.",
-  "Use /beckett or a Beckett message action for private decoding, response help, preparation, or practice.",
-  "Return to Beckett Apps to add another workspace, reconnect a degraded connection, or unlink your account.",
+  "Open the Beckett for Slack page, review the beta warning and six bot permissions, then choose Install Beckett for Slack.",
+  "Slack currently displays “App is not approved by Slack” because Beckett has not completed Marketplace review. Installation can still continue; some workspaces require an administrator to approve it.",
+  "Select the workspace and approve commands, chat:write, assistant:write, im:history, im:write, and users:read. Beckett does not request user tokens, workspace search, or channel-history scopes.",
+  "Use /beckett or a Beckett message action. Beckett routes the coaching to your private Beckett conversation instead of posting the result in the source channel.",
+  "A Beckett account is optional. Guest credits work immediately; link an account later if you want Slack coaching to use your saved preferences and subscription credits.",
+  "Return to Beckett Apps to add another workspace, reconnect or upgrade a connection, or unlink your account without uninstalling Beckett for other workspace members.",
 ];
 
 const calendarSteps = [
@@ -79,6 +81,14 @@ const troubleshooting = [
   {
     title: "Slack says reconnect or degraded",
     body: "Open Beckett Apps, choose Manage workspaces on the Slack card, and reconnect the affected workspace. You can unlink an old connection without uninstalling Beckett for anyone else.",
+  },
+  {
+    title: "Slack says the app is not approved",
+    body: "That notice means Beckett has not completed Slack Marketplace review. During the public beta, review the listed permissions and continue only if you are comfortable. If installation is blocked, ask a workspace owner or administrator to approve Beckett.",
+  },
+  {
+    title: "A Slack connection needs an upgrade",
+    body: "Open Beckett Apps, choose Manage workspaces, and select Upgrade/relink for the affected workspace. The new zero-copy connection uses six bot permissions and does not request workspace search or broad channel history.",
   },
 ];
 
@@ -150,6 +160,7 @@ export default function SupportPage() {
         <article className="rounded-card border border-border bg-white p-6">
           <h2 className="mb-3 text-2xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Using Beckett in Slack</h2>
           <ol className="space-y-3">{slackSteps.map((step, index) => <li key={step} className="flex gap-3 text-sm leading-relaxed text-ink-mid"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-xs font-medium text-primary">{index + 1}</span><span>{step}</span></li>)}</ol>
+          <div className="mt-5 flex flex-wrap gap-4 text-sm font-medium"><Link href="/slack" className="text-primary hover:underline">Beckett for Slack installation guide</Link><Link href="/slack/privacy" className="text-primary hover:underline">Slack privacy details</Link></div>
         </article>
 
         <article className="rounded-card border border-border bg-white p-6">

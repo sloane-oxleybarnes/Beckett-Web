@@ -264,7 +264,7 @@ export default function CoachWalkthrough({ shouldShow, forceShow = false, isBeta
             {current.slackConnect && (
               <div className="mt-4 rounded-card border border-border bg-bg/70 p-3">
                 <p className="mb-2 text-xs font-medium text-ink">Connect Slack from Beckett</p>
-                <AddToSlackButton href="/api/slack/connect" onClick={() => void finish()} />
+                <AddToSlackButton href="/slack/install?mode=connect" onClick={() => void finish()} />
               </div>
             )}
 

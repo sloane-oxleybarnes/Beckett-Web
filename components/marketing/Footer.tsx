@@ -19,6 +19,9 @@ export default function Footer() {
             <Link href="/features" className="hover:text-ink transition-colors">
               Features
             </Link>
+            <Link href="/slack" className="hover:text-ink transition-colors">
+              Slack
+            </Link>
             <Link href="/pricing" className="hover:text-ink transition-colors">
               Pricing
             </Link>
