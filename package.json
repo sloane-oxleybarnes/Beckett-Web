@@ -48,13 +48,13 @@
     "resend": "^6.20.0"
   },
   "devDependencies": {
-    "@next/bundle-analyzer": "^16.3.0",
+    "@next/bundle-analyzer": "^16.3.1",
     "@playwright/test": "^1.62.1",
     "@types/node": "^22.20.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^16.3.0",
+    "eslint-config-next": "^16.3.1",
     "postcss": "^8.5.26",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
