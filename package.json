@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build --webpack",
+    "build": "next build",
     "bundle:check": "node scripts/check-bundle-size.mjs",
     "performance:baseline": "node scripts/measure-web-vitals.mjs",
     "analyze": "ANALYZE=true next build --webpack",
@@ -54,7 +54,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^16.3.0",
+    "eslint-config-next": "^16.3.5",
     "postcss": "^8.5.26",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
