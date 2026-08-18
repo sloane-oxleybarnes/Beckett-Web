@@ -3,18 +3,18 @@ import { decryptOAuthToken, encryptOAuthToken } from "@/lib/oauth-token-crypto";
 import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import type { CalendarEvent } from "@/lib/calendar-insights";
 
-export const MICROSOFT_CALENDAR_SCOPES = [
+const MICROSOFT_BASE_SCOPES = [
   "openid",
   "profile",
   "email",
   "offline_access",
   "User.Read",
-  "Calendars.ReadBasic",
 ].join(" ");
 
-export const MICROSOFT_MAIL_SCOPES = `${MICROSOFT_CALENDAR_SCOPES} Mail.Read`;
+export const MICROSOFT_CALENDAR_SCOPES = `${MICROSOFT_BASE_SCOPES} Calendars.ReadBasic`;
+export const MICROSOFT_MAIL_SCOPES = `${MICROSOFT_BASE_SCOPES} Mail.Read`;
 export const MICROSOFT_CALENDAR_WRITE_SCOPES = `${MICROSOFT_CALENDAR_SCOPES} Calendars.ReadWrite`;
-export const MICROSOFT_MAIL_WRITE_SCOPES = `${MICROSOFT_CALENDAR_SCOPES} Mail.ReadWrite`;
+export const MICROSOFT_MAIL_WRITE_SCOPES = `${MICROSOFT_BASE_SCOPES} Mail.ReadWrite`;
 export const MICROSOFT_SCOPES = MICROSOFT_CALENDAR_SCOPES;
 
 const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";

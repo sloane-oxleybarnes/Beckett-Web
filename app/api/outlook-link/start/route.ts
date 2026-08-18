@@ -27,6 +27,9 @@ export async function POST(request: NextRequest) {
     if (error) throw error;
     const url = new URL("/api/outlook-link/claim", request.url);
     url.searchParams.set("attempt", id);
+    if (request.nextUrl.searchParams.get("permission") === "mail") {
+      url.searchParams.set("permission", "mail");
+    }
     return NextResponse.json({ attempt: id, url: url.toString() });
   } catch {
     return NextResponse.json({ error: "Beckett could not start the account-linking step." }, { status: 502 });

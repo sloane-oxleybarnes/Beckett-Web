@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { safeInternalPath } from "@/lib/auth-next";
 import {
   buildMicrosoftAuthorizationUrl,
   createMicrosoftCodeChallenge,
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest) {
 
   const state = randomBytes(32).toString("base64url");
   const codeVerifier = randomBytes(64).toString("base64url");
+  const next = safeInternalPath(request.nextUrl.searchParams.get("next"));
   const kindParam = request.nextUrl.searchParams.get("kind");
   const requestedKind = kindParam === "mail" || kindParam === "calendar-write" || kindParam === "mail-write"
     ? kindParam
@@ -58,5 +60,7 @@ export async function GET(request: NextRequest) {
   response.cookies.set("beckett_microsoft_oauth_state", state, cookieOptions);
   response.cookies.set("beckett_microsoft_oauth_verifier", codeVerifier, cookieOptions);
   response.cookies.set("beckett_microsoft_oauth_kind", requestedKind, cookieOptions);
+  if (next) response.cookies.set("beckett_microsoft_oauth_next", next, cookieOptions);
+  else response.cookies.delete("beckett_microsoft_oauth_next");
   return response;
 }

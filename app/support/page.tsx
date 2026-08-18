@@ -20,9 +20,10 @@ const gmailSteps = [
 const outlookSteps = [
   "Open a message or draft in Outlook.",
   "Choose Beckett from the Outlook ribbon or Apps menu.",
-  "Select Read selected item. Beckett does not read the item before this step.",
-  "Select Decode with Beckett to request coaching.",
-  "In a draft, choose Insert into current draft if you want to use the result. Beckett never sends the message.",
+  "Connect your Microsoft account. If seamless Microsoft sign-in is unavailable, choose Sign in to Beckett and finish in the secure Outlook dialog.",
+  "Choose Analyze message. Beckett reads and processes only the message or draft you selected.",
+  "Optional: choose Analyze full thread and approve Microsoft's read-only Mail.Read permission to analyze that selected conversation.",
+  "Copy a response, insert it into an open draft, or open a reply with it. Review and send it yourself; Beckett never sends email.",
 ];
 
 const slackSteps = [
@@ -60,11 +61,15 @@ const troubleshooting = [
   },
   {
     title: "Outlook asks you to sign in",
-    body: "Use Sign in in a new tab, finish signing in to your Beckett account, return to Outlook, and select Refresh sign-in.",
+    body: "Try Connect Microsoft account first. If Microsoft SSO is unavailable for that mailbox, choose Sign in to Beckett and complete sign-in in the secure Outlook dialog. The pane updates automatically.",
   },
   {
-    title: "Read selected item is unavailable",
-    body: "Open the Beckett pane from an email message or draft. The command is not intended to read your mailbox in the background.",
+    title: "Analyze message is unavailable",
+    body: "Open the Beckett pane from an email message or draft and finish sign-in. Beckett does not read your mailbox in the background.",
+  },
+  {
+    title: "Full-thread analysis asks for permission",
+    body: "Analyze full thread uses Microsoft's delegated, read-only Mail.Read permission. Approve it in the Microsoft window, return to Outlook, and choose Analyze full thread again.",
   },
   {
     title: "Text cannot be inserted",
