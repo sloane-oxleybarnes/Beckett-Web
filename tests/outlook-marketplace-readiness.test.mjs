@@ -37,6 +37,13 @@ test("task pane has NAA plus a memory-only Office dialog fallback", () => {
   assert.doesNotMatch(completion, /refresh_token/);
 });
 
+test("task pane has an Outlook-webview-compatible copy fallback", () => {
+  const pane = read("app/outlook-addin/page.tsx");
+  assert.match(pane, /document\.execCommand\("copy"\)/);
+  assert.match(pane, /navigator\.clipboard\.writeText/);
+  assert.match(pane, /Copy was blocked by Outlook/);
+});
+
 test("full-thread access requests Mail.Read incrementally and returns safely", () => {
   const oauth = read("lib/microsoft-oauth.ts");
   const mailDeclaration = oauth.match(/export const MICROSOFT_MAIL_SCOPES = ([^;]+);/)?.[0] || "";

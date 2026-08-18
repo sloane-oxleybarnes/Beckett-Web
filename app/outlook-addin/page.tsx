@@ -290,11 +290,47 @@ export default function OutlookAddinPage() {
     setStatus("Outlook could not open a reply here. Use Copy response instead.");
   }
 
+  function copyWithSelection(text: string) {
+    const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.setAttribute("aria-hidden", "true");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    textarea.style.pointerEvents = "none";
+    textarea.style.inset = "0 auto auto 0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    let copied = false;
+    try {
+      // Outlook task panes can deny the asynchronous Clipboard API while still
+      // allowing a user-initiated copy command in the embedded webview.
+      copied = document.execCommand("copy");
+    } finally {
+      textarea.remove();
+      activeElement?.focus();
+    }
+    return copied;
+  }
+
   async function copyResponse(text: string) {
+    try {
+      if (copyWithSelection(text)) {
+        setStatus("Response copied. Paste it into any draft when you are ready.");
+        return;
+      }
+    } catch {
+      // Continue to the modern Clipboard API before showing the manual fallback.
+    }
     try {
       await navigator.clipboard.writeText(text);
       setStatus("Response copied. Paste it into any draft when you are ready.");
-    } catch { setStatus("Copy was blocked by Outlook. Select the response text and copy it manually."); }
+    } catch {
+      setStatus("Copy was blocked by Outlook. Select the response text and copy it manually.");
+    }
   }
 
   async function startMicrosoftBrowserConnection(requestMailPermission: boolean) {
