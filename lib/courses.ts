@@ -1198,8 +1198,203 @@ Never break character. You are Priya, not Beckett.`,
   ],
 }
 
-export const COURSES: Course[] = [askSomeoneOut, introducingNewColleague, askingForClarity]
+// ── Giving Constructive Feedback ───────────────────────────────────────────
 
-export function getCourse(id: string): Course | undefined {
-  return COURSES.find(c => c.id === id)
-}
+const givingConstructiveFeedback: Course = {
+  id: 'giving-constructive-feedback-peer',
+  title: 'Giving Constructive Feedback to a Peer',
+  description: 'A workplace course where Beckett helps you tell a colleague something hard without damaging the relationship.',
+  estimatedMinutes: 45,
+  confidenceQuestion: 'How confident do you feel giving constructive feedback to a peer?',
+  confidenceIntro: 'In this course, Beckett will help you separate behavior from assumptions, explain impact, make a specific request, and agree on what happens next.',
+  reflectiveQuestion: 'You practiced the feedback formula: behavior, impact, specific request, and response or next step.',
+  reviewWrongAnswers: true,
+  reviewConversationTurns: 4,
+  savesToToolkit: false,
+  reviewSummary: {
+    title: 'Constructive feedback formula review',
+    description: 'Use this when a colleague’s behavior, decision, or piece of work is affecting the team or your ability to work effectively.',
+    formulas: [
+      { label: 'Situation or behavior', text: 'Describe what happened in observable terms instead of labeling the person or guessing their intent.' },
+      { label: 'Impact', text: 'Explain what the behavior affected: the work, coordination, participation, time, or trust.' },
+      { label: 'Specific request', text: 'Ask for a change the other person can actually try.' },
+      { label: 'Response and next step', text: 'Make room for context and agree on what should happen next.' },
+    ],
+    checklist: [
+      'I described what happened rather than labeling the person',
+      'I separated observable behavior from assumptions about intent',
+      'I explained a specific impact',
+      'I made a request the other person can act on',
+      'I matched the tone and intensity to the situation',
+      'I left room for context without abandoning the point',
+      'I ended with a concrete next step or agreement',
+    ],
+  },
+  openPractice: {
+    matchName: 'Jordan',
+    matchDescription: 'a collaborative peer who has been changing shared project plans without discussing the changes first',
+    practiceKind: 'workplace',
+    channel: 'slack',
+    subtitle: 'Slack DM',
+    introTitle: 'Open Practice: Give the feedback',
+    introDescription: 'Now you’ll practice giving Jordan clear, proportionate feedback about a scope change. Jordan is well-intentioned and may explain why they changed the plan, but your goal is to name the behavior, explain the impact, and agree on a better process for future changes.',
+    goal: 'Give Jordan feedback about changing the shared project plan without discussion, then agree on how scope changes should be handled going forward.',
+    helperChecklist: [
+      'Describe what happened without labeling Jordan’s intent or character',
+      'Explain the effect on the work or coordination',
+      'Ask for a specific change in future behavior',
+      'Leave room for Jordan to explain their perspective',
+      'Keep the feedback proportionate and focused on the issue',
+      'End with a concrete next step or agreement',
+    ],
+    progressChecklist: [
+      { key: 'behavior', label: 'Observable behavior named', patterns: ['added', 'changed', 'updated', 'scope', 'deliverable', 'plan', 'deadline'] },
+      { key: 'impact', label: 'Impact explained', patterns: ['timeline', 'estimate', 'rework', 'coordination', 'planning', 'work', 'team'] },
+      { key: 'request', label: 'Specific request made', patterns: ['next time', 'going forward', 'before updating', 'discuss', 'check', 'flag', 'let me know'] },
+      { key: 'response', label: 'Context acknowledged', patterns: ['understand', 'goal', 'see why', 'hear you', 'makes sense'] },
+      { key: 'next', label: 'Next step agreed', patterns: ['agree', 'process', 'before', 'together', 'check in', 'next time'] },
+    ],
+    contextPanel: {
+      title: 'What you already know',
+      items: [
+        'You and Jordan are working on a launch project.',
+        'You agreed on the scope last week.',
+        'Jordan added two new deliverables to the shared plan.',
+        'Jordan moved the handoff deadline forward by two days.',
+        'You have already begun work based on the original agreement.',
+      ],
+    },
+    starterMessages: [
+      { role: 'assistant', content: 'I updated the plan to include the customer comparison section and moved the handoff to Wednesday. It should make the final package stronger.', timestamp: '2:14 PM' },
+    ],
+    systemPrompt: `You are Jordan, a collaborative and well-intentioned peer in a workplace Slack DM. You changed the shared launch plan by adding a customer comparison section and moving the handoff deadline forward by two days without discussing the change first.
+
+The user wants to give you feedback. Stay open but realistic. You were trying to make the final package stronger, and you may initially explain that the timing was tight or that you thought the change was helpful. If the user clearly names the behavior, explains its impact, and asks for a specific future process, acknowledge the point and agree to discuss scope changes before updating the shared plan. If the user labels you, guesses at your intent, or makes a broad accusation, ask for a specific example or explain that you were trying to help. If the user gives feedback without explaining the impact, ask what problem the change created. If the user makes a clear request, do not force them to repeat it endlessly.
+
+Never break character. You are Jordan, not Beckett.`,
+  },
+  slides: [
+    {
+      type: 'accordion',
+      title: 'What Constructive Feedback Actually Is',
+      description: 'Constructive feedback is information about a behavior, decision, or piece of work and its effect. The goal is not to deliver a verdict on someone’s character. It is to make a future interaction or outcome more workable.',
+      sections: [
+        { heading: 'Feedback is about a changeable pattern', bullets: ['Focus on something the colleague could reasonably do differently.', 'Avoid broad labels such as careless, rude, difficult, or unreliable.'] },
+        { heading: 'Intent and impact can differ', bullets: ['The person may not have intended to cause a problem.', 'The impact can still be real and worth discussing.'] },
+        { heading: 'Specificity is respectful', bullets: ['“You never listen” gives the person no useful path forward.', 'A specific example gives both people something they can understand and act on.'] },
+      ],
+    },
+    {
+      type: 'reflection-choice',
+      title: 'Is This Feedback or Something Else?',
+      description: 'Not every difficult feeling needs to become peer feedback. First identify what happened, whether it is important enough to address, and whether a direct conversation is the right channel.',
+      prompt: 'What kind of situation are you trying to address?',
+      multi: true,
+      options: [
+        'A one-time mistake that may only need a quick correction',
+        'A repeated behavior affecting the work',
+        'A difference in working style that needs a shared agreement',
+        'A disagreement about a decision',
+        'A serious workplace concern that may need a formal channel',
+        'Frustration that I have not yet separated into a specific behavior',
+      ],
+    },
+    {
+      type: 'side-by-side',
+      title: 'From Labels to Observations',
+      description: 'A label may express how the situation feels, but it does not give the other person a clear way to respond. Start with what someone could see or hear.',
+      scenario: 'A colleague adds work to a shared project without discussing the change first.',
+      scenarioMessage: {
+        sender: 'Your colleague',
+        roleLabel: 'Slack message',
+        content: 'I added the customer comparison section to the plan and moved the handoff to Wednesday.',
+        channel: 'slack',
+      },
+      bad: { label: 'Story or label', message: 'You are trying to take over the project and create chaos at the last minute.', note: 'This guesses at intent and labels the person, which makes it easier to argue about the accusation instead of the issue.' },
+      good: { label: 'Observable version', message: 'You added a new section and moved the handoff deadline after we agreed on the original scope.', note: 'This describes what happened in terms the other person can confirm, correct, or explain.' },
+    },
+    {
+      type: 'visual-formula',
+      title: 'The Feedback Formula',
+      description: 'This structure keeps feedback specific and actionable without turning it into a character judgment.',
+      steps: [
+        { label: 'Situation or behavior', text: 'Describe what happened in observable terms.', example: 'You added two deliverables after we agreed on the original scope.' },
+        { label: 'Impact', text: 'Explain what the behavior affected.', example: 'That changed the timeline and made my estimates inaccurate.' },
+        { label: 'Specific request', text: 'Ask for a change the other person can try.', example: 'Could we discuss scope changes before updating the shared plan?' },
+        { label: 'Response and next step', text: 'Make room for context and agree what happens next.', example: 'I’m happy to review additions together before they become commitments.' },
+      ],
+    },
+    {
+      type: 'sorting',
+      title: 'Step 1 - Signal, Story, or Impact?',
+      description: 'Separate observable behavior from your interpretation of the person and from the effect on the work.',
+      formulaStep: 1,
+      instruction: 'Sort each statement into the right category.',
+      categories: ['Observable behavior', 'Interpretation or story', 'Impact'],
+      items: [
+        { message: 'You added two new deliverables to the shared plan after we agreed on the original scope.', correct: 'Observable behavior', explanation: 'This describes something that happened in a way the other person can confirm.' },
+        { message: 'You do not respect my expertise.', correct: 'Interpretation or story', explanation: 'This assigns meaning and intent rather than describing the behavior.' },
+        { message: 'I had to rework the timeline and my estimates were no longer accurate.', correct: 'Impact', explanation: 'This explains what the behavior changed for the work.' },
+        { message: 'You are trying to take over the project.', correct: 'Interpretation or story', explanation: 'This guesses at the person’s motivation.' },
+        { message: 'You changed the due date in the tracker before we discussed it.', correct: 'Observable behavior', explanation: 'This identifies a specific action.' },
+        { message: 'The team lost visibility into what could realistically be finished.', correct: 'Impact', explanation: 'This describes the effect on coordination and planning.' },
+      ],
+    },
+    {
+      type: 'multiple-choice',
+      title: 'Step 2 - What Was the Impact?',
+      description: 'A useful impact statement connects the behavior to the work, coordination, participation, time, or trust. It does not need to sound dramatic to be valid.',
+      helperChecklist: ['Name what changed because of the behavior', 'Connect the impact to the work or collaboration', 'Avoid turning the impact into a character judgment'],
+      compactHelper: true,
+      rounds: [
+        {
+          scenario: 'A colleague changes the presentation structure the night before the meeting without telling you.',
+          question: 'Which impact statement is most specific and useful?',
+          options: [
+            { text: 'You made me look unprepared.', correct: false, explanation: 'This may describe how you felt, but it does not explain the practical effect clearly.' },
+            { text: 'I had to rebuild the talking points, and we did not have time to check whether the narrative still matched the data.', correct: true, explanation: 'This names the concrete effect on the work and preparation.' },
+            { text: 'You always create chaos at the last minute.', correct: false, explanation: 'This is broad and labels the person instead of describing the effect.' },
+          ],
+        },
+        {
+          scenario: 'A colleague sends urgent requests without context or a clear deadline.',
+          question: 'Which impact statement best connects the pattern to the work?',
+          options: [
+            { text: 'It makes you seem inconsiderate.', correct: false, explanation: 'This labels the person rather than describing the impact.' },
+            { text: 'I have trouble prioritizing the requests and sometimes spend time on work that was not actually urgent.', correct: true, explanation: 'This explains the decision and prioritization problem the pattern creates.' },
+            { text: 'Everyone is annoyed by your messages.', correct: false, explanation: 'This makes an unsupported claim about other people and does not identify the work effect.' },
+          ],
+        },
+      ],
+    },
+    {
+      type: 'sorting',
+      title: 'Step 3 - Make the Request Actionable',
+      description: 'The request should describe a behavior the colleague can try, not a personality they need to become.',
+      formulaStep: 3,
+      instruction: 'Sort each response into a specific request or a vague complaint.',
+      categories: ['Specific request', 'Vague complaint'],
+      items: [
+        { message: 'Could you include the deadline and the decision you need when you send the request?', correct: 'Specific request', explanation: 'The colleague can act on this immediately.' },
+        { message: 'Please communicate better.', correct: 'Vague complaint', explanation: 'It does not identify what to do differently.' },
+        { message: 'Could you let me finish my answer before we move to the next topic?', correct: 'Specific request', explanation: 'This describes a clear change in the meeting.' },
+        { message: 'Be more considerate.', correct: 'Vague complaint', explanation: 'This names a quality rather than an observable behavior.' },
+        { message: 'Could we discuss scope changes before updating the shared plan?', correct: 'Specific request', explanation: 'This gives the team a concrete process to try.' },
+        { message: 'Stop making everything harder than it needs to be.', correct: 'Vague complaint', explanation: 'This expresses frustration without offering a usable next step.' },
+      ],
+    },
+    {
+      type: 'multiple-choice',
+      title: 'Step 4 - Make Room for a Response',
+      description: 'Constructive feedback leaves room for context without abandoning the point. You can listen to the explanation and still ask for a different process next time.',
+      helperChecklist: ['Acknowledge the other person’s perspective', 'Do not guess at intent', 'Keep the specific request visible'],
+      compactHelper: true,
+      rounds: [
+        {
+          scenario: 'You tell a colleague that changing the shared plan without discussion created rework. They say, “I was only trying to make the final package stronger.”',
+          options: [
+            { text: 'I know, but you always do this.', correct: false, explanation: 'This dismisses the explanation and expands the conversation into a character judgment.' },
+            { text: 'I understand the goal, and I’m open to the comparison section. The issue is that the scope changed after we planned the work, so I need us to discuss additions before updating the deadline.', correct: true, explanation: 'This acknowledges intent without losing the impact or request.' },
+            { text: 'Fine, forget it. Do whatever you want.', correct: false, explanation: 'This abandons the feedback and leaves the process unchanged.' },
+          ],
+        },
