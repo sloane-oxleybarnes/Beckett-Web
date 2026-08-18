@@ -1398,3 +1398,54 @@ Never break character. You are Jordan, not Beckett.`,
             { text: 'Fine, forget it. Do whatever you want.', correct: false, explanation: 'This abandons the feedback and leaves the process unchanged.' },
           ],
         },
+        {
+          scenario: 'You tell a colleague that public corrections are making it harder to resolve context. They say, “I was just trying to stop the mistake from spreading.”',
+          options: [
+            { text: 'I understand you wanted to fix it quickly. If it is not urgent, could you message me first so we can check the context before correcting the public thread?', correct: true, explanation: 'This acknowledges the possible goal and makes a specific request.' },
+            { text: 'You should not care so much about being right.', correct: false, explanation: 'This turns the feedback into an accusation about motivation.' },
+            { text: 'Okay, then there is no problem.', correct: false, explanation: 'The explanation does not remove the impact or the need for a future process.' },
+          ],
+        },
+      ],
+    },
+    {
+      type: 'multiple-choice',
+      title: 'Put It All Together',
+      description: 'Use the full Feedback Formula: name the observable behavior, explain the impact, make a specific request, and agree on the next step.',
+      helperChecklist: ['Observable behavior named', 'Specific impact explained', 'Actionable request made', 'Room for context and a next step'],
+      compactHelper: true,
+      rounds: [
+        {
+          scenario: 'A peer has interrupted you several times across two project meetings.',
+          options: [
+            { text: 'You keep interrupting me and it is really frustrating. Please be more respectful.', correct: false, explanation: 'It names a pattern but labels the issue broadly and does not explain the work impact or a specific next step.' },
+            { text: 'In the last two project meetings, the discussion moved on before I had finished answering. I lost the chance to share the context behind the recommendation. Could you let me finish my answer before we move to the next topic? I’d like us to try that in the next meeting.', correct: true, explanation: 'It names the behavior, explains the impact, makes a specific request, and identifies a next step.' },
+            { text: 'I do not want to make this a big deal, but maybe try to listen more carefully in meetings.', correct: false, explanation: 'It softens the point so much that the requested change is unclear.' },
+          ],
+        },
+        {
+          scenario: 'A peer changes the project plan after the team agrees on scope.',
+          options: [
+            { text: 'I noticed two new deliverables were added after we agreed on the original scope. That changed the timeline and made my estimates inaccurate. Could we discuss scope changes before updating the plan so we can adjust the timeline together?', correct: true, explanation: 'It is specific, proportionate, and gives the team a process to try.' },
+            { text: 'You cannot keep changing things whenever you feel like it.', correct: false, explanation: 'This focuses on intent and blame rather than a process change.' },
+            { text: 'The new section is fine, but please try not to surprise me next time.', correct: false, explanation: 'It hints at the problem but does not clearly explain the impact or request.' },
+          ],
+        },
+        {
+          scenario: 'A colleague repeatedly corrects you in a public channel before checking the context.',
+          options: [
+            { text: 'When corrections are posted in the group channel before we check the context, it makes the discussion harder to resolve. Could you message me first when the issue is not urgent? I’m happy to correct the public thread once we align.', correct: true, explanation: 'It names the pattern, impact, specific request, and a workable next step.' },
+            { text: 'You are undermining me in front of everyone.', correct: false, explanation: 'This may describe the user’s interpretation, but it does not give the colleague a specific change to make.' },
+            { text: 'Please do not correct me publicly anymore.', correct: false, explanation: 'It is direct but too broad; it does not distinguish urgent issues or offer a workable process.' },
+          ],
+        },
+      ],
+    },
+  ],
+}
+
+export const COURSES: Course[] = [askSomeoneOut, introducingNewColleague, askingForClarity, givingConstructiveFeedback]
+
+export function getCourse(id: string): Course | undefined {
+  return COURSES.find(c => c.id === id)
+}
