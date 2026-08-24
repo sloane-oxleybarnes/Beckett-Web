@@ -36,16 +36,16 @@
     "verify": "npm run lint && npm run typecheck && npm run migrations:check && npm run test:all && npm run build"
   },
   "dependencies": {
-    "@azure/msal-browser": "^5.18.0",
+    "@azure/msal-browser": "^5.19.0",
     "@sentry/nextjs": "^10.70.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
     "google-auth-library": "^11.0.2",
     "loops": "^6.3.0",
-    "next": "^16.3.0",
+    "next": "^16.3.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "resend": "^6.20.0"
+    "resend": "^6.21.0"
   },
   "devDependencies": {
     "@next/bundle-analyzer": "^16.3.0",
