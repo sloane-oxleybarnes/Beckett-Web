@@ -1025,7 +1025,10 @@ export type Database = {
           adult_us_eligibility_version: string | null
           coaching_disclaimer_acknowledged_at: string | null
           coaching_disclaimer_version: string | null
+          coaching_priority_ratings: Json
+          coaching_style_ratings: Json
           coaching_tone: string
+          communication_strength_ratings: Json
           communication_preferences: string[] | null
           created_at: string | null
           dashboard_walkthrough_completed_at: string | null
@@ -1068,13 +1071,17 @@ export type Database = {
           terms_version: string | null
           updated_at: string | null
           workplace_triggers: string[] | null
+          workplace_effort_ratings: Json
         }
         Insert: {
           adult_us_eligibility_confirmed_at?: string | null
           adult_us_eligibility_version?: string | null
           coaching_disclaimer_acknowledged_at?: string | null
           coaching_disclaimer_version?: string | null
+          coaching_priority_ratings?: Json
+          coaching_style_ratings?: Json
           coaching_tone?: string
+          communication_strength_ratings?: Json
           communication_preferences?: string[] | null
           created_at?: string | null
           dashboard_walkthrough_completed_at?: string | null
@@ -1117,13 +1124,17 @@ export type Database = {
           terms_version?: string | null
           updated_at?: string | null
           workplace_triggers?: string[] | null
+          workplace_effort_ratings?: Json
         }
         Update: {
           adult_us_eligibility_confirmed_at?: string | null
           adult_us_eligibility_version?: string | null
           coaching_disclaimer_acknowledged_at?: string | null
           coaching_disclaimer_version?: string | null
+          coaching_priority_ratings?: Json
+          coaching_style_ratings?: Json
           coaching_tone?: string
+          communication_strength_ratings?: Json
           communication_preferences?: string[] | null
           created_at?: string | null
           dashboard_walkthrough_completed_at?: string | null
@@ -1166,6 +1177,7 @@ export type Database = {
           terms_version?: string | null
           updated_at?: string | null
           workplace_triggers?: string[] | null
+          workplace_effort_ratings?: Json
         }
         Relationships: [
           {

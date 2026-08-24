@@ -31,6 +31,46 @@ export const communicationPreferenceOptions = [
   "Being more concise",
 ];
 
+export const strengthRatingOptions = [
+  { value: "not_usually", label: "Not usually" },
+  { value: "sometimes", label: "Sometimes" },
+  { value: "often", label: "Often" },
+  { value: "core_strength", label: "A core strength" },
+  { value: "unsure", label: "Not sure yet" },
+] as const;
+
+export const workplaceEffortRatingOptions = [
+  { value: "little_or_none", label: "Little or none" },
+  { value: "some", label: "Some" },
+  { value: "moderate", label: "Moderate" },
+  { value: "a_lot", label: "A lot" },
+  { value: "unsure", label: "Not sure yet" },
+] as const;
+
+export const coachingPriorityRatingOptions = [
+  { value: "not_priority", label: "Not a priority" },
+  { value: "occasionally_useful", label: "Occasionally useful" },
+  { value: "important", label: "Important" },
+  { value: "top_priority", label: "A top priority" },
+  { value: "unsure", label: "Not sure yet" },
+] as const;
+
+export const coachingStyleDimensions = [
+  { id: "directness", label: "Directness" },
+  { id: "emotional_reassurance", label: "Emotional reassurance" },
+  { id: "social_context_explanation", label: "Explanation of social context" },
+  { id: "action_focused_next_steps", label: "Action-focused next steps" },
+  { id: "concise_wording", label: "Concise wording" },
+] as const;
+
+export const coachingStyleRatingOptions = [
+  { value: "less", label: "Less" },
+  { value: "a_little", label: "A little" },
+  { value: "moderate", label: "A moderate amount" },
+  { value: "more", label: "More" },
+  { value: "unsure", label: "Not sure yet" },
+] as const;
+
 export const coachingToneOptions = [
   {
     value: "direct_kind",
@@ -70,3 +110,96 @@ export const neurodivergentContextOptions = [
 ];
 
 export type CoachingTone = (typeof coachingToneOptions)[number]["value"];
+export type StrengthRating = (typeof strengthRatingOptions)[number]["value"];
+export type WorkplaceEffortRating = (typeof workplaceEffortRatingOptions)[number]["value"];
+export type CoachingPriorityRating = (typeof coachingPriorityRatingOptions)[number]["value"];
+export type CoachingStyleRating = (typeof coachingStyleRatingOptions)[number]["value"];
+export type RatingMap<T extends string> = Record<string, T>;
+
+export function normalizeRatingMap<T extends string>(
+  input: unknown,
+  expectedKeys: readonly string[],
+  allowedValues: readonly T[],
+): RatingMap<T> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  const source = input as Record<string, unknown>;
+  return Object.fromEntries(
+    expectedKeys.flatMap((key) => {
+      const value = source[key];
+      return typeof value === "string" && allowedValues.includes(value as T)
+        ? [[key, value as T]]
+        : [];
+    }),
+  );
+}
+
+export function hasCompleteRatingMap<T extends string>(
+  ratings: RatingMap<T>,
+  expectedKeys: readonly string[],
+) {
+  return expectedKeys.every((key) => Boolean(ratings[key]));
+}
+
+function preferredItems<T extends string>(
+  options: readonly string[],
+  ratings: RatingMap<T>,
+  primaryValues: readonly T[],
+  fallbackValue: T,
+) {
+  const primary = options.filter((option) => primaryValues.includes(ratings[option]));
+  return primary.length ? primary : options.filter((option) => ratings[option] === fallbackValue);
+}
+
+export function deriveLegacyCoachingProfile({
+  strengthRatings,
+  workplaceEffortRatings,
+  coachingPriorityRatings,
+  coachingStyleRatings,
+}: {
+  strengthRatings: RatingMap<StrengthRating>;
+  workplaceEffortRatings: RatingMap<WorkplaceEffortRating>;
+  coachingPriorityRatings: RatingMap<CoachingPriorityRating>;
+  coachingStyleRatings: RatingMap<CoachingStyleRating>;
+}) {
+  const score: Record<CoachingStyleRating, number> = {
+    less: 0,
+    a_little: 1,
+    moderate: 2,
+    more: 3,
+    unsure: 1,
+  };
+  const styleScore = (id: string) => score[coachingStyleRatings[id] || "unsure"];
+  const explanation = styleScore("social_context_explanation");
+  const concise = styleScore("concise_wording");
+  const reassurance = styleScore("emotional_reassurance");
+  const directness = styleScore("directness");
+  const action = styleScore("action_focused_next_steps");
+
+  let coachingTone: CoachingTone = "direct_kind";
+  if (explanation >= 3 && explanation >= concise) coachingTone = "detailed_explanatory";
+  else if (concise >= 3 && concise > explanation) coachingTone = "short_concise";
+  else if (reassurance >= 3 && directness <= 1) coachingTone = "gentle_reassuring";
+  else if (directness >= 3 && action >= 3 && reassurance <= 1) coachingTone = "blunt_practical";
+
+  return {
+    strengths: preferredItems(
+      strengthOptions,
+      strengthRatings,
+      ["often", "core_strength"],
+      "sometimes",
+    ),
+    workplaceTriggers: preferredItems(
+      workplaceTriggerOptions,
+      workplaceEffortRatings,
+      ["moderate", "a_lot"],
+      "some",
+    ),
+    communicationPreferences: preferredItems(
+      communicationPreferenceOptions,
+      coachingPriorityRatings,
+      ["important", "top_priority"],
+      "occasionally_useful",
+    ),
+    coachingTone,
+  };
+}

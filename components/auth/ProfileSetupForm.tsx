@@ -8,12 +8,22 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase";
 import { hasCurrentBetaConsent } from "@/lib/beta-consent";
 import {
-  coachingToneOptions,
+  coachingPriorityRatingOptions,
+  coachingStyleDimensions,
+  coachingStyleRatingOptions,
   communicationPreferenceOptions,
+  hasCompleteRatingMap,
   neurodivergentContextOptions,
+  normalizeRatingMap,
+  strengthRatingOptions,
   strengthOptions,
+  workplaceEffortRatingOptions,
   workplaceTriggerOptions,
-  type CoachingTone,
+  type CoachingPriorityRating,
+  type CoachingStyleRating,
+  type RatingMap,
+  type StrengthRating,
+  type WorkplaceEffortRating,
 } from "@/lib/onboarding";
 import { safeInternalPath } from "@/lib/auth-next";
 import { CONNECTED_APPS, type ConnectedAppId } from "@/lib/connected-apps";
@@ -22,10 +32,10 @@ const steps = [
   "Before we begin",
   "Name",
   "Strengths",
-  "Triggers",
+  "Effort",
   "Coaching",
   "Context",
-  "Extension",
+  "Apps",
 ];
 
 function toggleValue(list: string[], value: string, max?: number) {
@@ -69,6 +79,54 @@ function TrustNote({ children }: { children: ReactNode }) {
   );
 }
 
+function RatingQuestion<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value?: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <fieldset className="rounded-sm border border-border bg-white p-3">
+      <legend className="px-1 text-sm font-medium leading-snug text-ink">{label}</legend>
+      <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-5">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={value === option.value}
+            onClick={() => onChange(option.value)}
+            className={`min-h-11 rounded-sm border px-2 py-2 text-center text-xs leading-tight transition-colors ${
+              value === option.value
+                ? "border-primary bg-primary-light font-medium text-primary"
+                : "border-border bg-bg text-ink-mid hover:border-primary-mid"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function ratedCount<T extends string>(ratings: RatingMap<T>) {
+  return Object.keys(ratings).length;
+}
+
+function ratingSummary<T extends string>(
+  options: readonly string[],
+  ratings: RatingMap<T>,
+  highlightedValues: readonly T[],
+) {
+  const highlighted = options.filter((option) => highlightedValues.includes(ratings[option]));
+  return highlighted.length ? highlighted.join(" · ") : "No strong preference selected";
+}
+
 export default function ProfileSetupForm() {
   const supabase = createClient();
   const router = useRouter();
@@ -86,10 +144,10 @@ export default function ProfileSetupForm() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [strengths, setStrengths] = useState<string[]>([]);
-  const [triggers, setTriggers] = useState<string[]>([]);
-  const [preferences, setPreferences] = useState<string[]>([]);
-  const [coachingTone, setCoachingTone] = useState<CoachingTone>("direct_kind");
+  const [strengthRatings, setStrengthRatings] = useState<RatingMap<StrengthRating>>({});
+  const [workplaceEffortRatings, setWorkplaceEffortRatings] = useState<RatingMap<WorkplaceEffortRating>>({});
+  const [coachingPriorityRatings, setCoachingPriorityRatings] = useState<RatingMap<CoachingPriorityRating>>({});
+  const [coachingStyleRatings, setCoachingStyleRatings] = useState<RatingMap<CoachingStyleRating>>({});
   const [context, setContext] = useState<string[]>([]);
   const [contextOther, setContextOther] = useState("");
   const [workApps, setWorkApps] = useState<ConnectedAppId[]>([]);
@@ -128,10 +186,26 @@ export default function ProfileSetupForm() {
       setFirstName(profile?.first_name || first);
       setLastName(profile?.last_name || rest.join(" "));
       setDisplayName(profile?.display_name || profile?.first_name || first);
-      setStrengths(profile?.strengths || []);
-      setTriggers(profile?.workplace_triggers || []);
-      setPreferences(profile?.communication_preferences || []);
-      setCoachingTone(profile?.coaching_tone || "direct_kind");
+      setStrengthRatings(normalizeRatingMap(
+        profile?.communication_strength_ratings,
+        strengthOptions,
+        strengthRatingOptions.map((option) => option.value),
+      ));
+      setWorkplaceEffortRatings(normalizeRatingMap(
+        profile?.workplace_effort_ratings,
+        workplaceTriggerOptions,
+        workplaceEffortRatingOptions.map((option) => option.value),
+      ));
+      setCoachingPriorityRatings(normalizeRatingMap(
+        profile?.coaching_priority_ratings,
+        communicationPreferenceOptions,
+        coachingPriorityRatingOptions.map((option) => option.value),
+      ));
+      setCoachingStyleRatings(normalizeRatingMap(
+        profile?.coaching_style_ratings,
+        coachingStyleDimensions.map((option) => option.id),
+        coachingStyleRatingOptions.map((option) => option.value),
+      ));
       setContext(profile?.neurodivergent_context || []);
       setContextOther(profile?.neurodivergent_context_other || "");
       setLoading(false);
@@ -146,11 +220,14 @@ export default function ProfileSetupForm() {
       return adultUsEligibilityConfirmed && termsAndPrivacyConfirmed && coachingDisclaimerConfirmed;
     }
     if (step === 1) return firstName.trim() && lastName.trim() && displayName.trim();
-    if (step === 2) return strengths.length > 0;
-    if (step === 3) return triggers.length > 0;
-    if (step === 4) return preferences.length > 0 && coachingTone;
+    if (step === 2) return hasCompleteRatingMap(strengthRatings, strengthOptions);
+    if (step === 3) return hasCompleteRatingMap(workplaceEffortRatings, workplaceTriggerOptions);
+    if (step === 4) {
+      return hasCompleteRatingMap(coachingPriorityRatings, communicationPreferenceOptions)
+        && hasCompleteRatingMap(coachingStyleRatings, coachingStyleDimensions.map((option) => option.id));
+    }
     return true;
-  }, [adultUsEligibilityConfirmed, coachingDisclaimerConfirmed, coachingTone, displayName, firstName, lastName, preferences.length, step, strengths.length, termsAndPrivacyConfirmed, triggers.length]);
+  }, [adultUsEligibilityConfirmed, coachingDisclaimerConfirmed, coachingPriorityRatings, coachingStyleRatings, displayName, firstName, lastName, step, strengthRatings, termsAndPrivacyConfirmed, workplaceEffortRatings]);
 
   async function completeOnboarding() {
     setSaving(true);
@@ -162,10 +239,10 @@ export default function ProfileSetupForm() {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       display_name: displayName.trim(),
-      strengths,
-      workplace_triggers: triggers,
-      communication_preferences: preferences,
-      coaching_tone: coachingTone,
+      communication_strength_ratings: strengthRatings,
+      workplace_effort_ratings: workplaceEffortRatings,
+      coaching_priority_ratings: coachingPriorityRatings,
+      coaching_style_ratings: coachingStyleRatings,
       neurodivergent_context: context,
       neurodivergent_context_other: contextOther.trim() || null,
       adult_us_eligibility_confirmed: adultUsEligibilityConfirmed,
@@ -351,20 +428,23 @@ export default function ProfileSetupForm() {
             <div>
               <h2 className="text-xl text-ink mb-2 font-serif">What are your communication strengths?</h2>
               <p className="text-sm text-ink-mid mb-5">
-                Pick up to three. Beckett starts from what already works in workplace conversations.
+                Rate each statement based on how true it usually feels. There are no right answers,
+                and “Not sure yet” is always okay.
               </p>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-3">
                 {strengthOptions.map((option) => (
-                  <OptionButton
+                  <RatingQuestion
                     key={option}
                     label={option}
-                    selected={strengths.includes(option)}
-                    disabled={!strengths.includes(option) && strengths.length >= 3}
-                    onClick={() => setStrengths((current) => toggleValue(current, option, 3))}
+                    value={strengthRatings[option]}
+                    options={strengthRatingOptions}
+                    onChange={(value) => setStrengthRatings((current) => ({ ...current, [option]: value }))}
                   />
                 ))}
               </div>
-              <p className="text-xs text-ink-light mt-3">{strengths.length}/3 selected</p>
+              <p className="text-xs text-ink-light mt-3" aria-live="polite">
+                {ratedCount(strengthRatings)}/{strengthOptions.length} rated
+              </p>
             </div>
           )}
 
@@ -372,19 +452,22 @@ export default function ProfileSetupForm() {
             <div>
               <h2 className="text-xl text-ink mb-2 font-serif">What tends to make work communication harder?</h2>
               <p className="text-sm text-ink-mid mb-5">
-                Pick anything that fits. This helps Beckett notice where messages, feedback,
-                tone, or expectations may need extra care.
+                How much extra effort does each situation usually create for you at work?
               </p>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-3">
                 {workplaceTriggerOptions.map((option) => (
-                  <OptionButton
+                  <RatingQuestion
                     key={option}
                     label={option}
-                    selected={triggers.includes(option)}
-                    onClick={() => setTriggers((current) => toggleValue(current, option))}
+                    value={workplaceEffortRatings[option]}
+                    options={workplaceEffortRatingOptions}
+                    onChange={(value) => setWorkplaceEffortRatings((current) => ({ ...current, [option]: value }))}
                   />
                 ))}
               </div>
+              <p className="text-xs text-ink-light mt-3" aria-live="polite">
+                {ratedCount(workplaceEffortRatings)}/{workplaceTriggerOptions.length} rated
+              </p>
             </div>
           )}
 
@@ -392,44 +475,55 @@ export default function ProfileSetupForm() {
             <div>
               <h2 className="text-xl text-ink mb-2 font-serif">How should Beckett coach you?</h2>
               <p className="text-sm text-ink-mid mb-5">
-                First choose what kind of help you want. Then choose the tone Beckett should use
-                when giving coaching feedback.
+                Rate how useful each kind of support would be, then tell Beckett how much of each
+                coaching quality you prefer.
               </p>
               <div className="mb-6">
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-light">
-                  What do you want help with?
+                  How useful would Beckett’s help be in each area?
                 </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                {communicationPreferenceOptions.map((option) => (
-                  <OptionButton
-                    key={option}
-                    label={option}
-                    selected={preferences.includes(option)}
-                    onClick={() => setPreferences((current) => toggleValue(current, option))}
+                <div className="space-y-3">
+                  {communicationPreferenceOptions.map((option) => (
+                    <RatingQuestion
+                      key={option}
+                      label={option}
+                      value={coachingPriorityRatings[option]}
+                      options={coachingPriorityRatingOptions}
+                      onChange={(value) => setCoachingPriorityRatings((current) => ({ ...current, [option]: value }))}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-ink-light mt-3" aria-live="polite">
+                  {ratedCount(coachingPriorityRatings)}/{communicationPreferenceOptions.length} priorities rated
+                </p>
+              </div>
+              <div className="space-y-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">
+                  How much of each quality should Beckett use?
+                </p>
+                {coachingStyleDimensions.map((option) => (
+                  <RatingQuestion
+                    key={option.id}
+                    label={option.label}
+                    value={coachingStyleRatings[option.id]}
+                    options={coachingStyleRatingOptions}
+                    onChange={(value) => setCoachingStyleRatings((current) => ({ ...current, [option.id]: value }))}
                   />
                 ))}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">
-                  How should Beckett sound as your coach?
+                <p className="text-xs text-ink-light mt-3" aria-live="polite">
+                  {ratedCount(coachingStyleRatings)}/{coachingStyleDimensions.length} coaching qualities rated
                 </p>
-                {coachingToneOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setCoachingTone(option.value)}
-                    className={`w-full text-left rounded-sm border px-3 py-3 transition-colors ${
-                      coachingTone === option.value
-                        ? "border-primary bg-primary-light"
-                        : "border-border hover:border-primary-mid"
-                    }`}
-                  >
-                    <p className="text-sm font-medium text-ink">{option.label}</p>
-                    <p className="text-xs text-ink-mid mt-0.5">{option.description}</p>
-                  </button>
-                ))}
               </div>
+              {hasCompleteRatingMap(coachingPriorityRatings, communicationPreferenceOptions)
+                && hasCompleteRatingMap(coachingStyleRatings, coachingStyleDimensions.map((option) => option.id)) && (
+                <div className="mt-5 rounded-sm border border-primary/20 bg-primary-light/40 p-4">
+                  <p className="text-sm font-medium text-ink">Your coaching setup is ready</p>
+                  <p className="mt-1 text-xs leading-relaxed text-ink-mid">
+                    Beckett will use these ratings together, rather than forcing your preferences
+                    into one coaching-style preset.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -469,6 +563,31 @@ export default function ProfileSetupForm() {
 
           {step === 6 && (
             <div>
+              <div className="mb-6 rounded-sm border border-primary/20 bg-primary-light/40 p-4">
+                <p className="text-sm font-medium text-ink">Your coaching profile</p>
+                <dl className="mt-3 space-y-3 text-xs leading-relaxed">
+                  <div>
+                    <dt className="font-medium text-ink">Strengths to build on</dt>
+                    <dd className="text-ink-mid">{ratingSummary(strengthOptions, strengthRatings, ["often", "core_strength"])}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-ink">Situations needing extra care</dt>
+                    <dd className="text-ink-mid">{ratingSummary(workplaceTriggerOptions, workplaceEffortRatings, ["moderate", "a_lot"])}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-ink">Coaching priorities</dt>
+                    <dd className="text-ink-mid">{ratingSummary(communicationPreferenceOptions, coachingPriorityRatings, ["important", "top_priority"])}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-ink">Coaching qualities to emphasize</dt>
+                    <dd className="text-ink-mid">{ratingSummary(
+                      coachingStyleDimensions.map((option) => option.id),
+                      coachingStyleRatings,
+                      ["more"],
+                    ).split(" · ").map((id) => coachingStyleDimensions.find((option) => option.id === id)?.label || id).join(" · ")}</dd>
+                  </div>
+                </dl>
+              </div>
               <h2 className="text-xl text-ink mb-2 font-serif">Which apps do you use?</h2>
               <p className="text-sm text-ink-mid mb-5">
                 Choose any that are part of your workday. They will appear in Your Apps, where Beckett will walk you through connecting or installing each one.

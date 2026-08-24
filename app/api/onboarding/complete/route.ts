@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { platformRepository } from "@/lib/repositories/platform-repository";
-import type { CoachingTone } from "@/lib/onboarding";
+import {
+  coachingPriorityRatingOptions,
+  coachingStyleDimensions,
+  coachingStyleRatingOptions,
+  communicationPreferenceOptions,
+  deriveLegacyCoachingProfile,
+  hasCompleteRatingMap,
+  normalizeRatingMap,
+  strengthOptions,
+  strengthRatingOptions,
+  workplaceEffortRatingOptions,
+  workplaceTriggerOptions,
+} from "@/lib/onboarding";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { addLoopsContact, triggerLoopsEvent, updateLoopsContact } from "@/lib/loops";
 import { createOrUpdateHubSpotContact } from "@/lib/hubspot";
@@ -18,10 +30,10 @@ type OnboardingBody = BetaConsentSubmission & {
   first_name: string;
   last_name: string;
   display_name: string;
-  strengths?: string[];
-  workplace_triggers?: string[];
-  communication_preferences?: string[];
-  coaching_tone?: CoachingTone;
+  communication_strength_ratings?: unknown;
+  workplace_effort_ratings?: unknown;
+  coaching_priority_ratings?: unknown;
+  coaching_style_ratings?: unknown;
   neurodivergent_context?: string[];
   neurodivergent_context_other?: string | null;
   work_apps?: unknown[];
@@ -45,6 +57,46 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const strengthRatings = normalizeRatingMap(
+    body.communication_strength_ratings,
+    strengthOptions,
+    strengthRatingOptions.map((option) => option.value),
+  );
+  const workplaceEffortRatings = normalizeRatingMap(
+    body.workplace_effort_ratings,
+    workplaceTriggerOptions,
+    workplaceEffortRatingOptions.map((option) => option.value),
+  );
+  const coachingPriorityRatings = normalizeRatingMap(
+    body.coaching_priority_ratings,
+    communicationPreferenceOptions,
+    coachingPriorityRatingOptions.map((option) => option.value),
+  );
+  const coachingStyleRatings = normalizeRatingMap(
+    body.coaching_style_ratings,
+    coachingStyleDimensions.map((option) => option.id),
+    coachingStyleRatingOptions.map((option) => option.value),
+  );
+
+  const ratingsComplete = hasCompleteRatingMap(strengthRatings, strengthOptions)
+    && hasCompleteRatingMap(workplaceEffortRatings, workplaceTriggerOptions)
+    && hasCompleteRatingMap(coachingPriorityRatings, communicationPreferenceOptions)
+    && hasCompleteRatingMap(coachingStyleRatings, coachingStyleDimensions.map((option) => option.id));
+
+  if (!ratingsComplete) {
+    return NextResponse.json(
+      { error: "Rate every communication and coaching category before continuing." },
+      { status: 400 },
+    );
+  }
+
+  const legacyProfile = deriveLegacyCoachingProfile({
+    strengthRatings,
+    workplaceEffortRatings,
+    coachingPriorityRatings,
+    coachingStyleRatings,
+  });
+
   const { error } = await platformRepository.from("profiles").upsert(
     {
       id: user.id,
@@ -53,10 +105,14 @@ export async function POST(req: NextRequest) {
       first_name: body.first_name,
       last_name: body.last_name,
       display_name: body.display_name,
-      strengths: body.strengths || [],
-      workplace_triggers: body.workplace_triggers || [],
-      communication_preferences: body.communication_preferences || [],
-      coaching_tone: body.coaching_tone || "direct_kind",
+      communication_strength_ratings: strengthRatings,
+      workplace_effort_ratings: workplaceEffortRatings,
+      coaching_priority_ratings: coachingPriorityRatings,
+      coaching_style_ratings: coachingStyleRatings,
+      strengths: legacyProfile.strengths,
+      workplace_triggers: legacyProfile.workplaceTriggers,
+      communication_preferences: legacyProfile.communicationPreferences,
+      coaching_tone: legacyProfile.coachingTone,
       neurodivergent_context: body.neurodivergent_context || [],
       neurodivergent_context_other: body.neurodivergent_context_other || null,
       adult_us_eligibility_confirmed_at: now,
@@ -118,9 +174,10 @@ export async function POST(req: NextRequest) {
     eventName: "onboarding_completed",
     source: "web_app",
     metadata: {
-      strengthsCount: body.strengths?.length || 0,
-      triggersCount: body.workplace_triggers?.length || 0,
-      preferencesCount: body.communication_preferences?.length || 0,
+      strengthsRatedCount: Object.keys(strengthRatings).length,
+      workplaceEffortRatedCount: Object.keys(workplaceEffortRatings).length,
+      coachingPrioritiesRatedCount: Object.keys(coachingPriorityRatings).length,
+      coachingStylesRatedCount: Object.keys(coachingStyleRatings).length,
       neurodivergentContextCount: body.neurodivergent_context?.length || 0,
       workApps,
     },
