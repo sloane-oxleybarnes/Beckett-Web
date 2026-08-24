@@ -6,12 +6,13 @@ Outlook add-in offer in Microsoft Partner Center.
 ## Production package
 
 - Manifest: `docs/outlook-addin-manifest-production.xml`
+- Redacted screenshot: `docs/outlook-marketplace-screenshot-redacted-1280x720.png`
 - Production task pane: `https://www.meetbeckett.co/outlook-addin`
 - Support: `https://www.meetbeckett.co/support`
 - Privacy: `https://www.meetbeckett.co/privacy`
 - Terms: `https://www.meetbeckett.co/terms`
 - Manifest ID: `90c2f2db-20b8-4c6f-91e7-9cba3b5c4b5e`
-- Manifest version: `1.0.0.2`
+- Manifest version: `1.0.0.3`
 - Publisher: `Beckett Labs Inc.`
 - Manifest permission: `ReadWriteItem`
 - Mailbox requirement set: `1.5`
@@ -27,7 +28,7 @@ Beckett
 
 ### Short description
 
-Decode Outlook tone and draft clearer replies in your own voice.
+Decode for Outlook: understand tone and draft clearer replies in your own voice.
 
 ### Long description
 
@@ -54,6 +55,7 @@ communication, email, coaching, tone, reply, workplace, accessibility
 - [ ] Availability, markets, and `en-US` are selected.
 - [ ] Support contact, privacy policy, and terms URLs are entered.
 - [ ] Store logo, screenshots, short description, and long description are uploaded.
+- [ ] Screenshots mask all names, email addresses, mailbox labels, and other personal information.
 - [ ] Encryption disclosure says HTTPS/TLS protects data in transit and AES-256-GCM protects stored Microsoft OAuth credentials.
 - [ ] A dedicated reviewer account has completed onboarding, has available credits, and does not require developer intervention.
 - [ ] Certification notes contain the walkthrough below, without placing the password in source control.
@@ -65,6 +67,8 @@ Partner Center; no payment method or manual approval is required.
 
 1. Install Beckett and open any safe sample message in Outlook.
 2. Open Beckett from the message ribbon or Apps menu.
+   Before sign-in, confirm the start screen explains that Beckett clarifies
+   intent and uncertain tone, creates editable responses, and never sends email.
 3. Select **Connect Microsoft account**. If Microsoft SSO is unavailable in the
    test mailbox, select **Sign in to Beckett** and complete sign-in in the secure
    Outlook dialog.

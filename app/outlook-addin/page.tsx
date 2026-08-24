@@ -55,6 +55,13 @@ function readAsync<T>(run: (callback: (result: OfficeResult) => void) => void, o
   return new Promise<T>((resolve, reject) => run((result) => result.status === office.AsyncResultStatus.Succeeded ? resolve(result.value as T) : reject(new Error("Outlook could not read this item."))));
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error(message)), timeoutMs)),
+  ]);
+}
+
 export default function OutlookAddinPage() {
   const [item, setItem] = useState<SelectedItem | null>(null);
   const [result, setResult] = useState<Analysis | null>(null);
@@ -63,6 +70,7 @@ export default function OutlookAddinPage() {
   const [canInsert, setCanInsert] = useState(false);
   const [canOpenReply, setCanOpenReply] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("checking");
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [outlookAccessToken, setOutlookAccessToken] = useState<string | null>(null);
   const [beckettAccessToken, setBeckettAccessToken] = useState<string | null>(null);
   const [connectionAction, setConnectionAction] = useState<ConnectionAction>(null);
@@ -94,26 +102,41 @@ export default function OutlookAddinPage() {
       setStatus("Microsoft SSO is not available for this mailbox. Sign in to Beckett in a secure Outlook dialog instead.");
       return;
     }
+    if (interactive) {
+      setIsAuthenticating(true);
+      setAuthState("signed-out");
+      setStatus("Opening Microsoft sign-in…");
+    }
     try {
-      const client = await getMsalClient();
+      const client = await withTimeout(getMsalClient(), 10_000, "Microsoft SSO took too long to initialize.");
       const request = { scopes: ["User.Read"] };
       let result;
       try {
-        result = await client.acquireTokenSilent(request);
+        result = await withTimeout(client.acquireTokenSilent(request), 10_000, "Microsoft SSO did not return a silent session.");
       } catch (error) {
-        if (!interactive || !(error instanceof InteractionRequiredAuthError)) {
+        if (!interactive) {
           setAuthState("signed-out");
           setStatus("Connect Beckett with your Microsoft work account to continue.");
           return;
         }
-        result = await client.acquireTokenPopup(request);
+        if (!(error instanceof InteractionRequiredAuthError)) {
+          setStatus("Microsoft needs an interactive sign-in. Opening it now…");
+        }
+        result = await withTimeout(
+          client.acquireTokenPopup(request),
+          45_000,
+          "Microsoft sign-in did not open in this Outlook client.",
+        );
       }
       setOutlookAccessToken(result.accessToken);
       setAuthState("signed-in");
       setStatus("Connected through Microsoft SSO.");
     } catch (error) {
-      setAuthState("error");
-      setStatus(error instanceof Error ? error.message : "Microsoft SSO could not start.");
+      setAuthState("signed-out");
+      const detail = error instanceof Error ? error.message : "Microsoft SSO could not start.";
+      setStatus(`${detail} Choose Sign in to Beckett below to continue securely.`);
+    } finally {
+      if (interactive) setIsAuthenticating(false);
     }
   }
 
@@ -169,6 +192,13 @@ export default function OutlookAddinPage() {
       setAuthState("signed-in");
       setStatus("Signed in to Beckett.");
     });
+  }
+
+  function chooseAnotherSignInMethod() {
+    setOutlookAccessToken(null);
+    setBeckettAccessToken(null);
+    setAuthState("signed-out");
+    setStatus("Choose Microsoft SSO or the secure Beckett sign-in fallback.");
   }
 
   function clearForNewItem() {
@@ -418,9 +448,12 @@ export default function OutlookAddinPage() {
   return <main className="min-h-screen bg-bg p-5 text-ink">
     <Script src="https://appsforoffice.microsoft.com/lib/1/hosted/Office.js" onLoad={initializeOffice} />
     <p className="text-xs font-medium uppercase tracking-wide text-primary">Beckett for Outlook</p>
+    <h1 className="mt-2 font-serif text-xl text-ink">Understand the message and reply with confidence.</h1>
+    <p className="mt-2 text-sm leading-relaxed text-ink-mid">Beckett explains intent and uncertain tone, then creates editable response options. You review every draft—Beckett never sends email.</p>
     {!officeHost && <div className="mt-4 rounded-sm border border-primary/20 bg-primary-light/30 px-3 py-3 text-xs leading-relaxed text-ink-mid">Open this page from the Beckett task pane inside Outlook.</div>}
     {status && <div className="mt-4 rounded-sm border border-border bg-white px-3 py-3 text-xs leading-relaxed text-ink-mid" role="status">{status}</div>}
-    {(authState === "signed-out" || authState === "unsupported" || authState === "error") && <div className="mt-4 rounded-card border border-border bg-white p-4"><div className="flex flex-wrap gap-2">{authState !== "unsupported" && <button type="button" onClick={() => void authenticateWithMicrosoft(true)} className="inline-flex rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">Connect Microsoft account</button>}<button type="button" onClick={signInWithBeckett} className="inline-flex rounded-pill border border-primary/30 px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light">Sign in to Beckett</button></div><p className="mt-2 text-xs leading-relaxed text-ink-light">Beckett sign-in is the fallback for Outlook.com and environments where Microsoft SSO is unavailable.</p></div>}
+    {(authState === "signed-out" || authState === "unsupported" || authState === "error") && <div className="mt-4 rounded-card border border-border bg-white p-4"><div className="flex flex-wrap gap-2">{authState !== "unsupported" && <button type="button" onClick={() => void authenticateWithMicrosoft(true)} disabled={isAuthenticating} className="inline-flex rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:cursor-wait disabled:opacity-70">{isAuthenticating ? "Opening Microsoft sign-in…" : "Connect Microsoft account"}</button>}<button type="button" onClick={signInWithBeckett} className="inline-flex rounded-pill border border-primary/30 px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light">Sign in to Beckett</button></div><p className="mt-2 text-xs leading-relaxed text-ink-light">Beckett sign-in is the secure fallback for Outlook clients where Microsoft SSO is unavailable or does not open.</p></div>}
+    {authState === "signed-in" && <button type="button" onClick={chooseAnotherSignInMethod} className="mt-3 text-xs font-medium text-primary hover:underline">Use another sign-in method</button>}
     <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => void analyzeMessage()} disabled={!officeHost || authState !== "signed-in"} className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50">Analyze message</button><button type="button" onClick={() => void analyzeThread()} disabled={!officeHost || authState !== "signed-in"} className="rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">Analyze full thread</button></div>
     <p className="mt-3 text-xs leading-relaxed text-ink-light">Pin Beckett in Outlook when you want it to stay open and follow the message you select.</p>
     {connectionAction === "link-account" && <div className="mt-4 rounded-card border border-primary/20 bg-primary-light/30 p-4"><p className="text-sm font-medium text-ink">Link your Microsoft work account</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">Finish a one-time Beckett sign-in in the browser window that opens. This pane will recognize the link automatically—no Outlook refresh needed.</p><button type="button" onClick={() => void linkMicrosoftAccount()} className="mt-3 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-white">Link Beckett account</button></div>}

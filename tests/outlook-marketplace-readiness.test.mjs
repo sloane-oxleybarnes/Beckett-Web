@@ -7,7 +7,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 test("production manifest keeps the certified Outlook identity and surfaces", () => {
   const manifest = read("docs/outlook-addin-manifest-production.xml");
   assert.match(manifest, /<Id>90c2f2db-20b8-4c6f-91e7-9cba3b5c4b5e<\/Id>/);
-  assert.match(manifest, /<Version>\d+\.\d+\.\d+\.\d+<\/Version>/);
+  assert.match(manifest, /<Version>1\.0\.0\.3<\/Version>/);
   assert.match(manifest, /<ProviderName>Beckett Labs Inc\.<\/ProviderName>/);
   assert.match(manifest, /<SupportUrl DefaultValue="https:\/\/www\.meetbeckett\.co\/support"/);
   assert.match(manifest, /<SourceLocation DefaultValue="https:\/\/www\.meetbeckett\.co\/outlook-addin"/);
@@ -27,6 +27,12 @@ test("task pane has NAA plus a memory-only Office dialog fallback", () => {
   assert.match(pane, /BrowserCacheLocation\.MemoryStorage/);
   assert.match(pane, /displayDialogAsync/);
   assert.match(pane, /Sign in to Beckett/);
+  assert.match(pane, /Use another sign-in method/);
+  assert.match(pane, /chooseAnotherSignInMethod/);
+  assert.match(pane, /Opening Microsoft sign-in/);
+  assert.match(pane, /withTimeout/);
+  assert.match(pane, /Beckett never sends email/);
+  assert.match(pane, /secure fallback for Outlook clients/);
   assert.match(pane, /beckett-outlook-auth/);
   assert.doesNotMatch(pane, /localStorage|sessionStorage/);
 
@@ -72,7 +78,9 @@ test("full-thread access requests Mail.Read incrementally and returns safely", (
 
 test("review documentation matches the production package and user-visible actions", () => {
   const submission = read("docs/outlook-marketplace-submission.md");
-  assert.match(submission, /Manifest version: `1\.0\.0\.2`/);
+  assert.match(submission, /Manifest version: `1\.0\.0\.3`/);
+  assert.match(submission, /Decode for Outlook/);
+  assert.doesNotMatch(submission, /Decode Outlook/);
   assert.match(submission, /Beckett Labs Inc\./);
   assert.match(submission, /Analyze message/);
   assert.match(submission, /Analyze full thread/);
