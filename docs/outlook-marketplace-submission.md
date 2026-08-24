@@ -6,7 +6,8 @@ Outlook add-in offer in Microsoft Partner Center.
 ## Production package
 
 - Manifest: `docs/outlook-addin-manifest-production.xml`
-- Redacted screenshot: `docs/outlook-marketplace-screenshot-redacted-1280x720.png`
+- Partner Center screenshot: `docs/outlook-marketplace-screenshot-redacted-1366x768.png`
+- Reference screenshot: `docs/outlook-marketplace-screenshot-redacted-1280x720.png`
 - Production task pane: `https://www.meetbeckett.co/outlook-addin`
 - Support: `https://www.meetbeckett.co/support`
 - Privacy: `https://www.meetbeckett.co/privacy`
@@ -109,7 +110,7 @@ Entra and Supabase projects:
 - [ ] Test both NAA and **Sign in to Beckett** fallback authentication.
 - [ ] Test message analysis, incremental full-thread consent, copy, insert, and open-reply behavior.
 - [ ] Confirm selected Outlook content is not stored by default.
-- [ ] Capture a redacted 1280×720 screenshot showing a completed analysis.
+- [x] Capture a fully redacted 1366×768 screenshot showing a completed analysis.
 - [ ] Upload the manifest, listing assets, reviewer credentials, and certification notes in Partner Center.
 - [ ] Review the final package, then select **Submit**.
 
