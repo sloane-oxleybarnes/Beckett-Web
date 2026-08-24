@@ -3,9 +3,11 @@ import test from "node:test";
 
 import {
   coachingStyleDimensions,
+  coachingStyleRatingsFromTone,
   deriveLegacyCoachingProfile,
   hasCompleteRatingMap,
   normalizeRatingMap,
+  ratingMapFromLegacySelections,
   strengthOptions,
   strengthRatingOptions,
 } from "../lib/onboarding.ts";
@@ -24,6 +26,26 @@ test("rating maps keep only expected categories and allowed values", () => {
   assert.equal(normalized["Unexpected category"], undefined);
   assert.equal(normalized[strengthOptions[0]], undefined);
   assert.equal(hasCompleteRatingMap(normalized, strengthOptions), false);
+});
+
+test("legacy selections become complete rating maps", () => {
+  const ratings = ratingMapFromLegacySelections(
+    strengthOptions,
+    [strengthOptions[2]],
+    "often",
+    "not_usually",
+  );
+
+  assert.equal(hasCompleteRatingMap(ratings, strengthOptions), true);
+  assert.equal(ratings[strengthOptions[2]], "often");
+  assert.equal(ratings[strengthOptions[0]], "not_usually");
+});
+
+test("legacy coaching tones become independent style ratings", () => {
+  const ratings = coachingStyleRatingsFromTone("gentle_reassuring");
+  assert.equal(hasCompleteRatingMap(ratings, coachingStyleDimensions.map((option) => option.id)), true);
+  assert.equal(ratings.emotional_reassurance, "more");
+  assert.equal(ratings.directness, "a_little");
 });
 
 test("not sure yet counts as an answered category", () => {

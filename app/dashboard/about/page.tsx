@@ -3,12 +3,21 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import {
+  deriveLegacyCoachingProfile,
+  normalizeRatingMap,
   neurodivergentContextOptions,
+  ratingMapFromLegacySelections,
+  strengthRatingOptions,
   strengthOptions,
+  workplaceEffortRatingOptions,
   workplaceTriggerOptions,
+  type RatingMap,
+  type StrengthRating,
+  type WorkplaceEffortRating,
 } from "@/lib/onboarding";
 import SupportPlansPanel from "../workday/SupportPlansPanel";
 import LearningCenter from "@/components/dashboard/LearningCenter";
+import RatingQuestion from "@/components/profile/RatingQuestion";
 
 type AboutData = {
   communication_style: string;
@@ -103,6 +112,39 @@ function SummaryChips({ values }: { values: string[] }) {
           {value}
         </span>
       ))}
+    </div>
+  );
+}
+
+function RatedSummary<T extends string>({
+  options,
+  ratings,
+  ratingOptions,
+  highlightedValues,
+}: {
+  options: readonly string[];
+  ratings: RatingMap<T>;
+  ratingOptions: readonly { value: T; label: string }[];
+  highlightedValues: readonly T[];
+}) {
+  const highlighted = options.filter((option) => highlightedValues.includes(ratings[option]));
+  const labels = new Map(ratingOptions.map((option) => [option.value, option.label]));
+  return (
+    <div>
+      {highlighted.length ? (
+        <div className="flex flex-wrap gap-2">
+          {highlighted.map((option) => (
+            <span key={option} className="rounded-pill bg-bg px-3 py-1 text-xs text-ink-mid">
+              {option} · {labels.get(ratings[option])}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-ink-light">No high ratings yet.</p>
+      )}
+      <p className="mt-2 text-xs text-ink-light">
+        {Object.keys(ratings).length}/{options.length} rated
+      </p>
     </div>
   );
 }
@@ -219,10 +261,10 @@ export default function AboutPage() {
   const [saved, setSaved] = useState(false);
   const [strengths, setStrengths] = useState<string[]>([]);
   const [workplaceTriggers, setWorkplaceTriggers] = useState<string[]>([]);
+  const [strengthRatings, setStrengthRatings] = useState<RatingMap<StrengthRating>>({});
+  const [workplaceEffortRatings, setWorkplaceEffortRatings] = useState<RatingMap<WorkplaceEffortRating>>({});
   const [neurodivergentContext, setNeurodivergentContext] = useState<string[]>([]);
   const [contextOther, setContextOther] = useState("");
-  const [customStrengths, setCustomStrengths] = useState("");
-  const [customTriggers, setCustomTriggers] = useState("");
   const [customContext, setCustomContext] = useState("");
   const [editingSections, setEditingSections] = useState<Set<string>>(new Set());
   const [toolkitItems, setToolkitItems] = useState<ToolkitItem[]>([]);
@@ -248,12 +290,28 @@ export default function AboutPage() {
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("strengths, workplace_triggers, neurodivergent_context, neurodivergent_context_other")
+        .select("strengths, workplace_triggers, communication_strength_ratings, workplace_effort_ratings, neurodivergent_context, neurodivergent_context_other")
         .eq("id", user.id)
         .single();
       if (profile) {
         setStrengths(profile.strengths || []);
         setWorkplaceTriggers(profile.workplace_triggers || []);
+        const loadedStrengthRatings = normalizeRatingMap(
+          profile.communication_strength_ratings,
+          strengthOptions,
+          strengthRatingOptions.map((option) => option.value),
+        );
+        const loadedEffortRatings = normalizeRatingMap(
+          profile.workplace_effort_ratings,
+          workplaceTriggerOptions,
+          workplaceEffortRatingOptions.map((option) => option.value),
+        );
+        setStrengthRatings(Object.keys(loadedStrengthRatings).length
+          ? loadedStrengthRatings
+          : ratingMapFromLegacySelections(strengthOptions, profile.strengths, "often", "not_usually"));
+        setWorkplaceEffortRatings(Object.keys(loadedEffortRatings).length
+          ? loadedEffortRatings
+          : ratingMapFromLegacySelections(workplaceTriggerOptions, profile.workplace_triggers, "moderate", "little_or_none"));
         setNeurodivergentContext(profile.neurodivergent_context || []);
         setContextOther(profile.neurodivergent_context_other || "");
       }
@@ -277,11 +335,21 @@ export default function AboutPage() {
       { user_id: user.id, ...data, updated_at: new Date().toISOString() },
       { onConflict: "user_id" }
     );
+    const legacyProfile = deriveLegacyCoachingProfile({
+      strengthRatings,
+      workplaceEffortRatings,
+      coachingPriorityRatings: {},
+      coachingStyleRatings: {},
+    });
+    const customStrengths = getCustomValues(strengths, strengthOptions);
+    const customWorkplaceTriggers = getCustomValues(workplaceTriggers, workplaceTriggerOptions);
     await supabase
       .from("profiles")
       .update({
-        strengths,
-        workplace_triggers: workplaceTriggers,
+        communication_strength_ratings: strengthRatings,
+        workplace_effort_ratings: workplaceEffortRatings,
+        strengths: [...legacyProfile.strengths, ...customStrengths],
+        workplace_triggers: [...legacyProfile.workplaceTriggers, ...customWorkplaceTriggers],
         neurodivergent_context: neurodivergentContext,
         neurodivergent_context_other: contextOther.trim() || null,
         updated_at: new Date().toISOString(),
@@ -299,16 +367,6 @@ export default function AboutPage() {
       else next.add(section);
       return next;
     });
-  }
-
-  function addCustomStrengths() {
-    setStrengths((current) => mergeCustomEntries(current, customStrengths, 3));
-    setCustomStrengths("");
-  }
-
-  function addCustomTriggers() {
-    setWorkplaceTriggers((current) => mergeCustomEntries(current, customTriggers));
-    setCustomTriggers("");
   }
 
   function addCustomContext() {
@@ -395,55 +453,58 @@ export default function AboutPage() {
         <SummarySection
           title="Communication strengths"
           description="Beckett starts from what already works."
-          values={strengths}
+          values={[]}
           editing={editingSections.has("strengths")}
           onToggle={() => toggleSection("strengths")}
+          summary={<RatedSummary
+            options={strengthOptions}
+            ratings={strengthRatings}
+            ratingOptions={strengthRatingOptions}
+            highlightedValues={["often", "core_strength"]}
+          />}
         >
-          <div className="grid gap-2 sm:grid-cols-2">
+          <p className="mb-3 text-xs leading-relaxed text-ink-mid">
+            Rate every statement based on how true it usually feels.
+          </p>
+          <div className="space-y-3">
             {strengthOptions.map((option) => (
-              <OptionButton
+              <RatingQuestion
                 key={option}
                 label={option}
-                selected={strengths.includes(option)}
-                onClick={() => setStrengths((current) => toggleValue(current, option))}
+                value={strengthRatings[option]}
+                options={strengthRatingOptions}
+                onChange={(value) => setStrengthRatings((current) => ({ ...current, [option]: value }))}
               />
             ))}
           </div>
-          <CustomEntryControls
-            value={customStrengths}
-            onChange={setCustomStrengths}
-            onAdd={addCustomStrengths}
-            values={strengths}
-            presetOptions={strengthOptions}
-            onRemove={(value) => setStrengths((current) => current.filter((item) => item !== value))}
-          />
+          <p className="mt-3 text-xs text-ink-light">{Object.keys(strengthRatings).length}/{strengthOptions.length} rated</p>
         </SummarySection>
 
         <SummarySection
-          title="My Triggers"
-          description="Beckett uses this to be more careful around the moments that tend to spike stress or confusion."
-          values={workplaceTriggers}
+          title="Situations that take extra effort"
+          description="How much extra effort each situation usually creates for you at work."
+          values={[]}
           editing={editingSections.has("triggers")}
           onToggle={() => toggleSection("triggers")}
+          summary={<RatedSummary
+            options={workplaceTriggerOptions}
+            ratings={workplaceEffortRatings}
+            ratingOptions={workplaceEffortRatingOptions}
+            highlightedValues={["moderate", "a_lot"]}
+          />}
         >
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="space-y-3">
             {workplaceTriggerOptions.map((option) => (
-              <OptionButton
+              <RatingQuestion
                 key={option}
                 label={option}
-                selected={workplaceTriggers.includes(option)}
-                onClick={() => setWorkplaceTriggers((current) => toggleValue(current, option))}
+                value={workplaceEffortRatings[option]}
+                options={workplaceEffortRatingOptions}
+                onChange={(value) => setWorkplaceEffortRatings((current) => ({ ...current, [option]: value }))}
               />
             ))}
           </div>
-          <CustomEntryControls
-            value={customTriggers}
-            onChange={setCustomTriggers}
-            onAdd={addCustomTriggers}
-            values={workplaceTriggers}
-            presetOptions={workplaceTriggerOptions}
-            onRemove={(value) => setWorkplaceTriggers((current) => current.filter((item) => item !== value))}
-          />
+          <p className="mt-3 text-xs text-ink-light">{Object.keys(workplaceEffortRatings).length}/{workplaceTriggerOptions.length} rated</p>
         </SummarySection>
 
         <SummarySection

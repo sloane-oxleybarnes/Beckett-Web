@@ -5,10 +5,20 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import type { Profile } from "@/lib/supabase";
 import {
-  coachingToneOptions,
+  coachingPriorityRatingOptions,
+  coachingStyleDimensions,
+  coachingStyleRatingOptions,
   communicationPreferenceOptions,
-  type CoachingTone,
+  coachingStyleRatingsFromTone,
+  deriveLegacyCoachingProfile,
+  hasCompleteRatingMap,
+  normalizeRatingMap,
+  ratingMapFromLegacySelections,
+  type CoachingPriorityRating,
+  type CoachingStyleRating,
+  type RatingMap,
 } from "@/lib/onboarding";
+import RatingQuestion from "@/components/profile/RatingQuestion";
 
 const planBadgeColor: Record<string, string> = {
   free: "bg-ink-light/20 text-ink-mid",
@@ -17,118 +27,9 @@ const planBadgeColor: Record<string, string> = {
   team: "bg-amber-100 text-amber-700",
 };
 
-function toggleValue(list: string[], value: string, max?: number) {
-  if (list.includes(value)) return list.filter((item) => item !== value);
-  if (max && list.length >= max) return list;
-  return [...list, value];
-}
-
-function splitCustomEntries(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function mergeCustomEntries(list: string[], value: string) {
-  const next = [...list];
-  const existing = new Set(next.map((item) => item.toLowerCase()));
-
-  for (const entry of splitCustomEntries(value)) {
-    const key = entry.toLowerCase();
-    if (existing.has(key)) continue;
-    next.push(entry);
-    existing.add(key);
-  }
-
-  return next;
-}
-
 function getCustomValues(values: string[], presetOptions: string[]) {
   const presets = new Set(presetOptions.map((item) => item.toLowerCase()));
   return values.filter((value) => !presets.has(value.toLowerCase()));
-}
-
-function SettingsOption({
-  label,
-  selected,
-  onClick,
-  disabled,
-}: {
-  label: string;
-  selected: boolean;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`text-left rounded-sm border px-3 py-2 text-xs transition-colors ${
-        selected
-          ? "border-primary bg-primary-light text-primary"
-          : "border-border text-ink hover:border-primary-mid"
-      } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function CustomPreferenceControls({
-  value,
-  onChange,
-  onAdd,
-  values,
-  onRemove,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  onAdd: () => void;
-  values: string[];
-  onRemove: (value: string) => void;
-}) {
-  const customValues = getCustomValues(values, communicationPreferenceOptions);
-
-  return (
-    <div className="mt-4 rounded-sm border border-border bg-bg/60 p-3">
-      <label className="block text-xs font-medium uppercase tracking-wide text-ink-light">
-        Add your own
-      </label>
-      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Separate each preference with a comma"
-          className="min-w-0 flex-1 rounded-sm border border-border bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-        <button
-          type="button"
-          onClick={onAdd}
-          disabled={splitCustomEntries(value).length === 0}
-          className="rounded-pill border border-border bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-primary-mid hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Add
-        </button>
-      </div>
-      {customValues.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {customValues.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => onRemove(item)}
-              className="rounded-pill bg-white px-3 py-1 text-xs text-ink-mid transition-colors hover:bg-red-50 hover:text-red-700"
-              aria-label={`Remove ${item}`}
-            >
-              {item} x
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export default function SettingsPage() {
@@ -142,9 +43,8 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [pwSaved, setPwSaved] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
-  const [preferences, setPreferences] = useState<string[]>([]);
-  const [coachingTone, setCoachingTone] = useState<CoachingTone>("direct_kind");
-  const [customPreferences, setCustomPreferences] = useState("");
+  const [coachingPriorityRatings, setCoachingPriorityRatings] = useState<RatingMap<CoachingPriorityRating>>({});
+  const [coachingStyleRatings, setCoachingStyleRatings] = useState<RatingMap<CoachingStyleRating>>({});
   const [coachingSettingsEditing, setCoachingSettingsEditing] = useState(false);
   const [deletionNotes, setDeletionNotes] = useState("");
   const [deletionStatus, setDeletionStatus] = useState<"idle" | "loading" | "requested" | "error">("idle");
@@ -161,8 +61,27 @@ export default function SettingsPage() {
         .then(({ data: profileData }) => {
           setProfile(profileData as Profile);
           setFullName(profileData?.full_name || "");
-          setPreferences(profileData?.communication_preferences || []);
-          setCoachingTone(profileData?.coaching_tone || "direct_kind");
+          const loadedPriorityRatings = normalizeRatingMap(
+            profileData?.coaching_priority_ratings,
+            communicationPreferenceOptions,
+            coachingPriorityRatingOptions.map((option) => option.value),
+          );
+          const loadedStyleRatings = normalizeRatingMap(
+            profileData?.coaching_style_ratings,
+            coachingStyleDimensions.map((option) => option.id),
+            coachingStyleRatingOptions.map((option) => option.value),
+          );
+          setCoachingPriorityRatings(Object.keys(loadedPriorityRatings).length
+            ? loadedPriorityRatings
+            : ratingMapFromLegacySelections(
+                communicationPreferenceOptions,
+                profileData?.communication_preferences,
+                "important",
+                "not_priority",
+              ));
+          setCoachingStyleRatings(Object.keys(loadedStyleRatings).length
+            ? loadedStyleRatings
+            : coachingStyleRatingsFromTone(profileData?.coaching_tone));
         });
     });
   }, [supabase]);
@@ -185,9 +104,21 @@ export default function SettingsPage() {
     const user = data.user;
     if (!user) return;
 
+    const legacyProfile = deriveLegacyCoachingProfile({
+      strengthRatings: {},
+      workplaceEffortRatings: {},
+      coachingPriorityRatings,
+      coachingStyleRatings,
+    });
+    const customPreferences = getCustomValues(
+      profile?.communication_preferences || [],
+      communicationPreferenceOptions,
+    );
     const update = {
-      communication_preferences: preferences,
-      coaching_tone: coachingTone,
+      coaching_priority_ratings: coachingPriorityRatings,
+      coaching_style_ratings: coachingStyleRatings,
+      communication_preferences: [...legacyProfile.communicationPreferences, ...customPreferences],
+      coaching_tone: legacyProfile.coachingTone,
       updated_at: new Date().toISOString(),
     };
 
@@ -202,9 +133,8 @@ export default function SettingsPage() {
     if (!window.confirm("Clear your Beckett coaching settings? You can add them again later.")) {
       return;
     }
-    setPreferences([]);
-    setCoachingTone("direct_kind");
-    setCustomPreferences("");
+    setCoachingPriorityRatings({});
+    setCoachingStyleRatings({});
 
     const { data } = await supabase.auth.getUser();
     const user = data.user;
@@ -212,6 +142,8 @@ export default function SettingsPage() {
     await supabase
       .from("profiles")
       .update({
+        coaching_priority_ratings: {},
+        coaching_style_ratings: {},
         communication_preferences: [],
         coaching_tone: "direct_kind",
         updated_at: new Date().toISOString(),
@@ -219,6 +151,8 @@ export default function SettingsPage() {
       .eq("id", user.id);
     setProfile((current) => current ? {
       ...current,
+      coaching_priority_ratings: {},
+      coaching_style_ratings: {},
       communication_preferences: [],
       coaching_tone: "direct_kind",
     } : current);
@@ -226,15 +160,28 @@ export default function SettingsPage() {
   }
 
   function cancelCoachingSettingsEdit() {
-    setPreferences(profile?.communication_preferences || []);
-    setCoachingTone(profile?.coaching_tone || "direct_kind");
-    setCustomPreferences("");
+    const loadedPriorityRatings = normalizeRatingMap(
+      profile?.coaching_priority_ratings,
+      communicationPreferenceOptions,
+      coachingPriorityRatingOptions.map((option) => option.value),
+    );
+    const loadedStyleRatings = normalizeRatingMap(
+      profile?.coaching_style_ratings,
+      coachingStyleDimensions.map((option) => option.id),
+      coachingStyleRatingOptions.map((option) => option.value),
+    );
+    setCoachingPriorityRatings(Object.keys(loadedPriorityRatings).length
+      ? loadedPriorityRatings
+      : ratingMapFromLegacySelections(
+          communicationPreferenceOptions,
+          profile?.communication_preferences,
+          "important",
+          "not_priority",
+        ));
+    setCoachingStyleRatings(Object.keys(loadedStyleRatings).length
+      ? loadedStyleRatings
+      : coachingStyleRatingsFromTone(profile?.coaching_tone));
     setCoachingSettingsEditing(false);
-  }
-
-  function addCustomPreferences() {
-    setPreferences((current) => mergeCustomEntries(current, customPreferences));
-    setCustomPreferences("");
   }
 
   async function changePassword(e: React.FormEvent) {
@@ -297,8 +244,19 @@ export default function SettingsPage() {
     );
   }
 
-  const selectedCoachingTone = coachingToneOptions.find((option) => option.value === coachingTone)
-    || coachingToneOptions[0];
+  const highlightedPriorities = communicationPreferenceOptions.filter((option) =>
+    ["important", "top_priority"].includes(coachingPriorityRatings[option]),
+  );
+  const emphasizedStyleIds = coachingStyleDimensions
+    .filter((option) => coachingStyleRatings[option.id] === "more")
+    .map((option) => option.label);
+  const coachingRatingsComplete = hasCompleteRatingMap(
+    coachingPriorityRatings,
+    communicationPreferenceOptions,
+  ) && hasCompleteRatingMap(
+    coachingStyleRatings,
+    coachingStyleDimensions.map((option) => option.id),
+  );
 
   return (
     <div className="max-w-xl">
@@ -429,23 +387,36 @@ export default function SettingsPage() {
         {!coachingSettingsEditing ? (
           <div className="mt-5 space-y-5">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">What Beckett helps with</p>
-              {preferences.length > 0 ? (
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Top coaching priorities</p>
+              {highlightedPriorities.length > 0 ? (
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {preferences.map((preference) => (
+                  {highlightedPriorities.map((preference) => (
                     <span key={preference} className="rounded-pill border border-primary/20 bg-primary-light px-3 py-1.5 text-xs text-primary">
                       {preference}
                     </span>
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-ink-light">Nothing selected</p>
+                <p className="mt-2 text-sm text-ink-light">No top priorities selected</p>
               )}
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Coaching tone</p>
-              <p className="mt-2 text-sm font-medium text-ink">{selectedCoachingTone.label}</p>
-              <p className="mt-1 text-xs leading-relaxed text-ink-mid">{selectedCoachingTone.description}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Coaching qualities to emphasize</p>
+              {emphasizedStyleIds.length ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {emphasizedStyleIds.map((label) => (
+                    <span key={label} className="rounded-pill border border-primary/20 bg-primary-light px-3 py-1.5 text-xs text-primary">
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-ink-light">No stronger emphasis selected</p>
+              )}
+              <p className="mt-2 text-xs text-ink-light">
+                {Object.keys(coachingPriorityRatings).length + Object.keys(coachingStyleRatings).length}/
+                {communicationPreferenceOptions.length + coachingStyleDimensions.length} rated
+              </p>
             </div>
           </div>
         ) : (
@@ -455,51 +426,48 @@ export default function SettingsPage() {
             live in About Me.
           </p>
           <div>
-            <label className="block text-sm font-medium text-ink mb-2">What I Want Beckett to Help Me With</label>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <p className="block text-sm font-medium text-ink mb-1">How useful would Beckett’s help be in each area?</p>
+            <p className="mb-3 text-xs leading-relaxed text-ink-mid">Rate every area. “Not sure yet” counts as an answer.</p>
+            <div className="space-y-3">
               {communicationPreferenceOptions.map((option) => (
-                <SettingsOption
+                <RatingQuestion
                   key={option}
                   label={option}
-                  selected={preferences.includes(option)}
-                  onClick={() => setPreferences((current) => toggleValue(current, option))}
+                  value={coachingPriorityRatings[option]}
+                  options={coachingPriorityRatingOptions}
+                  onChange={(value) => setCoachingPriorityRatings((current) => ({ ...current, [option]: value }))}
                 />
               ))}
             </div>
-            <CustomPreferenceControls
-              value={customPreferences}
-              onChange={setCustomPreferences}
-              onAdd={addCustomPreferences}
-              values={preferences}
-              onRemove={(value) => setPreferences((current) => current.filter((item) => item !== value))}
-            />
+            <p className="mt-3 text-xs text-ink-light">
+              {Object.keys(coachingPriorityRatings).length}/{communicationPreferenceOptions.length} priorities rated
+            </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-ink mb-2">Coaching tone</label>
-            <div className="space-y-2">
-              {coachingToneOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setCoachingTone(option.value)}
-                  className={`w-full text-left rounded-sm border px-3 py-3 transition-colors ${
-                    coachingTone === option.value
-                      ? "border-primary bg-primary-light"
-                      : "border-border hover:border-primary-mid"
-                  }`}
-                >
-                  <p className="text-sm font-medium text-ink">{option.label}</p>
-                  <p className="text-xs text-ink-mid mt-0.5">{option.description}</p>
-                </button>
+            <p className="block text-sm font-medium text-ink mb-1">How much of each coaching quality should Beckett use?</p>
+            <p className="mb-3 text-xs leading-relaxed text-ink-mid">These qualities work together; you do not have to fit one preset.</p>
+            <div className="space-y-3">
+              {coachingStyleDimensions.map((option) => (
+                <RatingQuestion
+                  key={option.id}
+                  label={option.label}
+                  value={coachingStyleRatings[option.id]}
+                  options={coachingStyleRatingOptions}
+                  onChange={(value) => setCoachingStyleRatings((current) => ({ ...current, [option.id]: value }))}
+                />
               ))}
             </div>
+            <p className="mt-3 text-xs text-ink-light">
+              {Object.keys(coachingStyleRatings).length}/{coachingStyleDimensions.length} coaching qualities rated
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="submit"
-              className="bg-primary text-white text-sm rounded-pill px-5 py-2 hover:bg-primary-dark transition-colors"
+              disabled={!coachingRatingsComplete}
+              className="bg-primary text-white text-sm rounded-pill px-5 py-2 hover:bg-primary-dark transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
               {profileSaved ? "Saved ✓" : "Save coaching settings"}
             </button>

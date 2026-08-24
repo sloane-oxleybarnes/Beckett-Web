@@ -59,7 +59,7 @@ const walkthroughSteps: WalkthroughStep[] = [
     eyebrow: "About Me",
     title: "Your coaching profile shapes the support.",
     body:
-      "About Me stores strengths, triggers, communication preferences, neurodivergent context, and your communication toolkit. You can edit or delete items.",
+      "About Me stores your rated communication strengths, situations that take extra effort, neurodivergent context, and communication toolkit. Coaching priorities and style ratings live in Settings.",
     target: '[data-tour="nav-about-me"]',
   },
   {

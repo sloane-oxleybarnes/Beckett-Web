@@ -140,6 +140,61 @@ export function hasCompleteRatingMap<T extends string>(
   return expectedKeys.every((key) => Boolean(ratings[key]));
 }
 
+export function ratingMapFromLegacySelections<T extends string>(
+  options: readonly string[],
+  selections: readonly string[] | null | undefined,
+  selectedValue: T,
+  unselectedValue: T,
+): RatingMap<T> {
+  const selected = new Set(selections || []);
+  return Object.fromEntries(
+    options.map((option) => [option, selected.has(option) ? selectedValue : unselectedValue]),
+  );
+}
+
+export function coachingStyleRatingsFromTone(
+  tone: CoachingTone | string | null | undefined,
+): RatingMap<CoachingStyleRating> {
+  const presets: Record<CoachingTone, RatingMap<CoachingStyleRating>> = {
+    direct_kind: {
+      directness: "more",
+      emotional_reassurance: "moderate",
+      social_context_explanation: "moderate",
+      action_focused_next_steps: "more",
+      concise_wording: "moderate",
+    },
+    gentle_reassuring: {
+      directness: "a_little",
+      emotional_reassurance: "more",
+      social_context_explanation: "moderate",
+      action_focused_next_steps: "moderate",
+      concise_wording: "a_little",
+    },
+    blunt_practical: {
+      directness: "more",
+      emotional_reassurance: "less",
+      social_context_explanation: "a_little",
+      action_focused_next_steps: "more",
+      concise_wording: "more",
+    },
+    detailed_explanatory: {
+      directness: "moderate",
+      emotional_reassurance: "moderate",
+      social_context_explanation: "more",
+      action_focused_next_steps: "more",
+      concise_wording: "less",
+    },
+    short_concise: {
+      directness: "moderate",
+      emotional_reassurance: "a_little",
+      social_context_explanation: "less",
+      action_focused_next_steps: "more",
+      concise_wording: "more",
+    },
+  };
+  return presets[tone as CoachingTone] || presets.direct_kind;
+}
+
 function preferredItems<T extends string>(
   options: readonly string[],
   ratings: RatingMap<T>,
