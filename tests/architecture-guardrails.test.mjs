@@ -49,6 +49,10 @@ test("course content is loaded on the server rather than bundled as client fallb
   assert.doesNotMatch(read("components/courses/CourseClient.tsx"), /getCourse/);
 });
 
+test("Tailwind scans feature modules that render product interfaces", () => {
+  assert.match(read("tailwind.config.ts"), /\.\/features\/\*\*\/\*\.\{js,ts,jsx,tsx,mdx\}/);
+});
+
 test("the auth proxy only runs for protected dashboard routes", () => {
   assert.match(read("proxy.ts"), /matcher: \['\/dashboard\/:path\*'\]/);
   assert.match(read("proxy.ts"), /auth\.getClaims\(\)/);
