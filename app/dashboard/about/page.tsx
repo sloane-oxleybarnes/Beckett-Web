@@ -142,9 +142,6 @@ function RatedSummary<T extends string>({
       ) : (
         <p className="text-sm text-ink-light">No high ratings yet.</p>
       )}
-      <p className="mt-2 text-xs text-ink-light">
-        {Object.keys(ratings).length}/{options.length} rated
-      </p>
     </div>
   );
 }
@@ -477,7 +474,6 @@ export default function AboutPage() {
               />
             ))}
           </div>
-          <p className="mt-3 text-xs text-ink-light">{Object.keys(strengthRatings).length}/{strengthOptions.length} rated</p>
         </SummarySection>
 
         <SummarySection
@@ -504,7 +500,6 @@ export default function AboutPage() {
               />
             ))}
           </div>
-          <p className="mt-3 text-xs text-ink-light">{Object.keys(workplaceEffortRatings).length}/{workplaceTriggerOptions.length} rated</p>
         </SummarySection>
 
         <SummarySection

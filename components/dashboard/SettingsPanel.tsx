@@ -413,10 +413,6 @@ export default function SettingsPage() {
               ) : (
                 <p className="mt-2 text-sm text-ink-light">No stronger emphasis selected</p>
               )}
-              <p className="mt-2 text-xs text-ink-light">
-                {Object.keys(coachingPriorityRatings).length + Object.keys(coachingStyleRatings).length}/
-                {communicationPreferenceOptions.length + coachingStyleDimensions.length} rated
-              </p>
             </div>
           </div>
         ) : (
@@ -439,9 +435,6 @@ export default function SettingsPage() {
                 />
               ))}
             </div>
-            <p className="mt-3 text-xs text-ink-light">
-              {Object.keys(coachingPriorityRatings).length}/{communicationPreferenceOptions.length} priorities rated
-            </p>
           </div>
 
           <div>
@@ -458,9 +451,6 @@ export default function SettingsPage() {
                 />
               ))}
             </div>
-            <p className="mt-3 text-xs text-ink-light">
-              {Object.keys(coachingStyleRatings).length}/{coachingStyleDimensions.length} coaching qualities rated
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">

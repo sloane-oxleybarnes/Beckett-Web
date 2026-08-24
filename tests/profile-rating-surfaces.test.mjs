@@ -17,6 +17,7 @@ test("Settings edits and saves the shared coaching rating maps", () => {
   assert.match(settingsSource, /coaching_priority_ratings: coachingPriorityRatings/);
   assert.match(settingsSource, /coaching_style_ratings: coachingStyleRatings/);
   assert.match(settingsSource, /disabled=\{!coachingRatingsComplete\}/);
+  assert.doesNotMatch(settingsSource, /priorities rated|coaching qualities rated/);
 });
 
 test("About Me edits and saves the shared strengths and effort rating maps", () => {
@@ -25,4 +26,5 @@ test("About Me edits and saves the shared strengths and effort rating maps", () 
   assert.match(aboutSource, /communication_strength_ratings: strengthRatings/);
   assert.match(aboutSource, /workplace_effort_ratings: workplaceEffortRatings/);
   assert.doesNotMatch(aboutSource, /title="My Triggers"/);
+  assert.doesNotMatch(aboutSource, />\{Object\.keys\([^<]+rated/);
 });
