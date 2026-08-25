@@ -30,6 +30,8 @@ const actionLabels: Record<MessageHelpAction, string> = {
   next_steps: "Next steps",
 };
 
+const replyOptionLabels = /^(Direct|Warm|Balanced|Clear|Warmer|More concise|Direct but kind|Warm and collaborative|Concise|Sets a gentle limit)$/i;
+
 function renderGuidanceCards(text: string) {
   const sections: Array<{ title: string; lines: string[] }> = [];
   let current: { title: string; lines: string[] } = { title: "", lines: [] };
@@ -42,10 +44,11 @@ function renderGuidanceCards(text: string) {
     const line = rawLine.trim();
     if (!line || line === "---") continue;
     const heading = line.match(/^#{2,3}\s+(.+)$/);
-    const labeledSection = line.match(/^(Direct|Warm|Balanced|Clear|Warmer|More concise)\s*:\s*(.*)$/i);
-    if (heading || labeledSection) {
+    const labeledSection = line.match(/^(Direct|Warm|Balanced|Clear|Warmer|More concise|Direct but kind|Warm and collaborative|Concise|Sets a gentle limit)\s*:\s*(.*)$/i);
+    const standaloneSection = replyOptionLabels.test(line) ? line : "";
+    if (heading || labeledSection || standaloneSection) {
       pushCurrent();
-      current.title = (heading?.[1] || labeledSection?.[1] || "").replace(/\*\*/g, "");
+      current.title = (heading?.[1] || labeledSection?.[1] || standaloneSection || "").replace(/\*\*/g, "");
       if (labeledSection?.[2]) current.lines.push(labeledSection[2]);
       continue;
     }
@@ -56,7 +59,7 @@ function renderGuidanceCards(text: string) {
 
   return sections.map((section, index) => (
     <article key={`${section.title}-${index}`} className="rounded-card border border-border bg-white p-5 sm:p-6">
-      {/^(Direct|Warm|Balanced|Clear|Warmer|More concise)$/i.test(section.title)
+      {replyOptionLabels.test(section.title)
         ? <p className="inline-flex rounded-pill border border-primary/25 bg-white px-3 py-1 text-sm font-semibold text-primary">{section.title}</p>
         : <p className="text-xs font-medium uppercase tracking-wide text-primary">{section.title || "Beckett's guidance"}</p>}
       <div className="mt-3 space-y-2">
