@@ -56,7 +56,9 @@ function renderGuidanceCards(text: string) {
 
   return sections.map((section, index) => (
     <article key={`${section.title}-${index}`} className="rounded-card border border-primary/20 bg-primary-light/20 p-5 sm:p-6">
-      <p className="text-xs font-medium uppercase tracking-wide text-primary">{section.title || "Beckett's guidance"}</p>
+      {/^(Direct|Warm|Balanced|Clear|Warmer|More concise)$/i.test(section.title)
+        ? <p className="inline-flex rounded-pill border border-primary/25 bg-white px-3 py-1 text-sm font-semibold text-primary">{section.title}</p>
+        : <p className="text-xs font-medium uppercase tracking-wide text-primary">{section.title || "Beckett's guidance"}</p>}
       <div className="mt-3 space-y-2">
         {section.lines.map((line, lineIndex) => {
           const bullet = line.match(/^[-•]\s+(.*)$/);
@@ -87,6 +89,7 @@ export default function MessageHelpPanel() {
   const [pendingAttachmentText, setPendingAttachmentText] = useState("");
   const [attachmentTarget, setAttachmentTarget] = useState<"message" | "context">("message");
   const [originalExpanded, setOriginalExpanded] = useState(false);
+  const [contextExpanded, setContextExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function openAttachmentPicker(target: "message" | "context") {
@@ -152,6 +155,7 @@ export default function MessageHelpPanel() {
       setSubmittedText(text.trim());
       setSubmittedContext(context.trim());
       setOriginalExpanded(false);
+      setContextExpanded(false);
       setStatus("idle");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Beckett could not prepare help right now.");
@@ -165,6 +169,7 @@ export default function MessageHelpPanel() {
     setSubmittedContext("");
     setSafety(null);
     setOriginalExpanded(false);
+    setContextExpanded(false);
   }
 
   async function requestFollowup(action: MessageHelpAction) {
@@ -197,7 +202,7 @@ export default function MessageHelpPanel() {
           {error && <p role="alert" className="mt-4 text-sm text-red-700">{error}</p>}<button type="submit" disabled={!text.trim() || status === "loading"} className="mt-5 rounded-pill bg-primary px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50">{status === "loading" ? "Beckett is working…" : "Analyze"}</button>
         </form>
       </> : <section aria-live="polite" className="space-y-5">
-        <div className="rounded-card border border-border bg-white p-5 shadow-sm sm:p-6"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="text-xs font-medium uppercase tracking-wide text-primary">Your original message</p><p className={`mt-3 whitespace-pre-wrap text-sm leading-7 text-ink ${!originalExpanded && submittedText.length > 180 ? "line-clamp-2" : ""}`}>{submittedText}</p>{submittedText.length > 180 && <button type="button" onClick={() => setOriginalExpanded((current) => !current)} aria-expanded={originalExpanded} className="mt-2 text-sm font-medium text-primary hover:underline">{originalExpanded ? "Show less ↑" : "Show more ↓"}</button>}</div><button type="button" onClick={startOver} className="shrink-0 rounded-pill border border-border px-3 py-2 text-xs font-medium text-ink-mid hover:border-primary hover:text-primary">Edit request</button></div>{submittedContext && <div className="mt-5 border-t border-border pt-4"><p className="text-xs font-medium uppercase tracking-wide text-ink-light">Conversation context</p><p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-ink-mid">{submittedContext}</p></div>}</div>
+        <div className="rounded-card border border-border bg-white p-5 shadow-sm sm:p-6"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="text-xs font-medium uppercase tracking-wide text-primary">Your original message</p><p className={`mt-3 whitespace-pre-wrap text-sm leading-7 text-ink ${!originalExpanded && submittedText.length > 180 ? "line-clamp-2" : ""}`}>{submittedText}</p>{submittedText.length > 180 && <button type="button" onClick={() => setOriginalExpanded((current) => !current)} aria-expanded={originalExpanded} className="mt-2 text-sm font-medium text-primary hover:underline">{originalExpanded ? "Show less ↑" : "Show more ↓"}</button>}</div><button type="button" onClick={startOver} className="shrink-0 rounded-pill border border-border px-3 py-2 text-xs font-medium text-ink-mid hover:border-primary hover:text-primary">Edit request</button></div>{submittedContext && <div className="mt-5 border-t border-border pt-4"><p className="text-xs font-medium uppercase tracking-wide text-ink-light">Conversation context</p><p className={`mt-2 whitespace-pre-wrap text-sm leading-7 text-ink-mid ${!contextExpanded && submittedContext.length > 180 ? "line-clamp-2" : ""}`}>{submittedContext}</p>{submittedContext.length > 180 && <button type="button" onClick={() => setContextExpanded((current) => !current)} aria-expanded={contextExpanded} className="mt-2 text-sm font-medium text-primary hover:underline">{contextExpanded ? "Show less ↑" : "Show more ↓"}</button>}</div>}</div>
         {response.map((item) => <div key={item.action} className="space-y-3"><p className="px-1 text-xs font-medium uppercase tracking-wide text-primary">Beckett&apos;s {actionLabels[item.action]}</p>{renderGuidanceCards(item.response)}</div>)}
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
         <div className="flex flex-wrap gap-3"><button type="button" onClick={() => void requestFollowup("respond")} disabled={status === "loading" || response.some((item) => item.action === "respond")} className="rounded-pill border border-primary/30 bg-white px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">Draft reply options</button><button type="button" onClick={() => void requestFollowup("next_steps")} disabled={status === "loading" || response.some((item) => item.action === "next_steps")} className="rounded-pill border border-primary/30 bg-white px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">Suggest next steps</button><button type="button" onClick={() => { toggleAction("practice"); sessionStorage.setItem("beckett-practice-prefill", JSON.stringify({ person: person.trim() || "the other person", situation: submittedText.slice(0, 4000), goal: goal.trim() || "Practice a clear response that reflects what I want to communicate.", relationshipContext: context.trim().slice(0, 1000) })); router.push("/dashboard/practice?from=message-help"); }} className="rounded-pill border border-primary/30 bg-white px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light">Practice this conversation</button><button type="button" onClick={startOver} className="rounded-pill border border-border bg-white px-4 py-2 text-sm font-medium text-ink-mid hover:border-primary hover:text-primary">Start another request</button></div>
