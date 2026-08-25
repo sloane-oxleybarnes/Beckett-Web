@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { SafetyResponse } from "@/lib/safety-resources";
 import type { MessageHelpAction } from "@/lib/message-help";
 
@@ -96,6 +96,19 @@ export default function MessageHelpPanel() {
   const [originalExpanded, setOriginalExpanded] = useState(false);
   const [contextExpanded, setContextExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem("beckett-message-help-prefill");
+    if (!raw) return;
+    sessionStorage.removeItem("beckett-message-help-prefill");
+    try {
+      const prefill = JSON.parse(raw) as { text?: unknown; action?: unknown };
+      if (typeof prefill.text === "string") setText(prefill.text.slice(0, 5000));
+      if (prefill.action === "decode" || prefill.action === "respond" || prefill.action === "rewrite" || prefill.action === "practice") setSelectedActions([prefill.action]);
+    } catch {
+      // Ignore malformed local prefill data.
+    }
+  }, []);
 
   function openAttachmentPicker(target: "message" | "context") {
     setAttachmentTarget(target);
