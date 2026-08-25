@@ -2,6 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import Script from "next/script";
+
+declare global {
+  interface Window {
+    microsoftTeams?: {
+      app: {
+        initialize: () => Promise<unknown>;
+      };
+    };
+  }
+}
 
 type DecodeResult = {
   intent: "decode";
@@ -46,35 +57,41 @@ export default function TeamsActionPage() {
   const [connectUrl, setConnectUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    const queryParams = new URLSearchParams(window.location.search);
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const token = queryParams.get("token") || hashParams.get("token");
-    window.history.replaceState(null, "", window.location.pathname);
-    if (!token) {
-      setError("This Teams action is missing or expired. Close Beckett and select the message action again.");
-      return;
-    }
-    void fetch("/api/teams/action", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token }),
-    }).then(async (response) => {
-      const payload = await response.json().catch(() => ({})) as {
-        result?: TeamsResult;
-        message?: string;
-        connectUrl?: string;
-      };
-      if (!response.ok || !payload.result) {
-        setConnectUrl(payload.connectUrl || null);
-        throw new Error(payload.message || "Beckett could not coach this message. Please try again.");
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (window.microsoftTeams?.app) await window.microsoftTeams.app.initialize();
+        if (cancelled) return;
+        const queryParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const token = queryParams.get("token") || hashParams.get("token");
+        window.history.replaceState(null, "", window.location.pathname);
+        if (!token) throw new Error("This Teams action is missing or expired. Close Beckett and select the message action again.");
+        const response = await fetch("/api/teams/action", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        const payload = await response.json().catch(() => ({})) as {
+          result?: TeamsResult;
+          message?: string;
+          connectUrl?: string;
+        };
+        if (!response.ok || !payload.result) {
+          setConnectUrl(payload.connectUrl || null);
+          throw new Error(payload.message || "Beckett could not coach this message. Please try again.");
+        }
+        setResult(payload.result);
+      } catch (requestError) {
+        if (!cancelled) setError(requestError instanceof Error ? requestError.message : "Beckett could not coach this message.");
       }
-      setResult(payload.result);
-    }).catch((requestError) => {
-      setError(requestError instanceof Error ? requestError.message : "Beckett could not coach this message.");
-    });
+    })();
+    return () => { cancelled = true; };
   }, []);
 
-  return <main className="min-h-screen bg-[#fbf8f3] px-5 py-6 text-[#1a1917]">
+  return <>
+    <Script src="https://res.cdn.office.net/teams-js/2.19.0/js/MicrosoftTeams.min.js" strategy="beforeInteractive" />
+    <main className="min-h-screen bg-[#fbf8f3] px-5 py-6 text-[#1a1917]">
     <div className="mx-auto max-w-xl">
       <div className="mb-6 flex items-center gap-3">
         <Image src="/brand/beckett-icon.png" alt="" width={36} height={36} className="h-9 w-9 rounded-lg" priority />
@@ -111,5 +128,6 @@ export default function TeamsActionPage() {
 
       <p className="mt-6 text-xs leading-relaxed text-[#847b72]">Beckett does not save the selected Teams message or send anything for you. Review and edit every draft before you choose to send it.</p>
     </div>
-  </main>;
+    </main>
+  </>;
 }
