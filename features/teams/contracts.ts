@@ -95,16 +95,18 @@ export function normalizeTeamsSelectedMessage(body?: {
 
 export function parseTeamsMessageAction(value: unknown): ParsedTeamsMessageAction {
   const activity = (value || {}) as TeamsMessageActionActivity;
+  const activityValue = activity.value;
   if (
     activity.type !== "invoke"
     || activity.name !== "composeExtension/fetchTask"
     || (activity.channelId && activity.channelId !== "msteams")
-    || !["compose", "message"].includes(activity.value?.commandContext || "")
+    || !activityValue
+    || !["compose", "message"].includes(activityValue.commandContext || "")
   ) {
     throw new TeamsMessageActionError("unsupported_activity", "This Teams action is not supported.");
   }
 
-  const commandId = activity.value.commandId || "";
+  const commandId = activityValue.commandId || "";
   const intent = TEAMS_ACTION_COMMANDS[commandId as keyof typeof TEAMS_ACTION_COMMANDS];
   if (!intent) throw new TeamsMessageActionError("unsupported_command", "This Beckett action is not available.");
 
@@ -113,7 +115,7 @@ export function parseTeamsMessageAction(value: unknown): ParsedTeamsMessageActio
     throw new TeamsMessageActionError("teams_identity_missing", "Teams did not provide a Microsoft account identity.");
   }
 
-  const messageText = normalizeTeamsSelectedMessage(activity.value.messagePayload?.body);
+  const messageText = normalizeTeamsSelectedMessage(activityValue.messagePayload?.body);
   if (!messageText) {
     throw new TeamsMessageActionError("selected_message_missing", "Beckett could not read text from the selected message.");
   }
