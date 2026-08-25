@@ -44,6 +44,7 @@ function renderGuidanceCards(text: string) {
     const line = rawLine.trim();
     const normalizedLine = line.replace(/\*\*/g, "").trim();
     if (!line || line === "---") continue;
+    if (/^(?:>|›)?\s*(?:these are ready to copy and send|want help with anything else|need help with anything else|how else can i help)/i.test(normalizedLine)) continue;
     const heading = normalizedLine.match(/^#{1,3}\s+(.+)$/);
     const labeledSection = normalizedLine.match(/^(Direct|Warm|Balanced|Clear|Warmer|More concise|Direct but kind|Warm and collaborative|Concise|Sets a gentle limit)\s*:\s*(.*)$/i);
     const standaloneSection = replyOptionLabels.test(normalizedLine) ? normalizedLine : "";
