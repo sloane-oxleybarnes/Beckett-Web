@@ -35,7 +35,7 @@ export default function SharedContextCard() {
             What Beckett carries across the web app
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-mid">
-            Home, Practice, Skills, Calendar &amp; Meetings, and About Me use the same choices. Beckett does not copy raw Gmail messages or calendar events into this shared profile.
+            Home, Practice, Skills, Calendar &amp; Meetings, and Settings &amp; About Me use the same choices. Beckett does not copy raw Gmail messages or calendar events into this shared profile.
           </p>
         </div>
         <Link href="/privacy" className="shrink-0 text-xs font-medium text-primary hover:underline">Privacy details →</Link>
@@ -47,7 +47,7 @@ export default function SharedContextCard() {
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <Detail
             label="Coaching profile"
-            value={context.profile.hasCoachingPreferences || context.profile.hasStrengths || context.profile.hasSupportConsiderations ? "Used to tailor requested coaching, not to label or diagnose you." : "Add preferences in About Me when you want more tailored support."}
+            value={context.profile.hasCoachingPreferences || context.profile.hasStrengths || context.profile.hasSupportConsiderations ? "Used to tailor requested coaching, not to label or diagnose you." : "Add preferences in Settings & About Me when you want more tailored support."}
           />
           <Detail
             label="Learning & patterns"
@@ -64,7 +64,7 @@ export default function SharedContextCard() {
         </div>
       )}
       <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-ink-light">
-        <Link href="/dashboard/about" className="hover:text-primary hover:underline">Edit About Me</Link>
+        <Link href="/dashboard/settings" className="hover:text-primary hover:underline">Edit Settings &amp; About Me</Link>
         <Link href="/dashboard/contacts" className="hover:text-primary hover:underline">Manage contacts</Link>
         <Link href="/dashboard/workday" className="hover:text-primary hover:underline">Review support plans</Link>
       </div>

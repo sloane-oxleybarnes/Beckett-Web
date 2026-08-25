@@ -47,7 +47,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           Welcome back, {name}.
         </h1>
         <p className="text-ink-mid text-sm">Here is your day, refreshed as you go.</p>
-        <Link href="/dashboard/message-help" className="mt-4 inline-flex rounded-pill bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-dark">Get help with a message</Link>
       </div>
 
       <TodayGuide name={name} />

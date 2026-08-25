@@ -56,17 +56,10 @@ const walkthroughSteps: WalkthroughStep[] = [
     slackConnect: true,
   },
   {
-    eyebrow: "About Me",
-    title: "Your coaching profile shapes the support.",
-    body:
-      "About Me stores your rated communication strengths, situations that take extra effort, neurodivergent context, and communication toolkit. Coaching priorities and style ratings live in Settings.",
-    target: '[data-tour="nav-about-me"]',
-  },
-  {
-    eyebrow: "Settings",
+    eyebrow: "Settings & About Me",
     title: "You stay in control.",
     body:
-      "Settings is where account details, connected tools, coaching preferences, and deletion requests live. Nothing here is locked away from you.",
+      "Settings & About Me is where your profile, communication preferences, coaching settings, connected tools, and deletion requests live. Nothing here is locked away from you.",
     target: '[data-tour="nav-settings"]',
   },
 ];

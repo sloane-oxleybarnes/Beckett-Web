@@ -14,7 +14,7 @@ type SkillCard = {
   level: 'Foundational'
   estimatedMinutes: number
   courseId?: string
-  illustration: 'date' | 'colleague' | 'clarity' | 'no'
+  illustration: 'date' | 'colleague' | 'clarity' | 'feedback' | 'no'
   section?: 'Professional' | 'Personal'
   sortOrder?: number
 }
@@ -79,6 +79,16 @@ function LineIllustration({ type }: { type: SkillCard['illustration'] }) {
           <div className="absolute bottom-2 right-2 h-9 w-9 rounded-full border border-primary" />
           <div className="absolute bottom-4 right-5 h-3 w-3 rounded-full border border-primary" />
           <div className="absolute bottom-2 right-5 h-px w-3 bg-primary" />
+        </div>
+      )}
+      {type === 'feedback' && (
+        <div className="relative h-full">
+          <div className="absolute left-1 top-2 h-10 w-16 rounded-sm border border-primary/70" />
+          <div className="absolute left-4 top-5 h-px w-9 bg-primary/70" />
+          <div className="absolute left-4 top-8 h-px w-6 bg-ink-light/50" />
+          <div className="absolute right-1 bottom-2 h-9 w-9 rounded-full border border-primary" />
+          <div className="absolute right-4 bottom-5 h-px w-4 rotate-[-25deg] bg-primary" />
+          <div className="absolute right-5 bottom-3 h-2 w-2 rounded-full bg-primary/70" />
         </div>
       )}
       {type === 'no' && (

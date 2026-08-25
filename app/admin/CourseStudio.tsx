@@ -17,7 +17,7 @@ type TextField = {
   value: string;
 };
 
-const ILLUSTRATIONS: CourseIllustration[] = ["clarity", "colleague", "date", "no"];
+const ILLUSTRATIONS: CourseIllustration[] = ["clarity", "colleague", "date", "feedback", "no"];
 const SECTIONS: CourseSection[] = ["Professional", "Personal"];
 
 function copyCourse(course: Course): Course {
