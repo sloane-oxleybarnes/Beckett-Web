@@ -113,15 +113,9 @@ export function selectedMessageOpener(
   messageText: string,
   requesterIsAuthor = false,
 ) {
-  return [
-    intent === "decode" ? "Let’s read this message privately." : "Let’s draft a response privately.",
-    requesterIsAuthor
-      ? `Selected your message: “${selectedMessageExcerpt(messageText)}”`
-      : `Selected message from ${author}: “${selectedMessageExcerpt(messageText)}”`,
-    intent === "decode"
-      ? "Reply in this thread so the message, read, and follow-ups stay together."
-      : "Reply in this thread so the message, drafts, and follow-ups stay together.",
-  ].join("\n\n");
+  const action = intent === "decode" ? "Decode" : "Respond";
+  const source = requesterIsAuthor ? "your message" : `from ${author}`;
+  return `${action} ${source}: “${selectedMessageExcerpt(messageText)}”`;
 }
 
 export function selectedMessageContextInstruction(
@@ -134,22 +128,14 @@ export function selectedMessageContextInstruction(
     : "Surrounding Slack context was unavailable. Base the drafts only on the selected message and briefly invite the requester to reply in the private Beckett thread with the 1–3 preceding messages if they would materially change the response.";
 }
 
-export function selectedMessagePrivateResult({
-  author,
-  messageText,
+export function selectedMessageThreadReply({
   response,
-  requesterIsAuthor = false,
   surroundingContextAvailable,
 }: {
-  author: string;
-  messageText: string;
   response: string;
-  requesterIsAuthor?: boolean;
   surroundingContextAvailable: boolean;
 }) {
-  const source = requesterIsAuthor ? "your message" : `from ${author}`;
   return [
-    `Decode ${source}: “${selectedMessageExcerpt(messageText)}”`,
     response.trim(),
     surroundingContextAvailable
       ? ""

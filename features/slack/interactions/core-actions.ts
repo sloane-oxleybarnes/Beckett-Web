@@ -74,7 +74,7 @@ import {
   parseInteractionPayload,
   selectedMessageContextInstruction,
   selectedMessageOpener,
-  selectedMessagePrivateResult,
+  selectedMessageThreadReply,
   shortcutSourceAckText,
   type MessageShortcutIntent,
   type SlackInteractionPayload,
@@ -613,15 +613,7 @@ export async function sendMessageShortcutResponse({
         botAccessToken,
         slackUserId,
         title: slackHistoryTitle(intent, "selected message"),
-        text: intent === "decode"
-          ? selectedMessagePrivateResult({
-              author: guestAuthorLabel,
-              messageText,
-              response,
-              requesterIsAuthor,
-              surroundingContextAvailable,
-            })
-          : selectedMessageOpener(intent, guestAuthorLabel, messageText, requesterIsAuthor),
+        text: selectedMessageOpener(intent, guestAuthorLabel, messageText, requesterIsAuthor),
       });
 
       let agentReplyPosted = false;
@@ -672,28 +664,26 @@ export async function sendMessageShortcutResponse({
             message: error instanceof Error ? error.message : String(error),
           });
         });
-        if (intent === "decode") {
-          agentReplyPosted = true;
-        } else {
-          const responsePayload = buildBeckettPayload({
-            title: "Beckett",
-            subtitle: "",
-            body: response,
-            hideTitle: true,
+        const responsePayload = buildBeckettPayload({
+          title: "Beckett",
+          subtitle: "",
+          body: intent === "decode"
+            ? selectedMessageThreadReply({ response, surroundingContextAvailable })
+            : response,
+          hideTitle: true,
+        });
+        const reply = await slackApiPost(botAccessToken, "chat.postMessage", {
+          channel: agentDelivery.channelId,
+          thread_ts: agentDelivery.ts,
+          ...responsePayload,
+        });
+        agentReplyPosted = Boolean(reply.ok);
+        if (!agentReplyPosted) {
+          console.error("Slack guest shortcut assistant reply failed", {
+            teamPresent: Boolean(teamId),
+            slackUserPresent: Boolean(slackUserId),
+            error: reply.error || "agent_reply_failed",
           });
-          const reply = await slackApiPost(botAccessToken, "chat.postMessage", {
-            channel: agentDelivery.channelId,
-            thread_ts: agentDelivery.ts,
-            ...responsePayload,
-          });
-          agentReplyPosted = Boolean(reply.ok);
-          if (!agentReplyPosted) {
-            console.error("Slack guest shortcut assistant reply failed", {
-              teamPresent: Boolean(teamId),
-              slackUserPresent: Boolean(slackUserId),
-              error: reply.error || "agent_reply_failed",
-            });
-          }
         }
       }
 
@@ -811,15 +801,7 @@ export async function sendMessageShortcutResponse({
       botAccessToken: user.botAccessToken,
       slackUserId,
       title: slackHistoryTitle(intent, authorLabel || (payload.channel?.name ? `#${payload.channel.name}` : "this Slack conversation")),
-      text: intent === "decode"
-        ? selectedMessagePrivateResult({
-            author: authorLabel || "the message author",
-            messageText,
-            response,
-            requesterIsAuthor,
-            surroundingContextAvailable,
-          })
-        : selectedMessageOpener(intent, authorLabel || "the message author", messageText, requesterIsAuthor),
+      text: selectedMessageOpener(intent, authorLabel || "the message author", messageText, requesterIsAuthor),
     });
 
     if (agentDelivery.ok) {
@@ -874,7 +856,27 @@ export async function sendMessageShortcutResponse({
           }).catch(() => null);
         }
 
-        if (intent === "decode") {
+        const responsePayload = buildBeckettPayload({
+          title: "Beckett",
+          subtitle: "",
+          body: intent === "decode"
+            ? selectedMessageThreadReply({ response, surroundingContextAvailable })
+            : response,
+          hideTitle: true,
+        });
+        const postedResponse = await slackApiPost<{ ts?: string }>(user.botAccessToken, "chat.postMessage", {
+          channel: agentChannelId,
+          thread_ts: agentThreadTs,
+          ...responsePayload,
+        });
+        if (postedResponse.ok && postedResponse.ts) {
+          await recordSlackCoachingBotMessage({
+            threadId: coachingThread?.id,
+            userId: user.id,
+            channelId: agentChannelId,
+            messageTs: postedResponse.ts,
+            kind: "reply",
+          }).catch(() => null);
           await appendSlackCoachingMessage({
             threadId: coachingThread?.id,
             user,
@@ -883,35 +885,6 @@ export async function sendMessageShortcutResponse({
             role: "beckett",
             content: response,
           }).catch(() => null);
-        } else {
-          const responsePayload = buildBeckettPayload({
-            title: "Beckett",
-            subtitle: "",
-            body: response,
-            hideTitle: true,
-          });
-          const postedResponse = await slackApiPost<{ ts?: string }>(user.botAccessToken, "chat.postMessage", {
-            channel: agentChannelId,
-            thread_ts: agentThreadTs,
-            ...responsePayload,
-          });
-          if (postedResponse.ok && postedResponse.ts) {
-            await recordSlackCoachingBotMessage({
-              threadId: coachingThread?.id,
-              userId: user.id,
-              channelId: agentChannelId,
-              messageTs: postedResponse.ts,
-              kind: "reply",
-            }).catch(() => null);
-            await appendSlackCoachingMessage({
-              threadId: coachingThread?.id,
-              user,
-              teamId,
-              slackUserId,
-              role: "beckett",
-              content: response,
-            }).catch(() => null);
-          }
         }
 
         const draftSession = intent === "respond"

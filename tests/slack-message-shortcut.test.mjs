@@ -6,7 +6,7 @@ import {
   buildShortcutPrompt,
   selectedMessageContextInstruction,
   selectedMessageOpener,
-  selectedMessagePrivateResult,
+  selectedMessageThreadReply,
   shortcutSourceAckText,
 } from "../features/slack/interaction-contracts.ts";
 
@@ -33,7 +33,7 @@ test("message shortcut recognizes a requester selecting their own message", () =
   const opener = selectedMessageOpener("decode", "Sloane", payload.message.text, true);
 
   assert.match(prompt, /selected their own message/i);
-  assert.match(opener, /Selected your message/);
+  assert.match(opener, /^Decode your message/);
   assert.doesNotMatch(opener, /from Sloane/);
 });
 
@@ -45,18 +45,21 @@ test("unavailable surrounding context forces an ambiguity-safe Decode", () => {
   assert.equal(selectedMessageContextInstruction("decode", true), "");
 });
 
-test("Decode is delivered as one compact private root with an add-context path", () => {
-  const result = selectedMessagePrivateResult({
-    author: "Claire",
-    messageText: "thinner so i can annoy you more",
+test("Decode uses a compact root and puts the result plus add-context path in a reply", () => {
+  const root = selectedMessageOpener(
+    "decode",
+    "Claire",
+    "thinner so i can annoy you more",
+  );
+  const reply = selectedMessageThreadReply({
     response: "~ Possible read ~ “Thinner” is ambiguous without the earlier messages.\n~ Next move ~ Share what you were discussing immediately before this.",
     surroundingContextAvailable: false,
   });
 
-  assert.match(result, /^Decode from Claire:/);
-  assert.equal((result.match(/thinner so i can annoy you more/g) || []).length, 1);
-  assert.match(result, /Reply here with the 1–3 messages immediately before/i);
-  assert.doesNotMatch(result, /Let’s read this message privately/);
+  assert.equal(root, "Decode from Claire: “thinner so i can annoy you more”");
+  assert.doesNotMatch(reply, /thinner so i can annoy you more/);
+  assert.match(reply, /Reply here with the 1–3 messages immediately before/i);
+  assert.doesNotMatch(root, /Let’s read this message privately/);
 });
 
 test("source conversation receives one short plain-text acknowledgement", () => {
