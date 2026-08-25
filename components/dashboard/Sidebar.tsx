@@ -19,7 +19,7 @@ const navItems = [
   { href: "/dashboard/message-help", label: "Message Help" },
   { href: "/dashboard/practice", label: "Practice" },
   { href: "/dashboard/skills", label: "Skills" },
-  { href: "/dashboard/calendar", label: "Calendar & Meetings" },
+  { href: "/dashboard/calendar", label: "Calendar" },
   { href: "/dashboard/contacts", label: "Contacts" },
   { href: "/dashboard/apps", label: "Apps" },
   { href: "/dashboard/settings", label: "Settings & About Me", tourKey: "settings" },

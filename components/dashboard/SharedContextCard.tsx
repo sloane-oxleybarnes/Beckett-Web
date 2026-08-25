@@ -35,7 +35,7 @@ export default function SharedContextCard() {
             What Beckett carries across the web app
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-mid">
-            Home, Practice, Skills, Calendar &amp; Meetings, and Settings &amp; About Me use the same choices. Beckett does not copy raw Gmail messages or calendar events into this shared profile.
+            Home, Practice, Skills, Calendar, and Settings &amp; About Me use the same choices. Beckett does not copy raw Gmail messages or calendar events into this shared profile.
           </p>
         </div>
         <Link href="/privacy" className="shrink-0 text-xs font-medium text-primary hover:underline">Privacy details →</Link>
