@@ -48,7 +48,7 @@ const sections = [
     title: "Who Beckett shares data with",
     body: [
       "Beckett shares user data only with service providers and systems needed to run, secure, support, and improve Beckett.",
-      "These may include authentication and database providers such as Supabase, AI providers such as Anthropic for generating coaching responses, Google, Microsoft, and Slack APIs when you connect those services, hosting and infrastructure providers, analytics and debugging tools, email delivery tools, and beta/customer-support tools such as HubSpot and Loops.",
+      "These may include authentication and database providers such as Supabase, AI providers such as Anthropic for generating coaching responses, Google, Microsoft, and Slack APIs when you connect those services (including selected Teams message text when you explicitly request a Teams coaching action), hosting and infrastructure providers, analytics and debugging tools, email delivery tools, and beta/customer-support tools such as HubSpot and Loops.",
       "Service providers receive only the information needed for their role. Beckett does not sell personal data or transfer user data to advertising platforms, data brokers, or other information resellers.",
     ],
   },

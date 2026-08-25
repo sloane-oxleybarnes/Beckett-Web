@@ -1,0 +1,54 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.29/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.29",
+  "version": "0.1.0",
+  "id": "__MICROSOFT_TEAMS_APP_ID__",
+  "developer": {
+    "name": "Beckett Labs Inc.",
+    "websiteUrl": "https://www.meetbeckett.co",
+    "privacyUrl": "https://www.meetbeckett.co/privacy",
+    "termsOfUseUrl": "https://www.meetbeckett.co/terms"
+  },
+  "name": {
+    "short": "Beckett",
+    "full": "Beckett for Microsoft Teams"
+  },
+  "description": {
+    "short": "Private coaching for workplace messages.",
+    "full": "Decode a selected Teams message or draft an editable response with Beckett. Beckett acts only after you select a message action and never sends on your behalf."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#B96F0E",
+  "composeExtensions": [
+    {
+      "id": "beckett-message-actions",
+      "botId": "__MICROSOFT_TEAMS_APP_ID__",
+      "composeExtensionType": "botBased",
+      "canUpdateConfiguration": false,
+      "commands": [
+        {
+          "id": "beckett_decode_selected",
+          "type": "action",
+          "context": ["message"],
+          "title": "Decode with Beckett",
+          "description": "Privately understand the selected message.",
+          "fetchTask": true
+        },
+        {
+          "id": "beckett_draft_response",
+          "type": "action",
+          "context": ["message"],
+          "title": "Draft a response",
+          "description": "Create editable response options for the selected message.",
+          "fetchTask": true
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity"],
+  "validDomains": ["__MICROSOFT_TEAMS_VALID_DOMAIN__"],
+  "defaultInstallScope": "personal"
+}
