@@ -23,7 +23,7 @@
     "validate:outlook": "office-addin-manifest validate -p docs/outlook-addin-manifest-production.xml",
     "verify:outlook": "npm run test:outlook && npm run validate:outlook",
     "test:google-workspace-addon": "node --test tests/google-workspace-addon-diagnostics.test.mjs tests/google-workspace-addon-link.test.mjs tests/google-workspace-gmail-context.test.mjs tests/google-workspace-gmail-draft-action.test.mjs",
-    "test:slack": "node --test tests/slack-guest-routing.test.mjs tests/slack-api-retry.test.mjs tests/slack-command-copy.test.mjs tests/slack-prep-copy.test.mjs tests/slack-guided-intent.test.mjs tests/slack-zero-copy.test.mjs tests/slack-thread-rehydration.test.mjs tests/slack-coaching-profile.test.mjs tests/slack-response-format.test.mjs tests/slack-diagnostics.test.mjs",
+    "test:slack": "node --test tests/slack-guest-routing.test.mjs tests/slack-api-retry.test.mjs tests/slack-command-copy.test.mjs tests/slack-prep-copy.test.mjs tests/slack-guided-intent.test.mjs tests/slack-zero-copy.test.mjs tests/slack-thread-rehydration.test.mjs tests/slack-coaching-profile.test.mjs tests/slack-response-format.test.mjs tests/slack-diagnostics.test.mjs tests/slack-message-shortcut.test.mjs",
     "test:teams": "node --test tests/teams-message-actions.test.mjs tests/teams-action-token.test.mjs tests/teams-manifest.test.mjs",
     "eval:slack-profiles": "node --env-file-if-exists=.env.local scripts/evaluate-slack-coaching-profiles.mjs",
     "demo:plan": "node scripts/demo-seed.cjs --plan",

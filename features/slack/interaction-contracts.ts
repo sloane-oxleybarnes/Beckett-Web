@@ -51,17 +51,27 @@ export function buildShortcutPrompt(
   payload: SlackInteractionPayload,
   authorLabel?: string | null,
   intent: MessageShortcutIntent = "respond",
+  requesterLabel?: string | null,
 ) {
   const author = authorLabel || payload.message?.username || null;
+  const requester = requesterLabel?.trim() || "the Slack user asking Beckett";
+  const requesterIsAuthor = Boolean(
+    payload.user?.id && payload.message?.user && payload.user.id === payload.message.user
+  );
   const channel = payload.channel?.name && payload.channel.name !== "directmessage" ? ` in #${payload.channel.name}` : "";
   const source = author ? ` from ${author}${channel}` : "";
+  const identity = requesterIsAuthor
+    ? `Requester Slack identity: ${requester}. The requester selected their own message.`
+    : `Requester Slack identity: ${requester}. Selected-message author: ${author || "another Slack participant"}. These are different Slack users.`;
   if (intent === "decode") {
     return [
+      identity,
       `Help me decode this message${source}.`,
       "What is visible, what might be underneath it, and what should I pay attention to?",
     ].join(" ");
   }
   return [
+    identity,
     `Help me draft a response to this message${source}.`,
     "Give me a short read, the next move, and three Slack-ready response options.",
   ].join(" ");
@@ -97,12 +107,56 @@ export function selectedMessageExcerpt(text: string, maxLength = 180) {
   return cleaned.length <= maxLength ? cleaned : `${cleaned.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
-export function selectedMessageOpener(intent: MessageShortcutIntent, author: string, messageText: string) {
+export function selectedMessageOpener(
+  intent: MessageShortcutIntent,
+  author: string,
+  messageText: string,
+  requesterIsAuthor = false,
+) {
   return [
     intent === "decode" ? "Let’s read this message privately." : "Let’s draft a response privately.",
-    `Selected message from ${author}: “${selectedMessageExcerpt(messageText)}”`,
+    requesterIsAuthor
+      ? `Selected your message: “${selectedMessageExcerpt(messageText)}”`
+      : `Selected message from ${author}: “${selectedMessageExcerpt(messageText)}”`,
     intent === "decode"
       ? "Reply in this thread so the message, read, and follow-ups stay together."
       : "Reply in this thread so the message, drafts, and follow-ups stay together.",
   ].join("\n\n");
+}
+
+export function selectedMessageContextInstruction(
+  intent: MessageShortcutIntent,
+  surroundingContextAvailable: boolean,
+) {
+  if (surroundingContextAvailable) return "";
+  return intent === "decode"
+    ? "Surrounding Slack context was unavailable. Treat ambiguous words and references as unresolved: do not invent what they refer to. Briefly say the read is limited to the selected message and, when the missing context matters, ask the requester to reply in the private Beckett thread with the 1–3 messages immediately before it or a short paraphrase."
+    : "Surrounding Slack context was unavailable. Base the drafts only on the selected message and briefly invite the requester to reply in the private Beckett thread with the 1–3 preceding messages if they would materially change the response.";
+}
+
+export function selectedMessagePrivateResult({
+  author,
+  messageText,
+  response,
+  requesterIsAuthor = false,
+  surroundingContextAvailable,
+}: {
+  author: string;
+  messageText: string;
+  response: string;
+  requesterIsAuthor?: boolean;
+  surroundingContextAvailable: boolean;
+}) {
+  const source = requesterIsAuthor ? "your message" : `from ${author}`;
+  return [
+    `Decode ${source}: “${selectedMessageExcerpt(messageText)}”`,
+    response.trim(),
+    surroundingContextAvailable
+      ? ""
+      : "Need a more certain read? Reply here with the 1–3 messages immediately before this one, or briefly say what you were discussing.",
+  ].filter(Boolean).join("\n\n");
+}
+
+export function shortcutSourceAckText() {
+  return "Opened privately in Beckett.";
 }
