@@ -1,4 +1,4 @@
-export const messageHelpActions = ["decode", "respond", "rewrite", "prep"] as const;
+export const messageHelpActions = ["decode", "respond", "rewrite", "next_steps"] as const;
 
 export type MessageHelpAction = (typeof messageHelpActions)[number];
 
@@ -8,7 +8,7 @@ export function isMessageHelpAction(value: unknown): value is MessageHelpAction 
 
 export function messageHelpTask(action: MessageHelpAction) {
   if (action === "decode") {
-    return "Explain what the message clearly says, its plausible tone, what remains ambiguous, and what response may be expected. Separate evidence from interpretation and offer practical next steps.";
+    return "Explain only what the message clearly says, its plausible tone, and what remains ambiguous. Separate evidence from interpretation. Do not draft a reply, recommend next steps, or add actions the user did not request.";
   }
   if (action === "respond") {
     return "Write three ready-to-send response options labeled Direct, Warm, and Balanced. Preserve the user's intent and do not claim to send anything.";
@@ -16,5 +16,5 @@ export function messageHelpTask(action: MessageHelpAction) {
   if (action === "rewrite") {
     return "Rewrite the user's draft three ways labeled Clear, Warmer, and More concise. Preserve its meaning, boundaries, and factual claims.";
   }
-  return "Help the user prepare for the conversation connected to this message. Include the desired outcome, an opening line, key talking points, likely pushback without presenting it as certain, and a useful follow-up.";
+  return "Suggest practical next steps for the user based on the specific message and context. Do not draft a reply unless the user separately asks for response options.";
 }
