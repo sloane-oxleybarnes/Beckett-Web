@@ -54,6 +54,17 @@ test("only the two explicit message actions are accepted", () => {
   );
 });
 
+test("accepts Microsoft's compose context for message actions", () => {
+  const parsed = parseTeamsMessageAction(activity({
+    channelId: undefined,
+    value: {
+      ...activity().value,
+      commandContext: "compose",
+    },
+  }));
+  assert.equal(parsed.intent, "decode");
+});
+
 test("parser rejects non-message invokes, missing identity, and blank selected content", () => {
   assert.throws(
     () => parseTeamsMessageAction(activity({ channelId: "webchat" })),

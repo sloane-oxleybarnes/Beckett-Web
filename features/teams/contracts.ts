@@ -98,8 +98,8 @@ export function parseTeamsMessageAction(value: unknown): ParsedTeamsMessageActio
   if (
     activity.type !== "invoke"
     || activity.name !== "composeExtension/fetchTask"
-    || activity.channelId !== "msteams"
-    || activity.value?.commandContext !== "message"
+    || (activity.channelId && activity.channelId !== "msteams")
+    || !["compose", "message"].includes(activity.value?.commandContext || "")
   ) {
     throw new TeamsMessageActionError("unsupported_activity", "This Teams action is not supported.");
   }

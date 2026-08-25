@@ -53,7 +53,10 @@ teamsApp.on("message.ext.open", async ({ activity }) => {
     const origin = (process.env.NEXT_PUBLIC_SITE_URL || "https://meetbeckett.co").replace(/\/$/, "");
     return buildTeamsTaskDialogResponse(`${origin}/teams/action?token=${encodeURIComponent(token)}`, action.intent);
   } catch (error) {
-    if (error instanceof TeamsMessageActionError) return buildTeamsTaskErrorResponse(error.message);
+    if (error instanceof TeamsMessageActionError) {
+      console.warn(`Microsoft Teams action rejected: ${error.code}`);
+      return buildTeamsTaskErrorResponse(error.message);
+    }
     console.error("Microsoft Teams action could not open");
     return buildTeamsTaskErrorResponse("Beckett could not open this message. Please try again.");
   }
