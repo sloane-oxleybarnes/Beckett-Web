@@ -22,7 +22,7 @@ export default function HomeMessageHelpCard() {
   }
 
   return (
-    <section className="rounded-card border border-primary/20 bg-primary-light/35 p-5 shadow-sm sm:p-6">
+    <section className="h-full rounded-card border border-primary/20 bg-primary-light/35 p-5 shadow-sm sm:p-6">
       <p className="text-xs font-medium uppercase tracking-wide text-primary">Message help</p>
       <h2 className="mt-2 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>What do you want help with?</h2>
       <p className="mt-1 text-sm leading-relaxed text-ink-mid">Paste a message or draft and choose the kind of support you want.</p>

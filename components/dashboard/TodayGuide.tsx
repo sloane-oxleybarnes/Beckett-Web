@@ -370,7 +370,7 @@ export default function TodayGuide({ name }: { name: string }) {
 
   return (
     <section className="mb-6 space-y-5">
-      <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
+      <div className="grid gap-5 lg:grid-cols-2">
       <div id="today-checkin" className="rounded-card border border-border bg-white p-5 sm:p-6">
         <p className="text-xs font-medium uppercase tracking-wide text-primary">Today with Beckett</p>
         <h2 className="mt-2 text-3xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{greeting}, {name}.</h2>
