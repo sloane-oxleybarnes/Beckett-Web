@@ -16,6 +16,7 @@ const planBadgeColor: Record<string, string> = {
 
 const navItems = [
   { href: "/dashboard", label: "Home" },
+  { href: "/dashboard/message-help", label: "Message Help" },
   { href: "/dashboard/practice", label: "Practice" },
   { href: "/dashboard/skills", label: "Skills" },
   { href: "/dashboard/contacts", label: "Contacts" },

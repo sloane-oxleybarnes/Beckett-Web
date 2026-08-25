@@ -36,6 +36,26 @@ export default function AdaptiveConversationSimulator({ embedded = false }: { em
   const [error, setError] = useState('')
 
   useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const stored = sessionStorage.getItem('beckett-practice-prefill')
+      const prefill = stored ? JSON.parse(stored) as Partial<Setup> : null
+      const situation = prefill?.situation || params.get('scenario') || ''
+      const goal = prefill?.goal || params.get('goal') || ''
+      if (situation || goal || prefill?.person) {
+        setSetup((current) => ({
+          ...current,
+          person: prefill?.person?.trim() || 'the other person',
+          situation: situation.slice(0, 4000),
+          goal: goal.slice(0, 1000),
+          relationshipContext: prefill?.relationshipContext?.slice(0, 1000) || '',
+        }))
+      }
+      if (stored) sessionStorage.removeItem('beckett-practice-prefill')
+    } catch {
+      sessionStorage.removeItem('beckett-practice-prefill')
+    }
+
     loadAdaptiveSimulator()
       .then((body) => {
         setContacts(body.contacts || [])
