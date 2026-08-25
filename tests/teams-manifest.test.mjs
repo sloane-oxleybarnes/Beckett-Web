@@ -33,7 +33,7 @@ test("Teams implementation is private, authenticated, and zero-copy by construct
   assert.match(app, /dangerouslyAllowUnauthenticatedRequests: false/);
   assert.match(app, /MICROSOFT_TEAMS_APP_ID/);
   assert.match(app, /MICROSOFT_TEAMS_APP_SECRET/);
-  assert.match(app, /#token=/);
+  assert.match(app, /[?&]token=/);
   assert.doesNotMatch(app, /send\(|reply\(|microsoftGraphRequest|chatMessage|serviceUrl/);
   assert.doesNotMatch(actionRoute, /\.insert\(|\.upsert\(|messageText.*metadata|trackBetaEvent/);
   assert.match(page, /does not save the selected Teams message or send anything for you/);

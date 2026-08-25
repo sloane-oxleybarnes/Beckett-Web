@@ -73,10 +73,10 @@ test("parser rejects non-message invokes, missing identity, and blank selected c
 });
 
 test("message action returns a private hosted dialog, never a conversation post", () => {
-  const response = buildTeamsTaskDialogResponse("https://www.meetbeckett.co/teams/action#token=opaque", "decode");
+  const response = buildTeamsTaskDialogResponse("https://www.meetbeckett.co/teams/action?token=opaque", "decode");
   assert.equal(response.task.type, "continue");
   assert.equal(response.task.value.width, "medium");
-  assert.match(response.task.value.url, /#token=opaque$/);
+  assert.match(response.task.value.url, /[?&]token=opaque$/);
   assert.equal("composeExtension" in response, false);
   assert.equal("activity" in response, false);
 });

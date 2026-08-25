@@ -51,7 +51,7 @@ teamsApp.on("message.ext.open", async ({ activity }) => {
       messageText: action.messageText,
     });
     const origin = (process.env.NEXT_PUBLIC_SITE_URL || "https://meetbeckett.co").replace(/\/$/, "");
-    return buildTeamsTaskDialogResponse(`${origin}/teams/action#token=${encodeURIComponent(token)}`, action.intent);
+    return buildTeamsTaskDialogResponse(`${origin}/teams/action?token=${encodeURIComponent(token)}`, action.intent);
   } catch (error) {
     if (error instanceof TeamsMessageActionError) return buildTeamsTaskErrorResponse(error.message);
     console.error("Microsoft Teams action could not open");

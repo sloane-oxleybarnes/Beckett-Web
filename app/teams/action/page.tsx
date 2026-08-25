@@ -46,8 +46,9 @@ export default function TeamsActionPage() {
   const [connectUrl, setConnectUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const token = params.get("token");
+    const queryParams = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const token = queryParams.get("token") || hashParams.get("token");
     window.history.replaceState(null, "", window.location.pathname);
     if (!token) {
       setError("This Teams action is missing or expired. Close Beckett and select the message action again.");
