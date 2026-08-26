@@ -10,6 +10,12 @@ import { isMessageHelpAction, messageHelpTask, type MessageHelpAction } from "@/
 
 type Action = MessageHelpAction | "draft";
 
+function repeatsSourceMessage(response: string, source: string) {
+  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const normalizedSource = normalize(source);
+  return normalizedSource.length >= 20 && normalize(response).includes(normalizedSource);
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -42,7 +48,14 @@ export async function POST(request: NextRequest) {
 
   try {
     await metering.ai.record({ userId: user.id, source: "web_coach", action: `coach_${canonicalAction}`, metadata: { directness, warmth, formality, length } });
-    const response = await callAnthropic(system, [{ role: "user", content: prompt }], 900);
+    let response = await callAnthropic(system, [{ role: "user", content: prompt }], 900);
+    if (canonicalAction === "respond" && repeatsSourceMessage(response, text)) {
+      response = await callAnthropic(
+        `${system}\n\nQuality check: the previous draft repeated the source message. Correct it by writing three genuine replies from the user to the other person. Do not include the source message, a quotation of it, or a paraphrase of it in any option.`,
+        [{ role: "user", content: prompt }],
+        900,
+      );
+    }
     return NextResponse.json({ response: response.trim(), safety: null });
   } catch (error) {
     if (error instanceof AiUsageLimitError) return NextResponse.json({ error: error.message }, { status: error.status });
