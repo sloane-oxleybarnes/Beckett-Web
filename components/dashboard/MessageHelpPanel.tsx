@@ -32,7 +32,7 @@ const actionLabels: Record<MessageHelpAction, string> = {
 
 const replyOptionLabels = /^(Direct|Warm|Balanced|Clear|Warmer|More concise|Direct but kind|Warm and collaborative|Concise|Sets a gentle limit)$/i;
 
-function renderGuidanceCards(text: string) {
+function renderGuidanceCards(text: string, onCopy?: (value: string) => void, copiedValue?: string) {
   const sections: Array<{ title: string; lines: string[] }> = [];
   let current: { title: string; lines: string[] } = { title: "", lines: [] };
   const pushCurrent = () => {
@@ -72,6 +72,7 @@ function renderGuidanceCards(text: string) {
             : <p key={lineIndex} className="text-sm leading-7 text-ink-mid">{line}</p>;
         })}
       </div>
+      {onCopy && <button type="button" onClick={() => onCopy(section.lines.join("\n"))} className="mt-4 rounded-pill border border-primary/30 bg-white px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-light">{copiedValue === section.lines.join("\n") ? "Copied" : "Copy"}</button>}
     </article>
   ));
 }
@@ -95,6 +96,9 @@ export default function MessageHelpPanel() {
   const [attachmentTarget, setAttachmentTarget] = useState<"message" | "context">("message");
   const [originalExpanded, setOriginalExpanded] = useState(false);
   const [contextExpanded, setContextExpanded] = useState(false);
+  const [editingAction, setEditingAction] = useState<MessageHelpAction | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  const [copiedResponse, setCopiedResponse] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -188,6 +192,26 @@ export default function MessageHelpPanel() {
     setSafety(null);
     setOriginalExpanded(false);
     setContextExpanded(false);
+    setEditingAction(null);
+    setEditingValue("");
+    setCopiedResponse(null);
+  }
+
+  async function copyResponse(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedResponse(value);
+      window.setTimeout(() => setCopiedResponse((current) => current === value ? null : current), 1800);
+    } catch {
+      setError("Could not copy that response. You can select and copy it manually.");
+    }
+  }
+
+  function saveEditedResponse() {
+    if (!editingAction || !editingValue.trim()) return;
+    setResponse((current) => current.map((item) => item.action === editingAction ? { ...item, response: editingValue.trim() } : item));
+    setEditingAction(null);
+    setEditingValue("");
   }
 
   async function requestFollowup(action: MessageHelpAction) {
@@ -221,9 +245,9 @@ export default function MessageHelpPanel() {
         </form>
       </> : <section aria-live="polite" className="space-y-5">
         <div className="rounded-card border border-primary/20 bg-primary-light/25 p-5 shadow-sm sm:p-6"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="text-xs font-medium uppercase tracking-wide text-primary">Your original message</p><p className={`mt-3 whitespace-pre-wrap text-sm leading-7 text-ink ${!originalExpanded && submittedText.length > 100 ? "line-clamp-1" : ""}`}>{submittedText}</p>{submittedText.length > 100 && <button type="button" onClick={() => setOriginalExpanded((current) => !current)} aria-expanded={originalExpanded} className="mt-2 text-sm font-medium text-primary hover:underline">{originalExpanded ? "Show less ↑" : "Show more ↓"}</button>}</div><button type="button" onClick={startOver} className="shrink-0 rounded-pill border border-border bg-white/70 px-3 py-2 text-xs font-medium text-ink-mid hover:border-primary hover:text-primary">Edit request</button></div>{submittedContext && <div className="mt-5 border-t border-primary/20 pt-4"><p className="text-xs font-medium uppercase tracking-wide text-primary/75">Conversation context</p><p className={`mt-2 whitespace-pre-wrap text-sm leading-7 text-ink-mid ${!contextExpanded && submittedContext.length > 100 ? "line-clamp-1" : ""}`}>{submittedContext}</p>{submittedContext.length > 100 && <button type="button" onClick={() => setContextExpanded((current) => !current)} aria-expanded={contextExpanded} className="mt-2 text-sm font-medium text-primary hover:underline">{contextExpanded ? "Show less ↑" : "Show more ↓"}</button>}</div>}</div>
-        {response.map((item) => <div key={item.action} className="space-y-3"><p className="px-1 text-xs font-medium uppercase tracking-wide text-primary">Beckett&apos;s {actionLabels[item.action]}</p>{renderGuidanceCards(item.response)}</div>)}
+        {response.map((item) => <div key={item.action} className="space-y-3"><div className="flex items-center justify-between gap-3"><p className="px-1 text-xs font-medium uppercase tracking-wide text-primary">Beckett&apos;s {actionLabels[item.action]}</p>{item.action === "respond" && <button type="button" onClick={() => { setEditingAction(item.action); setEditingValue(item.response); }} className="rounded-pill border border-primary/30 bg-white px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-light">Edit</button>}</div>{editingAction === item.action ? <div className="rounded-card border border-primary/30 bg-white p-4"><textarea value={editingValue} onChange={(event) => setEditingValue(event.target.value)} rows={12} className="block w-full resize-y rounded-sm border border-border px-3 py-2 text-sm leading-relaxed text-ink" /><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={saveEditedResponse} disabled={!editingValue.trim()} className="rounded-pill bg-primary px-4 py-2 text-xs font-medium text-white hover:bg-primary-dark disabled:opacity-50">Save changes</button><button type="button" onClick={() => { setEditingAction(null); setEditingValue(""); }} className="rounded-pill border border-border bg-white px-4 py-2 text-xs font-medium text-ink-mid hover:border-primary hover:text-primary">Cancel</button></div></div> : renderGuidanceCards(item.response, item.action === "respond" ? copyResponse : undefined, copiedResponse ?? undefined)}</div>)}
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-        <div className="flex flex-wrap gap-3"><button type="button" onClick={() => void requestFollowup("respond")} disabled={status === "loading" || response.some((item) => item.action === "respond")} className="rounded-pill border border-primary/30 bg-white px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">Draft reply options</button><button type="button" onClick={() => void requestFollowup("next_steps")} disabled={status === "loading" || response.some((item) => item.action === "next_steps")} className="rounded-pill border border-primary/30 bg-white px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">Suggest next steps</button><button type="button" onClick={() => { toggleAction("practice"); sessionStorage.setItem("beckett-practice-prefill", JSON.stringify({ person: person.trim() || "the other person", situation: submittedText.slice(0, 4000), goal: goal.trim() || "Practice a clear response that reflects what I want to communicate.", relationshipContext: context.trim().slice(0, 1000) })); router.push("/dashboard/practice?from=message-help"); }} className="rounded-pill border border-primary/30 bg-white px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light">Practice this conversation</button><button type="button" onClick={startOver} className="rounded-pill border border-border bg-white px-4 py-2 text-sm font-medium text-ink-mid hover:border-primary hover:text-primary">Start another request</button></div>
+        <div className="flex flex-wrap gap-3"><button type="button" onClick={() => void requestFollowup("respond")} disabled={status === "loading"} className="rounded-pill border border-primary/30 bg-white px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">{response.some((item) => item.action === "respond") ? "Retry reply options" : "Draft reply options"}</button><button type="button" onClick={() => void requestFollowup("next_steps")} disabled={status === "loading" || response.some((item) => item.action === "next_steps")} className="rounded-pill border border-primary/30 bg-white px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">Suggest next steps</button><button type="button" onClick={() => { toggleAction("practice"); sessionStorage.setItem("beckett-practice-prefill", JSON.stringify({ person: person.trim() || "the other person", situation: submittedText.slice(0, 4000), goal: goal.trim() || "Practice a clear response that reflects what I want to communicate.", relationshipContext: context.trim().slice(0, 1000) })); router.push("/dashboard/practice?from=message-help"); }} className="rounded-pill border border-primary/30 bg-white px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light">Practice this conversation</button><button type="button" onClick={startOver} className="rounded-pill border border-border bg-white px-4 py-2 text-sm font-medium text-ink-mid hover:border-primary hover:text-primary">Start another request</button></div>
       </section>}
       {safety && <section className="mt-6 rounded-card border border-amber-200 bg-amber-50 p-5"><h2 className="text-xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{safety.title}</h2><p className="mt-2 text-sm leading-relaxed text-ink-mid">{safety.message}</p><div className="mt-4 flex flex-col gap-2">{safety.resources.map((resource) => <a key={resource.href} href={resource.href} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary hover:underline">{resource.label} ↗</a>)}</div></section>}
     </div>
