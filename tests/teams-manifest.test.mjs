@@ -38,6 +38,18 @@ test("Teams implementation is private, authenticated, and zero-copy by construct
   assert.doesNotMatch(app, /send\(|reply\(|microsoftGraphRequest|chatMessage|serviceUrl/);
   assert.doesNotMatch(actionRoute, /\.insert\(|\.upsert\(|messageText.*metadata|trackBetaEvent/);
   assert.match(page, /does not save the selected Teams message or send anything for you/);
+  assert.match(page, /How Beckett works/);
+  assert.match(page, /analyzes only the message you selected/);
+  assert.match(page, /does not read surrounding messages/);
+  assert.match(page, /does not save the selected message/);
+  assert.match(page, /never sends anything automatically/);
+  assert.match(page, /configured AI provider/);
+  assert.match(page, /Need help\?/);
+  assert.match(page, /Report a problem/);
+  assert.match(page, /Contact support/);
+  assert.match(page, /content-free request ID/);
+  assert.match(page, /selected Teams message in your report/);
+  assert.match(actionRoute, /requestId/);
   assert.match(page, /Connect Microsoft 365 to continue/);
   assert.match(page, /I’ve connected Microsoft 365 — try again/);
   assert.match(page, /requestTeamsAction\(actionToken(?:,|\))/);

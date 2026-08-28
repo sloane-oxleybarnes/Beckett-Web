@@ -16,15 +16,17 @@ export async function POST(request: NextRequest) {
     return noStoreJson({ error: "invalid_action" }, 400);
   }
 
+  let requestId: string | undefined;
   try {
     const action = decryptTeamsActionToken(body.token);
+    requestId = action.requestId;
     // A decode dialog may explicitly request editable draft options. The
     // request remains bound to the authenticated, encrypted action token;
     // callers cannot supply a new message or user identity.
     const intent = body.intent === "draft" ? "draft" : action.intent;
     const configuredTenant = process.env.MICROSOFT_TEAMS_TENANT_ID?.trim();
     if (!configuredTenant || !action.tenantId || action.tenantId !== configuredTenant) {
-      return noStoreJson({ error: "teams_tenant_not_allowed" }, 403);
+      return noStoreJson({ error: "teams_tenant_not_allowed", requestId }, 403);
     }
     const user = await lookupTeamsBeckettUser(action.aadObjectId);
     if (!user) {
@@ -35,6 +37,7 @@ export async function POST(request: NextRequest) {
         // returns to the Apps page after sign-in/consent so the user can
         // confirm the connection before retrying this action.
         connectUrl: "/api/microsoft/connect?kind=mail&next=%2Fdashboard%2Fapps",
+        requestId,
       }, 403);
     }
     const result = await runTeamsMessageCoaching({
@@ -44,7 +47,7 @@ export async function POST(request: NextRequest) {
       messageText: action.messageText,
       profileContext: user.promptContext,
     });
-    return noStoreJson({ result }, 200);
+    return noStoreJson({ result, requestId }, 200);
   } catch (error) {
     if (error instanceof WebCreditLimitError) {
       return noStoreJson({ error: "credit_limit", message: error.message }, 429);
@@ -53,6 +56,6 @@ export async function POST(request: NextRequest) {
     const message = expired
       ? "This Teams action expired. Close Beckett and select the message action again for a fresh request."
       : "Beckett could not coach this message right now. Please try again.";
-    return noStoreJson({ error: expired ? "teams_action_expired" : "teams_action_failed", message }, 400);
+    return noStoreJson({ error: expired ? "teams_action_expired" : "teams_action_failed", message, ...(requestId ? { requestId } : {}) }, 400);
   }
 }

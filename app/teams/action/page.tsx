@@ -47,11 +47,13 @@ async function requestTeamsAction(token: string, intent?: "draft") {
     error?: string;
     message?: string;
     connectUrl?: string;
+    requestId?: string;
   };
   if (!response.ok || !payload.result) {
-    const error = new Error(payload.message || "Beckett could not coach this message. Please try again.") as Error & { connectUrl?: string; code?: string };
+    const error = new Error(payload.message || "Beckett could not coach this message. Please try again.") as Error & { connectUrl?: string; code?: string; requestId?: string };
     error.connectUrl = payload.connectUrl;
     error.code = payload.error;
+    error.requestId = payload.requestId;
     throw error;
   }
   return payload.result;
@@ -88,11 +90,15 @@ export default function TeamsActionPage() {
   const [needsMicrosoftConnection, setNeedsMicrosoftConnection] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [retryIntent, setRetryIntent] = useState<"decode" | "draft">("decode");
+  const [supportRequestId, setSupportRequestId] = useState(() => (typeof crypto !== "undefined" ? crypto.randomUUID() : "unavailable"));
+
+  const supportHref = `mailto:hello@meetbeckett.co?subject=${encodeURIComponent(`Teams problem (request ID: ${supportRequestId})`)}&body=${encodeURIComponent("Please describe what happened. Do not include the selected Teams message or other message content.")}`;
 
   function applyRequestError(requestError: unknown, fallback: string) {
-    const typedError = requestError as Error & { connectUrl?: string; code?: string };
+    const typedError = requestError as Error & { connectUrl?: string; code?: string; requestId?: string };
     const code = typedError.code || (typedError.message && /expired/i.test(typedError.message) ? "teams_action_expired" : "teams_action_failed");
     setConnectUrl(typedError.connectUrl || null);
+    if (typedError.requestId) setSupportRequestId(typedError.requestId);
     setErrorCode(code);
     setNeedsMicrosoftConnection(code === "microsoft_account_not_connected" || Boolean(typedError.connectUrl));
     setError(requestError instanceof Error ? requestError.message : fallback);
@@ -128,6 +134,17 @@ export default function TeamsActionPage() {
         <Image src="/brand/beckett-icon.png" alt="" width={36} height={36} className="h-9 w-9 rounded-lg" priority />
         <div><p className="font-semibold">Beckett</p><p className="text-xs text-[#746d64]">Private Teams coaching</p></div>
       </div>
+
+      <section className="mb-6 rounded-2xl border border-[#e6ddd1] bg-[#fffdf9] p-5 shadow-sm" aria-labelledby="how-beckett-works">
+        <h1 id="how-beckett-works" className="text-lg font-semibold">How Beckett works</h1>
+        <ul className="mt-3 space-y-2 text-sm leading-relaxed text-[#5f5952]">
+          <li>Beckett analyzes only the message you selected.</li>
+          <li>It does not read surrounding messages or conversation history.</li>
+          <li>It does not save the selected message.</li>
+          <li>It never sends anything automatically.</li>
+          <li>The selected text is processed by Beckett’s configured AI provider to generate the coaching response.</li>
+        </ul>
+      </section>
 
       {!result && !error && <section className="rounded-2xl border border-[#e6ddd1] bg-white p-6 shadow-sm" aria-live="polite">
         <div className="h-2 w-24 animate-pulse rounded-full bg-[#d58a21]/40" />
@@ -200,7 +217,16 @@ export default function TeamsActionPage() {
         {result.drafts.map((draft) => <div key={draft.label} className="rounded-2xl border border-[#e6ddd1] bg-white p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wide text-[#a9650e]">{draft.label}</p><p className="my-3 whitespace-pre-wrap text-sm leading-relaxed text-[#2f2c29]">{draft.text}</p><CopyButton text={draft.text} /></div>)}
       </section>}
 
-      <p className="mt-6 text-xs leading-relaxed text-[#847b72]">Beckett does not save the selected Teams message or send anything for you. Review and edit every draft before you choose to send it.</p>
+      <section className="mt-6 rounded-2xl border border-[#e6ddd1] bg-white p-5 shadow-sm" aria-labelledby="teams-support">
+        <h2 id="teams-support" className="text-base font-semibold">Need help?</h2>
+        <p className="mt-2 text-xs leading-relaxed text-[#746d64]">Share this content-free request ID with support so we can investigate without exposing your message text: <span className="font-mono text-[#5f5952]">{supportRequestId}</span></p>
+        <p className="mt-2 text-xs leading-relaxed text-[#746d64]">Please do not include the selected Teams message in your report.</p>
+        <div className="mt-3 flex flex-wrap gap-4 text-sm font-medium">
+          <a href={supportHref} className="text-[#8b5510] hover:underline">Report a problem</a>
+          <a href="/support" target="_blank" rel="noreferrer" className="text-[#8b5510] hover:underline">Contact support</a>
+        </div>
+      </section>
+      <p className="mt-4 text-xs leading-relaxed text-[#847b72]">Beckett does not save the selected Teams message or send anything for you. Review and edit every draft before you choose to send it.</p>
     </div>
     </main>
   </>;
