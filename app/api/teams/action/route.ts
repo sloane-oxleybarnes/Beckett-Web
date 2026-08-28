@@ -24,11 +24,14 @@ export async function POST(request: NextRequest) {
     // request remains bound to the authenticated, encrypted action token;
     // callers cannot supply a new message or user identity.
     const intent = body.intent === "draft" ? "draft" : action.intent;
-    const configuredTenant = process.env.MICROSOFT_TEAMS_TENANT_ID?.trim();
-    if (!configuredTenant || !action.tenantId || action.tenantId !== configuredTenant) {
+    const allowedTenants = (process.env.MICROSOFT_TEAMS_ALLOWED_TENANTS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (!action.tenantId || (allowedTenants.length > 0 && !allowedTenants.includes(action.tenantId))) {
       return noStoreJson({ error: "teams_tenant_not_allowed", requestId }, 403);
     }
-    const user = await lookupTeamsBeckettUser(action.aadObjectId);
+    const user = await lookupTeamsBeckettUser(action.tenantId, action.aadObjectId);
     if (!user) {
       return noStoreJson({
         error: "microsoft_account_not_connected",

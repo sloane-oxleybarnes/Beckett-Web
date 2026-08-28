@@ -37,7 +37,10 @@ Scope these values to the `staging` branch / Preview environment:
 | `NEXT_PUBLIC_SITE_URL` | `https://beckett-git-staging-sloane-s-projects1.vercel.app` |
 | `MICROSOFT_TEAMS_APP_ID` | Teams bot application ID |
 | `MICROSOFT_TEAMS_APP_SECRET` | Dedicated Teams bot secret |
-| `MICROSOFT_TEAMS_TENANT_ID` | Staging Entra tenant ID |
+| `MICROSOFT_TEAMS_TENANT_ID` | Staging Entra tenant ID (used with `MICROSOFT_TEAMS_SINGLE_TENANT=true`) |
+| `MICROSOFT_TEAMS_SINGLE_TENANT` | Set to `true` only for staging/emergency single-tenant auth |
+| `MICROSOFT_TEAMS_ALLOWED_TENANTS` | Optional comma-separated tenant allowlist for staging/emergency blocking |
+| `MICROSOFT_SINGLE_TENANT` | Set to `true` only if the shared Microsoft OAuth app should use its configured tenant authority |
 | `MICROSOFT_TEAMS_ACTION_TOKEN_KEY` | New random 32-byte base64 or 64-character hex key |
 
 Never place the Teams bot secret or action-token key in the repository, manifest, or client bundle. Do not reuse `MICROSOFT_TOKEN_ENCRYPTION_KEY`.
@@ -78,7 +81,7 @@ Stop the rollout and inspect the deployment if any of these occur:
 - The action posts into a channel or chat without a user sending it.
 - A user can see another user's private dialog result.
 - The Teams account cannot be matched to the connected Beckett Microsoft account.
-- The activity tenant does not match `MICROSOFT_TEAMS_TENANT_ID`.
+- The activity tenant is not in `MICROSOFT_TEAMS_ALLOWED_TENANTS` when an allowlist is configured.
 - The action repeatedly exceeds the Teams invoke timeout.
 
 Keep production unchanged until the real-client validation checklist in `docs/teams-message-action-mvp.md` passes.

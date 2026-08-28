@@ -11,7 +11,7 @@ The prototype receives only the message the user explicitly selects. It does not
 
 Selected text is never written to Beckett's database, analytics metadata, product logs, or the dialog URL. The authenticated bot endpoint encrypts the selected text into a five-minute action token placed in the URL fragment. Fragments are not sent in the initial HTTP request; the dialog removes the fragment immediately and submits the encrypted token directly to the coaching endpoint.
 
-The selected text is sent to Beckett's configured AI provider only to generate the requested result; it is not used to train generalized models. The first rollout is single-tenant: the activity tenant must match `MICROSOFT_TEAMS_TENANT_ID`.
+The selected text is sent to Beckett's configured AI provider only to generate the requested result; it is not used to train generalized models. Production accepts Microsoft Entra work/school tenants and binds a Teams identity to both its tenant ID and Microsoft user/object ID. Existing Microsoft connections must reconnect once before Teams can use them, because tenant IDs are never inferred or backfilled.
 
 ## Required configuration
 
@@ -26,7 +26,7 @@ Configure these deployment variables:
 ```text
 MICROSOFT_TEAMS_APP_ID
 MICROSOFT_TEAMS_APP_SECRET
-MICROSOFT_TEAMS_TENANT_ID
+MICROSOFT_TEAMS_ALLOWED_TENANTS (optional comma-separated staging/emergency allowlist)
 MICROSOFT_TEAMS_ACTION_TOKEN_KEY
 ```
 

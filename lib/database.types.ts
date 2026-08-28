@@ -2041,6 +2041,7 @@ export type Database = {
           connected_at: string
           external_team_id: string | null
           external_team_name: string | null
+          external_tenant_id: string | null
           external_user_id: string | null
           id: string
           metadata: Json
@@ -2053,6 +2054,7 @@ export type Database = {
           connected_at?: string
           external_team_id?: string | null
           external_team_name?: string | null
+          external_tenant_id?: string | null
           external_user_id?: string | null
           id?: string
           metadata?: Json
@@ -2065,6 +2067,7 @@ export type Database = {
           connected_at?: string
           external_team_id?: string | null
           external_team_name?: string | null
+          external_tenant_id?: string | null
           external_user_id?: string | null
           id?: string
           metadata?: Json

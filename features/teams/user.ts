@@ -1,11 +1,13 @@
 import { fetchCoachingProfileContext } from "@/lib/coaching-profile";
 import { integrationsRepository } from "@/lib/repositories/integrations-repository";
+export { matchesMicrosoftConnection } from "./user-linking";
 
-export async function lookupTeamsBeckettUser(aadObjectId: string) {
+export async function lookupTeamsBeckettUser(tenantId: string, aadObjectId: string) {
   const { data: integration, error } = await integrationsRepository
     .from("user_integrations")
-    .select("user_id, external_user_id")
+    .select("user_id, external_tenant_id, external_user_id")
     .eq("provider", "microsoft")
+    .eq("external_tenant_id", tenantId)
     .eq("external_user_id", aadObjectId)
     .maybeSingle();
   if (error) throw error;

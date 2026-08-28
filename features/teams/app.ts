@@ -33,7 +33,11 @@ const adapter = new NextTeamsHttpAdapter();
 const teamsApp = new App({
   clientId: process.env.MICROSOFT_TEAMS_APP_ID?.trim(),
   clientSecret: process.env.MICROSOFT_TEAMS_APP_SECRET?.trim(),
-  tenantId: process.env.MICROSOFT_TEAMS_TENANT_ID?.trim(),
+  // Production is multitenant. Set MICROSOFT_TEAMS_SINGLE_TENANT=true only
+  // for a staging/emergency deployment that intentionally pins one tenant.
+  tenantId: process.env.MICROSOFT_TEAMS_SINGLE_TENANT === "true"
+    ? process.env.MICROSOFT_TEAMS_TENANT_ID?.trim()
+    : undefined,
   httpServerAdapter: adapter,
   messagingEndpoint: "/api/teams/messages",
   logger: new TeamsSafeLogger(),

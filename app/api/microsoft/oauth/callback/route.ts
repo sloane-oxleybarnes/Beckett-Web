@@ -10,6 +10,7 @@ import {
   MICROSOFT_MAIL_SCOPES,
   MICROSOFT_MAIL_WRITE_SCOPES,
   MICROSOFT_SCOPES,
+  extractMicrosoftTenantId,
   saveMicrosoftConnection,
 } from "@/lib/microsoft-oauth";
 
@@ -60,7 +61,9 @@ export async function GET(request: NextRequest) {
   try {
     const token = await exchangeMicrosoftCode(code, getMicrosoftRedirectUri(url.origin), codeVerifier, scopes);
     const profile = await getMicrosoftProfile(token.access_token || "");
-    await saveMicrosoftConnection(user.id, token, profile);
+    const tenantId = extractMicrosoftTenantId(token.id_token);
+    if (!tenantId) throw new Error("Microsoft sign-in did not provide a valid tenant. Please reconnect and try again.");
+    await saveMicrosoftConnection(user.id, token, profile, tenantId);
     return redirectAfterOAuth(url, next);
   } catch (error) {
     return redirectAfterOAuth(url, next, error instanceof Error ? error.message : "Microsoft connection failed");
