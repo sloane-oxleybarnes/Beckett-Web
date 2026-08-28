@@ -48,21 +48,31 @@ test("only the two explicit message actions are accepted", () => {
   }));
   assert.equal(draft.intent, "draft");
 
+  const rewrite = parseTeamsMessageAction(activity({
+    value: { ...activity().value, commandId: "beckett_rewrite_draft", commandContext: "compose" },
+  }));
+  assert.equal(rewrite.intent, "rewrite");
+
   assert.throws(
     () => parseTeamsMessageAction(activity({ value: { ...activity().value, commandId: "beckett_draft" } })),
     (error) => error instanceof TeamsMessageActionError && error.code === "unsupported_command",
   );
+  assert.throws(
+    () => parseTeamsMessageAction(activity({ value: { ...activity().value, commandId: "beckett_rewrite_draft" } })),
+    (error) => error instanceof TeamsMessageActionError && error.code === "unsupported_activity",
+  );
 });
 
-test("accepts Microsoft's compose context for message actions", () => {
+test("accepts compose context for rewrite actions", () => {
   const parsed = parseTeamsMessageAction(activity({
     channelId: undefined,
     value: {
       ...activity().value,
+      commandId: "beckett_rewrite_draft",
       commandContext: "compose",
     },
   }));
-  assert.equal(parsed.intent, "decode");
+  assert.equal(parsed.intent, "rewrite");
 });
 
 test("parser rejects non-message invokes, missing identity, and blank selected content", () => {

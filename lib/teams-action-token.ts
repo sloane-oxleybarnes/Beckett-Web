@@ -57,7 +57,7 @@ export function decryptTeamsActionToken(value: string, now = Date.now()): TeamsA
     || !payload.activityId
     || !payload.aadObjectId
     || !payload.messageText
-    || (payload.intent !== "decode" && payload.intent !== "draft")
+    || !["decode", "draft", "rewrite"].includes(payload.intent as string)
     || typeof payload.issuedAt !== "number"
     || payload.issuedAt > now + 30_000
     || now - payload.issuedAt > MAX_AGE_MS

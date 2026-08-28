@@ -1,6 +1,7 @@
 export const TEAMS_ACTION_COMMANDS = {
   beckett_decode_selected: "decode",
   beckett_draft_response: "draft",
+  beckett_rewrite_draft: "rewrite",
 } as const;
 
 export type TeamsActionIntent = (typeof TEAMS_ACTION_COMMANDS)[keyof typeof TEAMS_ACTION_COMMANDS];
@@ -109,6 +110,10 @@ export function parseTeamsMessageAction(value: unknown): ParsedTeamsMessageActio
   const commandId = activityValue.commandId || "";
   const intent = TEAMS_ACTION_COMMANDS[commandId as keyof typeof TEAMS_ACTION_COMMANDS];
   if (!intent) throw new TeamsMessageActionError("unsupported_command", "This Beckett action is not available.");
+  const commandContext = activityValue.commandContext;
+  if ((intent === "rewrite" && commandContext !== "compose") || (intent !== "rewrite" && commandContext !== "message")) {
+    throw new TeamsMessageActionError("unsupported_activity", "This Beckett action is not available in this Teams context.");
+  }
 
   const aadObjectId = activity.from?.aadObjectId?.trim() || "";
   if (!aadObjectId) {
@@ -135,7 +140,7 @@ export function buildTeamsTaskDialogResponse(url: string, intent: TeamsActionInt
     task: {
       type: "continue" as const,
       value: {
-        title: intent === "decode" ? "Decode with Beckett" : "Draft a response with Beckett",
+        title: intent === "decode" ? "Decode with Beckett" : intent === "rewrite" ? "Rewrite my draft with Beckett" : "Draft a response with Beckett",
         height: "large" as const,
         width: "medium" as const,
         url,

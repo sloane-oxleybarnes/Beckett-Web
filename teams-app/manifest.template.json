@@ -44,6 +44,14 @@
           "title": "Draft a response",
           "description": "Create editable response options for the selected message.",
           "fetchTask": true
+        },
+        {
+          "id": "beckett_rewrite_draft",
+          "type": "action",
+          "context": ["compose"],
+          "title": "Rewrite my draft",
+          "description": "Rewrite your draft into editable response options.",
+          "fetchTask": true
         }
       ]
     }

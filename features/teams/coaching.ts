@@ -19,7 +19,13 @@ export type TeamsDraftResult = {
   drafts: Array<{ label: string; text: string }>;
 };
 
-export type TeamsCoachingResult = TeamsDecodeResult | TeamsDraftResult;
+export type TeamsRewriteResult = {
+  intent: "rewrite";
+  shortRead: string;
+  drafts: Array<{ label: string; text: string }>;
+};
+
+export type TeamsCoachingResult = TeamsDecodeResult | TeamsDraftResult | TeamsRewriteResult;
 
 function clean(value: unknown, max = 700) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
@@ -74,7 +80,7 @@ ${intentContract}
 ${beckettBoundaryPrompt()}`;
   const prompt = `${input.profileContext || "The user has not saved additional coaching preferences."}
 
-Selected Microsoft Teams message:
+${input.intent === "rewrite" ? "User's Microsoft Teams draft to rewrite:" : "Selected Microsoft Teams message:"}
 <selected_message>${input.messageText}</selected_message>`;
 
   const result = await withAiMetering({

@@ -28,7 +28,13 @@ type DraftResult = {
   drafts: Array<{ label: string; text: string }>;
 };
 
-type TeamsResult = DecodeResult | DraftResult;
+type RewriteResult = {
+  intent: "rewrite";
+  shortRead: string;
+  drafts: Array<{ label: string; text: string }>;
+};
+
+type TeamsResult = DecodeResult | DraftResult | RewriteResult;
 
 async function requestTeamsAction(token: string, intent?: "draft") {
   const response = await fetch("/api/teams/action", {
@@ -148,8 +154,8 @@ export default function TeamsActionPage() {
         </div>}
       </section>}
 
-      {result?.intent === "draft" && <section className="space-y-4" aria-live="polite">
-        <h1 className="text-3xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Draft options</h1>
+      {(result?.intent === "draft" || result?.intent === "rewrite") && <section className="space-y-4" aria-live="polite">
+        <h1 className="text-3xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{result.intent === "rewrite" ? "Rewrite options" : "Draft options"}</h1>
         <p className="text-sm leading-relaxed text-[#5f5952]">{result.shortRead}</p>
         {result.drafts.map((draft) => <div key={draft.label} className="rounded-2xl border border-[#e6ddd1] bg-white p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wide text-[#a9650e]">{draft.label}</p><p className="my-3 whitespace-pre-wrap text-sm leading-relaxed text-[#2f2c29]">{draft.text}</p><CopyButton text={draft.text} /></div>)}
       </section>}
