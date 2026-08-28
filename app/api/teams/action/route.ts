@@ -31,7 +31,10 @@ export async function POST(request: NextRequest) {
       return noStoreJson({
         error: "microsoft_account_not_connected",
         message: "Connect this Microsoft account to Beckett before using the Teams action.",
-        connectUrl: "/dashboard/apps",
+        // Start the existing Microsoft 365 OAuth flow directly. The flow
+        // returns to the Apps page after sign-in/consent so the user can
+        // confirm the connection before retrying this action.
+        connectUrl: "/api/microsoft/connect?kind=mail&next=%2Fdashboard%2Fapps",
       }, 403);
     }
     const result = await runTeamsMessageCoaching({

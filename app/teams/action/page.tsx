@@ -44,12 +44,14 @@ async function requestTeamsAction(token: string, intent?: "draft") {
   });
   const payload = await response.json().catch(() => ({})) as {
     result?: TeamsResult;
+    error?: string;
     message?: string;
     connectUrl?: string;
   };
   if (!response.ok || !payload.result) {
-    const error = new Error(payload.message || "Beckett could not coach this message. Please try again.") as Error & { connectUrl?: string };
+    const error = new Error(payload.message || "Beckett could not coach this message. Please try again.") as Error & { connectUrl?: string; code?: string };
     error.connectUrl = payload.connectUrl;
+    error.code = payload.error;
     throw error;
   }
   return payload.result;
@@ -82,6 +84,8 @@ export default function TeamsActionPage() {
   const [connectUrl, setConnectUrl] = useState<string | null>(null);
   const [actionToken, setActionToken] = useState<string | null>(null);
   const [draftLoading, setDraftLoading] = useState(false);
+  const [retryLoading, setRetryLoading] = useState(false);
+  const [needsMicrosoftConnection, setNeedsMicrosoftConnection] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,8 +102,9 @@ export default function TeamsActionPage() {
         setResult(await requestTeamsAction(token));
       } catch (requestError) {
         if (!cancelled) {
-          const typedError = requestError as Error & { connectUrl?: string };
+          const typedError = requestError as Error & { connectUrl?: string; code?: string };
           setConnectUrl(typedError.connectUrl || null);
+          setNeedsMicrosoftConnection(typedError.code === "microsoft_account_not_connected" || Boolean(typedError.connectUrl));
           setError(requestError instanceof Error ? requestError.message : "Beckett could not coach this message.");
         }
       }
@@ -123,9 +128,33 @@ export default function TeamsActionPage() {
       </section>}
 
       {error && <section className="rounded-2xl border border-[#e6ddd1] bg-white p-6 shadow-sm" role="alert">
-        <h1 className="text-2xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Beckett couldn’t open this message</h1>
-        <p className="mt-3 text-sm leading-relaxed text-[#5f5952]">{error}</p>
-        {connectUrl && <a href={connectUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex rounded-full bg-[#b86f10] px-5 py-2.5 text-sm font-medium text-white">Connect Microsoft 365</a>}
+        <h1 className="text-2xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{needsMicrosoftConnection ? "Connect Microsoft 365 to continue" : "Beckett couldn’t open this message"}</h1>
+        {needsMicrosoftConnection ? <>
+          <p className="mt-3 text-sm leading-relaxed text-[#5f5952]">This Teams account is not linked to Beckett yet. Connect the same Microsoft account you use in Teams, then return here and retry.</p>
+          <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-[#5f5952]">
+            <li>Select <strong>Connect Microsoft 365</strong> below.</li>
+            <li>Sign in with the Microsoft account you use in Teams and approve the requested access.</li>
+            <li>Return to this Teams window after Beckett confirms the connection.</li>
+            <li>Select <strong>I’ve connected Microsoft 365 — try again</strong>.</li>
+          </ol>
+        </> : <p className="mt-3 text-sm leading-relaxed text-[#5f5952]">{error}</p>}
+        <div className="mt-5 flex flex-wrap gap-3">
+          {connectUrl && <a href={connectUrl} target="_blank" rel="noreferrer" className="inline-flex rounded-full bg-[#b86f10] px-5 py-2.5 text-sm font-medium text-white">Connect Microsoft 365</a>}
+          {needsMicrosoftConnection && actionToken && <button type="button" disabled={retryLoading} onClick={() => {
+            setRetryLoading(true);
+            setError(null);
+            setConnectUrl(null);
+            void requestTeamsAction(actionToken)
+              .then((nextResult) => { setNeedsMicrosoftConnection(false); setResult(nextResult); })
+              .catch((requestError) => {
+                const typedError = requestError as Error & { connectUrl?: string; code?: string };
+                setConnectUrl(typedError.connectUrl || null);
+                setNeedsMicrosoftConnection(typedError.code === "microsoft_account_not_connected" || Boolean(typedError.connectUrl));
+                setError(requestError instanceof Error ? requestError.message : "Beckett could not coach this message. Please try again.");
+              })
+              .finally(() => setRetryLoading(false));
+          }} className="inline-flex rounded-full border border-[#b86f10] px-5 py-2.5 text-sm font-medium text-[#8b5510] hover:bg-[#fff7e9] disabled:cursor-wait disabled:opacity-60">{retryLoading ? "Checking connection…" : "I’ve connected Microsoft 365 — try again"}</button>}
+        </div>
       </section>}
 
       {result?.intent === "decode" && <section className="space-y-4" aria-live="polite">
