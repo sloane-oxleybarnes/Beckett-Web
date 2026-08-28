@@ -12,14 +12,13 @@ test("Teams manifest exposes only two selected-message actions", () => {
   assert.equal(manifest.composeExtensions[0].composeExtensionType, "botBased");
   assert.deepEqual(
     manifest.composeExtensions[0].commands.map((command) => command.id),
-    ["beckett_decode_selected", "beckett_draft_response", "beckett_rewrite_draft"],
+    ["beckett_decode_selected", "beckett_draft_response"],
   );
   for (const command of manifest.composeExtensions[0].commands.slice(0, 2)) {
     assert.deepEqual(command.context, ["message"]);
     assert.equal(command.type, "action");
     assert.equal(command.fetchTask, true);
   }
-  assert.deepEqual(manifest.composeExtensions[0].commands[2].context, ["compose"]);
   assert.equal("authorization" in manifest.composeExtensions[0], false);
   assert.equal("webApplicationInfo" in manifest, false);
   assert.doesNotMatch(JSON.stringify(manifest), /Chat\.Read|ChannelMessage|messageTeamMembers|teamSettings|meeting|transcript/i);
