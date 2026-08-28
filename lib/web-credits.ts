@@ -21,7 +21,7 @@ async function isUnlimitedWebCreditUser(userId: string) {
 
 export class WebCreditLimitError extends Error {
   status = 429;
-  constructor(public kind: "daily" | "monthly") {
+  constructor(public kind: "daily" | "monthly", public resetsAt?: string) {
     super(kind === "daily" ? "You have used today's coaching credits." : "You have used this month's coaching credits.");
   }
 }
@@ -153,10 +153,10 @@ export async function reserveWebCredit(userId: string, input: {
   });
 
   if (error?.message?.includes("web_credit_daily_limit_reached")) {
-    throw new WebCreditLimitError("daily");
+    throw new WebCreditLimitError("daily", summary.daily.resetsAt);
   }
   if (error?.message?.includes("web_credit_monthly_limit_reached")) {
-    throw new WebCreditLimitError("monthly");
+    throw new WebCreditLimitError("monthly", summary.monthly.resetsAt);
   }
   if (error) throw error;
 

@@ -49,6 +49,12 @@ test("Teams implementation is private, authenticated, and zero-copy by construct
   assert.match(page, /Contact support/);
   assert.match(page, /content-free request ID/);
   assert.match(page, /selected Teams message in your report/);
+  assert.match(page, /Teams coaching uses your Beckett plan credits/);
+  assert.match(page, /when your credits renew/);
+  assert.match(actionRoute, /retryAt/);
+  assert.match(page, /focus-visible:outline/);
+  assert.match(page, /overflow-x-hidden/);
+  assert.match(page, /aria-live="assertive"/);
   assert.match(actionRoute, /requestId/);
   assert.match(page, /Connect Microsoft 365 to continue/);
   assert.match(page, /I’ve connected Microsoft 365 — try again/);

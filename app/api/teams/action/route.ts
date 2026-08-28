@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     return noStoreJson({ result, requestId }, 200);
   } catch (error) {
     if (error instanceof WebCreditLimitError) {
-      return noStoreJson({ error: "credit_limit", message: error.message }, 429);
+      return noStoreJson({ error: "credit_limit", message: error.message, retryAt: error.resetsAt }, 429);
     }
     const expired = error instanceof Error && /expired/i.test(error.message);
     const message = expired
