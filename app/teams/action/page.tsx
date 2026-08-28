@@ -86,6 +86,17 @@ export default function TeamsActionPage() {
   const [draftLoading, setDraftLoading] = useState(false);
   const [retryLoading, setRetryLoading] = useState(false);
   const [needsMicrosoftConnection, setNeedsMicrosoftConnection] = useState(false);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [retryIntent, setRetryIntent] = useState<"decode" | "draft">("decode");
+
+  function applyRequestError(requestError: unknown, fallback: string) {
+    const typedError = requestError as Error & { connectUrl?: string; code?: string };
+    const code = typedError.code || (typedError.message && /expired/i.test(typedError.message) ? "teams_action_expired" : "teams_action_failed");
+    setConnectUrl(typedError.connectUrl || null);
+    setErrorCode(code);
+    setNeedsMicrosoftConnection(code === "microsoft_account_not_connected" || Boolean(typedError.connectUrl));
+    setError(requestError instanceof Error ? requestError.message : fallback);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -102,10 +113,7 @@ export default function TeamsActionPage() {
         setResult(await requestTeamsAction(token));
       } catch (requestError) {
         if (!cancelled) {
-          const typedError = requestError as Error & { connectUrl?: string; code?: string };
-          setConnectUrl(typedError.connectUrl || null);
-          setNeedsMicrosoftConnection(typedError.code === "microsoft_account_not_connected" || Boolean(typedError.connectUrl));
-          setError(requestError instanceof Error ? requestError.message : "Beckett could not coach this message.");
+          applyRequestError(requestError, "Beckett could not coach this message.");
         }
       }
     })();
@@ -127,8 +135,10 @@ export default function TeamsActionPage() {
         <p className="mt-2 text-sm leading-relaxed text-[#746d64]">Beckett is analyzing only the message you selected. It does not read the surrounding Teams conversation.</p>
       </section>}
 
-      {error && <section className="rounded-2xl border border-[#e6ddd1] bg-white p-6 shadow-sm" role="alert">
-        <h1 className="text-2xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{needsMicrosoftConnection ? "Connect Microsoft 365 to continue" : "Beckett couldn’t open this message"}</h1>
+      {error && <section className="rounded-2xl border border-[#e6ddd1] bg-white p-6 shadow-sm" role="alert" aria-live="assertive">
+        <h1 className="text-2xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>
+          {needsMicrosoftConnection ? "Connect Microsoft 365 to continue" : errorCode === "teams_action_expired" ? "This Teams action expired" : errorCode === "credit_limit" ? "You’ve reached your coaching limit" : "Beckett couldn’t open this message"}
+        </h1>
         {needsMicrosoftConnection ? <>
           <p className="mt-3 text-sm leading-relaxed text-[#5f5952]">This Teams account is not linked to Beckett yet. Connect the same Microsoft account you use in Teams, then return here and retry.</p>
           <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-[#5f5952]">
@@ -137,23 +147,23 @@ export default function TeamsActionPage() {
             <li>Return to this Teams window after Beckett confirms the connection.</li>
             <li>Select <strong>I’ve connected Microsoft 365 — try again</strong>.</li>
           </ol>
-        </> : <p className="mt-3 text-sm leading-relaxed text-[#5f5952]">{error}</p>}
+        </> : <>
+          <p className="mt-3 text-sm leading-relaxed text-[#5f5952]">{error}</p>
+          {errorCode === "teams_action_expired" && <p className="mt-3 text-sm leading-relaxed text-[#5f5952]">Select Beckett from the Teams message again to create a fresh action. This dialog cannot renew an expired Teams request.</p>}
+          {errorCode === "credit_limit" && <p className="mt-3 text-sm leading-relaxed text-[#5f5952]">Your access will be available again when your credits renew. You can check again below after your plan or credit balance changes.</p>}
+          {errorCode !== "teams_action_expired" && errorCode !== "credit_limit" && <p className="mt-3 text-sm leading-relaxed text-[#5f5952]">This may be temporary. Retry the same private request below.</p>}
+        </>}
         <div className="mt-5 flex flex-wrap gap-3">
           {connectUrl && <a href={connectUrl} target="_blank" rel="noreferrer" className="inline-flex rounded-full bg-[#b86f10] px-5 py-2.5 text-sm font-medium text-white">Connect Microsoft 365</a>}
-          {needsMicrosoftConnection && actionToken && <button type="button" disabled={retryLoading} onClick={() => {
+          {actionToken && <button type="button" disabled={retryLoading} onClick={() => {
             setRetryLoading(true);
             setError(null);
             setConnectUrl(null);
-            void requestTeamsAction(actionToken)
-              .then((nextResult) => { setNeedsMicrosoftConnection(false); setResult(nextResult); })
-              .catch((requestError) => {
-                const typedError = requestError as Error & { connectUrl?: string; code?: string };
-                setConnectUrl(typedError.connectUrl || null);
-                setNeedsMicrosoftConnection(typedError.code === "microsoft_account_not_connected" || Boolean(typedError.connectUrl));
-                setError(requestError instanceof Error ? requestError.message : "Beckett could not coach this message. Please try again.");
-              })
+            void requestTeamsAction(actionToken, retryIntent === "draft" ? "draft" : undefined)
+              .then((nextResult) => { setNeedsMicrosoftConnection(false); setErrorCode(null); setResult(nextResult); })
+              .catch((requestError) => applyRequestError(requestError, "Beckett could not coach this message. Please try again."))
               .finally(() => setRetryLoading(false));
-          }} className="inline-flex rounded-full border border-[#b86f10] px-5 py-2.5 text-sm font-medium text-[#8b5510] hover:bg-[#fff7e9] disabled:cursor-wait disabled:opacity-60">{retryLoading ? "Checking connection…" : "I’ve connected Microsoft 365 — try again"}</button>}
+          }} className="inline-flex rounded-full border border-[#b86f10] px-5 py-2.5 text-sm font-medium text-[#8b5510] hover:bg-[#fff7e9] disabled:cursor-wait disabled:opacity-60">{retryLoading ? "Retrying…" : needsMicrosoftConnection ? "I’ve connected Microsoft 365 — try again" : errorCode === "credit_limit" ? "Check credits and try again" : errorCode === "teams_action_expired" ? "Try this action again" : "Try again"}</button>}
         </div>
       </section>}
 
@@ -171,11 +181,12 @@ export default function TeamsActionPage() {
             type="button"
             disabled={draftLoading}
             onClick={() => {
+              setRetryIntent("draft");
               setDraftLoading(true);
               setError(null);
               void requestTeamsAction(actionToken, "draft")
-                .then(setResult)
-                .catch((requestError) => setError(requestError instanceof Error ? requestError.message : "Beckett could not draft a reply."))
+                .then((nextResult) => { setErrorCode(null); setResult(nextResult); })
+                .catch((requestError) => applyRequestError(requestError, "Beckett could not draft a reply."))
                 .finally(() => setDraftLoading(false));
             }}
             className="mt-3 rounded-full bg-[#b86f10] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#9d5e0c] disabled:cursor-wait disabled:opacity-60"

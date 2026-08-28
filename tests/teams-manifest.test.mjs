@@ -40,7 +40,10 @@ test("Teams implementation is private, authenticated, and zero-copy by construct
   assert.match(page, /does not save the selected Teams message or send anything for you/);
   assert.match(page, /Connect Microsoft 365 to continue/);
   assert.match(page, /I’ve connected Microsoft 365 — try again/);
-  assert.match(page, /requestTeamsAction\(actionToken\)/);
+  assert.match(page, /requestTeamsAction\(actionToken(?:,|\))/);
+  assert.match(page, /Try this action again/);
+  assert.match(page, /Check credits and try again/);
+  assert.match(actionRoute, /teams_action_expired/);
   assert.match(page, /navigator\.clipboard\.writeText/);
   assert.doesNotMatch(page, /sendActivity|chat\.send|Graph/);
   assert.match(coaching, /metadata: \{ intent: input\.intent \}/);

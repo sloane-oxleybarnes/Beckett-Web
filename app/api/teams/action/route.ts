@@ -49,9 +49,10 @@ export async function POST(request: NextRequest) {
     if (error instanceof WebCreditLimitError) {
       return noStoreJson({ error: "credit_limit", message: error.message }, 429);
     }
-    const message = error instanceof Error && /expired/i.test(error.message)
-      ? "This Teams action expired. Close Beckett and run the message action again."
-      : "Beckett could not coach this message. Please try again.";
-    return noStoreJson({ error: "teams_action_failed", message }, 400);
+    const expired = error instanceof Error && /expired/i.test(error.message);
+    const message = expired
+      ? "This Teams action expired. Close Beckett and select the message action again for a fresh request."
+      : "Beckett could not coach this message right now. Please try again.";
+    return noStoreJson({ error: expired ? "teams_action_expired" : "teams_action_failed", message }, 400);
   }
 }
