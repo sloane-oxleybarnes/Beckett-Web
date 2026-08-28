@@ -30,6 +30,25 @@ type DraftResult = {
 
 type TeamsResult = DecodeResult | DraftResult;
 
+async function requestTeamsAction(token: string, intent?: "draft") {
+  const response = await fetch("/api/teams/action", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(intent ? { token, intent } : { token }),
+  });
+  const payload = await response.json().catch(() => ({})) as {
+    result?: TeamsResult;
+    message?: string;
+    connectUrl?: string;
+  };
+  if (!response.ok || !payload.result) {
+    const error = new Error(payload.message || "Beckett could not coach this message. Please try again.") as Error & { connectUrl?: string };
+    error.connectUrl = payload.connectUrl;
+    throw error;
+  }
+  return payload.result;
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
@@ -55,6 +74,8 @@ export default function TeamsActionPage() {
   const [result, setResult] = useState<TeamsResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connectUrl, setConnectUrl] = useState<string | null>(null);
+  const [actionToken, setActionToken] = useState<string | null>(null);
+  const [draftLoading, setDraftLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,23 +88,14 @@ export default function TeamsActionPage() {
         const token = queryParams.get("token") || hashParams.get("token");
         window.history.replaceState(null, "", window.location.pathname);
         if (!token) throw new Error("This Teams action is missing or expired. Close Beckett and select the message action again.");
-        const response = await fetch("/api/teams/action", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token }),
-        });
-        const payload = await response.json().catch(() => ({})) as {
-          result?: TeamsResult;
-          message?: string;
-          connectUrl?: string;
-        };
-        if (!response.ok || !payload.result) {
-          setConnectUrl(payload.connectUrl || null);
-          throw new Error(payload.message || "Beckett could not coach this message. Please try again.");
-        }
-        setResult(payload.result);
+        setActionToken(token);
+        setResult(await requestTeamsAction(token));
       } catch (requestError) {
-        if (!cancelled) setError(requestError instanceof Error ? requestError.message : "Beckett could not coach this message.");
+        if (!cancelled) {
+          const typedError = requestError as Error & { connectUrl?: string };
+          setConnectUrl(typedError.connectUrl || null);
+          setError(requestError instanceof Error ? requestError.message : "Beckett could not coach this message.");
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -118,6 +130,22 @@ export default function TeamsActionPage() {
           ["What remains uncertain", result.uncertainty],
           ["Next move", result.nextMove],
         ].map(([label, text]) => <div key={label} className="rounded-2xl border border-[#e6ddd1] bg-white p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wide text-[#a9650e]">{label}</p><p className="mt-2 text-sm leading-relaxed text-[#3c3935]">{text}</p></div>)}
+        {actionToken && <div className="rounded-2xl border border-[#e6ddd1] bg-white p-5 shadow-sm">
+          <p className="text-sm leading-relaxed text-[#5f5952]">Want help wording a response?</p>
+          <button
+            type="button"
+            disabled={draftLoading}
+            onClick={() => {
+              setDraftLoading(true);
+              setError(null);
+              void requestTeamsAction(actionToken, "draft")
+                .then(setResult)
+                .catch((requestError) => setError(requestError instanceof Error ? requestError.message : "Beckett could not draft a reply."))
+                .finally(() => setDraftLoading(false));
+            }}
+            className="mt-3 rounded-full bg-[#b86f10] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#9d5e0c] disabled:cursor-wait disabled:opacity-60"
+          >{draftLoading ? "Drafting…" : "Draft replies"}</button>
+        </div>}
       </section>}
 
       {result?.intent === "draft" && <section className="space-y-4" aria-live="polite">

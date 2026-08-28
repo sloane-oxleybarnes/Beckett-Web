@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { decryptTeamsActionToken } from "@/lib/teams-action-token";
+import { decryptTeamsActionToken, teamsActionRequestId } from "@/lib/teams-action-token";
 import { lookupTeamsBeckettUser } from "@/features/teams/user";
 import { runTeamsMessageCoaching } from "@/features/teams/coaching";
 import { WebCreditLimitError } from "@/lib/web-credits";
@@ -11,13 +11,17 @@ function noStoreJson(body: unknown, status: number) {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null) as { token?: unknown } | null;
+  const body = await request.json().catch(() => null) as { token?: unknown; intent?: unknown } | null;
   if (typeof body?.token !== "string" || body.token.length > 16_000) {
     return noStoreJson({ error: "invalid_action" }, 400);
   }
 
   try {
     const action = decryptTeamsActionToken(body.token);
+    // A decode dialog may explicitly request editable draft options. The
+    // request remains bound to the authenticated, encrypted action token;
+    // callers cannot supply a new message or user identity.
+    const intent = body.intent === "draft" ? "draft" : action.intent;
     const configuredTenant = process.env.MICROSOFT_TEAMS_TENANT_ID?.trim();
     if (!configuredTenant || !action.tenantId || action.tenantId !== configuredTenant) {
       return noStoreJson({ error: "teams_tenant_not_allowed" }, 403);
@@ -32,8 +36,8 @@ export async function POST(request: NextRequest) {
     }
     const result = await runTeamsMessageCoaching({
       userId: user.id,
-      requestId: action.requestId,
-      intent: action.intent,
+      requestId: teamsActionRequestId(action.activityId, intent),
+      intent,
       messageText: action.messageText,
       profileContext: user.promptContext,
     });
