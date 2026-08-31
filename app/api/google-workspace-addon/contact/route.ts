@@ -15,13 +15,13 @@ import {
   gmailCounterparts,
   gmailInteractionDedupeKey,
 } from "@/lib/google-workspace-gmail";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { contactsRepository } from "@/lib/repositories/server-repositories";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 async function findOrCreateContact(userId: string, email: string, name: string) {
-  const { data: identifier } = await supabaseAdmin
+  const { data: identifier } = await contactsRepository
     .from("contact_identifiers")
     .select("contact_id")
     .eq("user_id", userId)
@@ -34,7 +34,7 @@ async function findOrCreateContact(userId: string, email: string, name: string) 
   let created = false;
 
   if (!contactId) {
-    const { data: emailMatch } = await supabaseAdmin
+    const { data: emailMatch } = await contactsRepository
       .from("contacts")
       .select("id")
       .eq("user_id", userId)
@@ -45,7 +45,7 @@ async function findOrCreateContact(userId: string, email: string, name: string) 
   }
 
   if (!contactId) {
-    const { data: contact, error } = await supabaseAdmin
+    const { data: contact, error } = await contactsRepository
       .from("contacts")
       .insert({ user_id: userId, name: name.slice(0, 120), email, trusted: false })
       .select("id")
@@ -56,7 +56,7 @@ async function findOrCreateContact(userId: string, email: string, name: string) 
   }
 
   const now = new Date().toISOString();
-  const { error: identifierError } = await supabaseAdmin.from("contact_identifiers").upsert(
+  const { error: identifierError } = await contactsRepository.from("contact_identifiers").upsert(
     {
       user_id: userId,
       contact_id: contactId,

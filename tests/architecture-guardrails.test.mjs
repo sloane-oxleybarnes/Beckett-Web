@@ -103,7 +103,7 @@ test("dashboard cards keep secondary content compact until editing", () => {
   const settings = read("components/dashboard/SettingsPanel.tsx");
   assert.match(settings, /coachingSettingsEditing/);
   assert.match(settings, /aria-controls="coaching-settings-editor"/);
-  assert.match(settings, /What Beckett helps with/);
+  assert.match(settings, /Top coaching priorities/);
 });
 
 test("public beta positioning stays immediate, professional, and evidence-based", () => {
