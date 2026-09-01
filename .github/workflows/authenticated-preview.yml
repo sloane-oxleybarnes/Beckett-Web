@@ -36,7 +36,7 @@ jobs:
       - name: Capture authenticated Core Web Vitals and route JS bytes
         run: npm run performance:baseline
       - name: Upload performance baseline
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: authenticated-performance-${{ github.run_id }}
           path: docs/performance/baseline.json
