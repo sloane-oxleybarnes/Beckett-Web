@@ -22,7 +22,6 @@ export async function GET(req: NextRequest) {
     .eq("user_id", authProfile.id);
 
   const slack = integrations?.find((item) => item.provider === "slack");
-  const google = integrations?.find((item) => item.provider === "google");
 
   return NextResponse.json({
     id: profile.id,
@@ -39,13 +38,6 @@ export async function GET(req: NextRequest) {
             teamName: slack.external_team_name || null,
             connectedAt: slack.connected_at || null,
             updatedAt: slack.updated_at || null,
-          }
-        : { connected: false },
-      google: google
-        ? {
-            connected: true,
-            connectedAt: google.connected_at || null,
-            updatedAt: google.updated_at || null,
           }
         : { connected: false },
     },

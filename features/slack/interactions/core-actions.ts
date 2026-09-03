@@ -1,12 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
 import {
   buildAskedResponsePayload,
   buildBeckettPayload,
   buildGuestSlackContextPacket,
   buildSlackCoachingContext,
   fetchSlackConversationContext,
-  fetchSlackThreadSnapshot,
-  formatSlackThreadSnapshot,
   handleSlackAiError,
   isAllowedSlackPlan,
   lookupSlackConnectedUser,
@@ -21,38 +18,26 @@ import {
   shouldUseBroaderSlackContext,
   slackApiPost,
   slackConnectText,
-  SlackBlock,
-  SlackCoachingIntent,
+  type SlackBlock,
+  type SlackCoachingIntent,
   SLACK_SLASH_LONGER_ACTION_ID,
   SLACK_SLASH_QUICK_ACTION_ID,
-  SlackResponseDetail,
-  setSlackAgentSuggestedPrompts,
-  verifySlackRequest,
+  type SlackResponseDetail,
 } from "@/lib/slack-app";
 import {
   createSlackDraftActionSession,
-  extractSlackDraftOptions,
   SLACK_DRAFT_CANCEL_ACTION_ID,
   SLACK_DRAFT_SEND_ACTION_ID,
   SLACK_DRAFT_USE_ACTION_ID,
-  startGuidedSlackFlow,
-  SlackDraftOption,
+  type SlackDraftOption,
 } from "@/lib/slack-guided-prep";
 import {
-  archiveSlackCoachingThread,
   appendSlackCoachingMessage,
   buildSlackExplainMoreAction,
-  buildSlackHistoryContinuePayload,
-  buildSlackStartCardPayload,
   buildSlackThreadArchiveAction,
-  cancelSlackInactivityStartCard,
   createSlackCoachingThread,
-  loadSlackCoachingMessages,
-  loadSlackCoachingThread,
   parseSlackHistoryAction,
-  publishSlackHome,
   recordSlackCoachingBotMessage,
-  saveSlackGuestPrepState,
   saveSlackGuestSelectedMessageState,
   scheduleSlackInactivityStartCard,
   slackHistoryTitle,
@@ -61,7 +46,6 @@ import {
   SLACK_HISTORY_CONTINUE_ACTION_ID,
   SLACK_HISTORY_QUICK_ACTION_ID,
   SLACK_GUEST_PREP_PRACTICE_ACTION_ID,
-  SlackHistoryFlowType,
   summarizeSlackCoachingResponse,
 } from "@/lib/slack-history";
 import { slackRepository } from "@/lib/repositories/slack-repository";
@@ -69,9 +53,6 @@ import { startSlackGuestSession } from "@/lib/slack-guest-session";
 import { startGuestPracticeFromPrep } from "@/lib/slack-guest-practice";
 import {
   buildShortcutPrompt,
-  extractMessageText,
-  messageShortcutIntent,
-  parseInteractionPayload,
   selectedMessageOpener,
   type MessageShortcutIntent,
   type SlackInteractionPayload,

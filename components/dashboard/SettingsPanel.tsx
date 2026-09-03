@@ -585,7 +585,7 @@ export default function SettingsPage() {
               <HealthPill ok={diagnostics.beckett.authenticated} label="Beckett login" />
               <HealthPill ok={diagnostics.extension.tokenIssued} label="Extension token" />
               <HealthPill ok={diagnostics.integrations.slack.connected} label="Slack" />
-              <HealthPill ok={diagnostics.integrations.google.connected} label="Google" />
+              <HealthPill ok={diagnostics.integrations.google.connected} label="Gmail add-on" />
               <HealthPill ok={diagnostics.integrations.microsoft.connected} label="Microsoft 365" />
               <HealthPill ok={diagnostics.api.reachable} label="API reachable" />
             </div>

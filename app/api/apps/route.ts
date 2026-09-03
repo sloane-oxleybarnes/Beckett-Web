@@ -27,10 +27,10 @@ export async function GET() {
 
   const providers = new Map((integrations || []).map((item) => [item.provider, item]));
   const microsoft = providers.get("microsoft");
-  const google = providers.get("google") || providers.get("google_workspace_addon");
+  const gmail = providers.get("google_workspace_addon");
   const slack = providers.get("slack");
   const connected: Record<ConnectedAppId, boolean> = {
-    gmail: Boolean(google),
+    gmail: Boolean(gmail),
     google_calendar: providers.has("google_calendar"),
     slack: Boolean(slack),
     outlook: Boolean(microsoft),
@@ -38,7 +38,9 @@ export async function GET() {
     chrome: Boolean(profile?.extension_connected_at),
   };
   const details: Partial<Record<ConnectedAppId, string>> = {
-    gmail: google?.external_user_id || undefined,
+    gmail: typeof gmail?.metadata === "object" && gmail.metadata && "email" in gmail.metadata
+      ? String(gmail.metadata.email || "") || undefined
+      : undefined,
     slack: slack?.external_team_name || undefined,
     outlook: microsoft?.external_user_id || undefined,
     microsoft_calendar: microsoft?.external_user_id || undefined,
