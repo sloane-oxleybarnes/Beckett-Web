@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { listMicrosoftCalendarEvents, microsoftNeedsReconnect } from "@/lib/microsoft-oauth";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  const { data: integration, error } = await supabaseAdmin
+  const { data: integration, error } = await integrationsRepository
     .from("user_integrations")
     .select("metadata")
     .eq("user_id", user.id)

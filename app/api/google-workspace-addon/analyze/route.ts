@@ -30,6 +30,7 @@ import {
 } from "@/lib/google-workspace-gmail";
 import { loadWorkspaceGmailPersonalization } from "@/lib/google-workspace-personalization";
 import { recordOptInGmailVoicePattern } from "@/lib/google-workspace-voice-pattern";
+import { logError } from "@/lib/structured-logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,11 +75,7 @@ export async function POST(request: NextRequest) {
       const cachedSections = await loadWorkspaceAnalysisCache({ userId: profile.id, thread });
       if (cachedSections) {
         await storeWorkspaceAnalysisCache({ userId: profile.id, thread, sections: cachedSections }).catch((error) => {
-          console.error("Google Workspace analysis cache refresh failed", {
-            userId: profile.id,
-            threadId: thread.id,
-            message: error instanceof Error ? error.message : "analysis_cache_refresh_failed",
-          });
+          logError("google_workspace.cache_refresh_failed", error, { provider: "gmail", operation: "cache_refresh" });
         });
         return cardUpdateResponse(buildWorkspaceAnalysisCard(request, cachedSections, contacts));
       }
@@ -128,11 +125,7 @@ export async function POST(request: NextRequest) {
       };
 
       await storeWorkspaceAnalysisCache({ userId: profile.id, thread, sections }).catch((error) => {
-        console.error("Google Workspace analysis cache write failed", {
-          userId: profile.id,
-          threadId: thread.id,
-          message: error instanceof Error ? error.message : "analysis_cache_write_failed",
-        });
+        logError("google_workspace.cache_write_failed", error, { provider: "gmail", operation: "cache_write" });
       });
 
       if (personalization.relationshipContext && personalization.counterparts.length === 1) {
@@ -156,11 +149,7 @@ export async function POST(request: NextRequest) {
             derived_at: new Date().toISOString(),
           },
         }).catch((error) => {
-          console.error("Google Workspace Gmail interaction summary storage failed", {
-            userId: profile.id,
-            contactId: personalization.relationshipContext?.contact.id,
-            message: error instanceof Error ? error.message : "interaction_summary_failed",
-          });
+          logError("google_workspace.interaction_summary_failed", error, { provider: "gmail", operation: "summary_store" });
         });
       }
 
@@ -169,10 +158,7 @@ export async function POST(request: NextRequest) {
         userEmail: profile.googleEmail,
         thread,
       }).catch((error) => {
-        console.error("Google Workspace Gmail voice pattern storage failed", {
-          userId: profile.id,
-          message: error instanceof Error ? error.message : "voice_pattern_failed",
-        });
+        logError("google_workspace.voice_pattern_store_failed", error, { provider: "gmail", operation: "voice_pattern_store" });
       });
 
       await trackBetaEvent({
@@ -198,7 +184,7 @@ export async function POST(request: NextRequest) {
         return cardUpdateResponse(errorCard("Credit limit reached", error.message));
       }
       const message = error instanceof Error ? error.message : "analysis_failed";
-      console.error("Google Workspace Gmail analysis failed", { message, userId: profile.id });
+      logError("google_workspace.analysis_failed", error, { provider: "gmail", operation: "analysis" });
       const friendly = message.startsWith("gmail_api_error:403")
         ? "Google did not grant access to this message. Reopen Beckett and approve the requested Gmail permission."
         : "Beckett could not analyze this conversation. Please reopen the email and try again.";

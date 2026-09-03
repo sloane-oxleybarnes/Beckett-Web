@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/server-admin";
+import { platformRepository } from "@/lib/repositories/platform-repository";
 import { SITE_CONTENT_DEFAULTS } from "@/lib/site-content";
 
 type SiteContentRow = {
@@ -15,7 +15,7 @@ export async function getSiteContent(keys?: string[]) {
     : { ...SITE_CONTENT_DEFAULTS };
 
   try {
-    let query = supabaseAdmin.from("site_content").select("key, value");
+    let query = platformRepository.from("site_content").select("key, value");
     if (keys?.length) query = query.in("key", keys);
     const { data, error } = await query;
     if (error) return defaults;

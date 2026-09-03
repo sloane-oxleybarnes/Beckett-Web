@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { platformRepository } from "@/lib/repositories/platform-repository";
 import { SITE_CONTENT_FIELDS } from "@/lib/site-content";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 
@@ -25,7 +25,7 @@ export async function PUT(req: Request) {
     updated_at: new Date().toISOString(),
   }));
 
-  const { error } = await supabaseAdmin
+  const { error } = await platformRepository
     .from("site_content")
     .upsert(rows, { onConflict: "key" });
 

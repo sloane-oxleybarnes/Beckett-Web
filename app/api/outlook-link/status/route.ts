@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMicrosoftProfile } from "@/lib/microsoft-oauth";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   try {
     const profile = await getMicrosoftProfile(token);
     if (!profile.id) return NextResponse.json({ linked: false }, { status: 401 });
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await integrationsRepository
       .from("outlook_sso_link_attempts")
       .select("user_id, expires_at")
       .eq("id", attempt)

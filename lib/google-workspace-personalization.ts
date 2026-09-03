@@ -10,7 +10,8 @@ import {
   type GmailCounterpart,
   type SelectedGmailThread,
 } from "@/lib/google-workspace-gmail";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
+import { logError } from "@/lib/structured-logger";
 
 export type WorkspaceGmailPersonalization = {
   coachingPromptContext: string;
@@ -28,7 +29,7 @@ export async function loadWorkspaceGmailPersonalization(
 
   try {
     const [coachingProfile, relationshipContext] = await Promise.all([
-      fetchCoachingProfileContext(supabaseAdmin, profile.id, { includeToolkit: true, toolkitLimit: 5 }),
+      fetchCoachingProfileContext(integrationsRepository, profile.id, { includeToolkit: true, toolkitLimit: 5 }),
       counterpartEmail
         ? lookupRelationshipContextByEmail({ userId: profile.id, email: counterpartEmail })
         : Promise.resolve(null),
@@ -41,10 +42,9 @@ export async function loadWorkspaceGmailPersonalization(
       relationshipContext,
     };
   } catch (error) {
-    console.error("Google Workspace Gmail personalization lookup failed", {
-      userId: profile.id,
-      counterpartEmail,
-      message: error instanceof Error ? error.message : "personalization_lookup_failed",
+    logError("google_workspace.personalization_lookup_failed", error, {
+      provider: "gmail",
+      operation: "personalization_lookup",
     });
     return { coachingPromptContext: "", counterpartEmail, counterparts, relationshipContext: null };
   }

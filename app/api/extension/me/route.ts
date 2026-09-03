@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getExtensionProfile } from "@/lib/extension-auth";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 
 export async function GET(req: NextRequest) {
   const authProfile = await getExtensionProfile(req);
   if (!authProfile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: profile, error } = await supabaseAdmin
+  const { data: profile, error } = await integrationsRepository
     .from("profiles")
     .select("id, email, full_name, first_name, display_name, plan")
     .eq("id", authProfile.id)
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Profile not found." }, { status: 404 });
   }
 
-  const { data: integrations } = await supabaseAdmin
+  const { data: integrations } = await integrationsRepository
     .from("user_integrations")
     .select("provider, external_user_id, external_team_id, external_team_name, connected_at, updated_at")
     .eq("user_id", authProfile.id);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { callAnthropic } from "@/lib/anthropic";
-import { AiUsageLimitError, recordAiUsage } from "@/lib/ai-usage";
+import { AiUsageLimitError } from "@/lib/ai-usage";
+import { metering } from "@/lib/metering";
 import { beckettBoundaryPrompt } from "@/lib/beckett-boundaries";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
@@ -14,7 +15,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     return NextResponse.json({ error: "Add notes, decisions, or open questions before asking Beckett to summarize." }, { status: 400 });
   }
   try {
-    await recordAiUsage(user.id, { source: "meeting_companion", action: "meeting_notes_summary" });
+    await metering.ai.record({ userId: user.id, source: "meeting_companion", action: "meeting_notes_summary" });
     const text = await callAnthropic(
       `You are Beckett, a communication coach. Summarize only the user's selected meeting notes. Do not infer details not present. Do not give legal, medical, mental-health, HR, or crisis advice. ${beckettBoundaryPrompt()} Keep the result under 160 words, with concise headings for Summary, Decisions, and Open questions when applicable.`,
       [{ role: "user", content: `Meeting: ${session.title}\n\nUser notes:\n${session.user_notes || "None"}\n\nDecisions:\n${JSON.stringify(session.decisions)}\n\nOpen questions:\n${JSON.stringify(session.open_questions)}` }],

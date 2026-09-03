@@ -210,7 +210,7 @@ test("Slack OAuth worker and staging manifest use the same reviewed scopes and o
 
 test("Chrome extension package configuration contains no Slack surface", () => {
   const manifest = readFileSync(new URL("../extension/manifest.json", import.meta.url), "utf8");
-  const packager = readFileSync(new URL("../scripts/package-extension.js", import.meta.url), "utf8");
+  const packager = readFileSync(new URL("../scripts/package-extension.cjs", import.meta.url), "utf8");
   const background = readFileSync(new URL("../extension/background/service_worker.js", import.meta.url), "utf8");
   assert.doesNotMatch(manifest, /slack/i);
   assert.doesNotMatch(packager, /slack/i);

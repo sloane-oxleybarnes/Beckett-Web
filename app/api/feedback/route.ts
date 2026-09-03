@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { platformRepository } from "@/lib/repositories/platform-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { trackBetaEvent } from "@/lib/beta-events";
 import { sendFeedbackThankYouIfFirst } from "@/lib/beta-emails";
@@ -19,7 +19,7 @@ const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 async function removeUploadedScreenshots(items: Array<{ path: string }>) {
   if (!items.length) return;
-  const { error } = await supabaseAdmin.storage
+  const { error } = await platformRepository.storage
     .from(SCREENSHOT_BUCKET)
     .remove(items.map((item) => item.path));
   if (error) console.error("Feedback screenshot cleanup failed", error);
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
   for (const file of screenshots) {
     const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
     const path = `${user.id}/${crypto.randomUUID()}.${extension}`;
-    const { error: uploadError } = await supabaseAdmin.storage.from(SCREENSHOT_BUCKET).upload(path, await file.arrayBuffer(), {
+    const { error: uploadError } = await platformRepository.storage.from(SCREENSHOT_BUCKET).upload(path, await file.arrayBuffer(), {
       contentType: file.type,
       upsert: false,
     });
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     uploadedScreenshots.push({ path, name: truncate(file.name, 180) || "screenshot", type: file.type, size: file.size });
   }
 
-  const { error } = await supabaseAdmin.from("beta_feedback").insert({
+  const { error } = await platformRepository.from("beta_feedback").insert({
     user_id: user.id,
     rating: body.rating,
     comment: truncate(body.comment),

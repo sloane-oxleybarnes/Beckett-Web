@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function DELETE() {
@@ -7,7 +7,7 @@ export async function DELETE() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const { error } = await supabaseAdmin.from("profiles").update({
+  const { error } = await integrationsRepository.from("profiles").update({
     extension_token: null,
     extension_connected_at: null,
     updated_at: new Date().toISOString(),

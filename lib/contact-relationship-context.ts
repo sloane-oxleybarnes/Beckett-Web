@@ -1,5 +1,5 @@
 import { ContactIdentifierInput, normalizeContactIdentifier } from "@/lib/contact-identifiers";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { contactsRepository } from "@/lib/repositories/contacts-repository";
 
 type ContactMatch = {
   id: string;
@@ -82,7 +82,7 @@ export async function lookupRelationshipContextByIdentifier({
   const normalized = normalizeContactIdentifier(identifier);
   if (!normalized) return null;
 
-  const { data: identifierRow, error } = await supabaseAdmin
+  const { data: identifierRow, error } = await contactsRepository
     .from("contact_identifiers")
     .select("contact_id, confirmed")
     .eq("user_id", userId)
@@ -93,7 +93,7 @@ export async function lookupRelationshipContextByIdentifier({
   if (error || !identifierRow?.contact_id) return null;
   if (requireConfirmed && !identifierRow.confirmed) return null;
 
-  const { data: contact } = await supabaseAdmin
+  const { data: contact } = await contactsRepository
     .from("contacts")
     .select("id, name, notes, trusted, relationship_type, relationship_other")
     .eq("user_id", userId)
@@ -102,14 +102,14 @@ export async function lookupRelationshipContextByIdentifier({
 
   if (!contact) return null;
 
-  const { data: summary } = await supabaseAdmin
+  const { data: summary } = await contactsRepository
     .from("contact_relationship_summaries")
     .select("communication_style, recurring_tension_points, what_tends_to_work, unresolved_topics, generated_from, updated_at")
     .eq("user_id", userId)
     .eq("contact_id", contact.id)
     .maybeSingle();
 
-  const { data: recentInteractions } = await supabaseAdmin
+  const { data: recentInteractions } = await contactsRepository
     .from("interaction_summaries")
     .select("summary, tone_observed, occurred_at, platform")
     .eq("user_id", userId)
@@ -174,7 +174,7 @@ export async function recordSafeInteractionSummary({
   const occurredAt = new Date().toISOString();
 
   if (dedupeKey) {
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await contactsRepository
       .from("interaction_summaries")
       .select("id")
       .eq("user_id", userId)
@@ -186,7 +186,7 @@ export async function recordSafeInteractionSummary({
     if (existing) return { created: false };
   }
 
-  const { error: insertError } = await supabaseAdmin.from("interaction_summaries").insert({
+  const { error: insertError } = await contactsRepository.from("interaction_summaries").insert({
     user_id: userId,
     contact_id: contactId,
     platform,
@@ -202,7 +202,7 @@ export async function recordSafeInteractionSummary({
 
   if (!updateRelationshipSummary) return { created: true };
 
-  const { error: summaryError } = await supabaseAdmin.from("contact_relationship_summaries").upsert(
+  const { error: summaryError } = await contactsRepository.from("contact_relationship_summaries").upsert(
     {
       user_id: userId,
       contact_id: contactId,
@@ -234,7 +234,7 @@ export async function upsertRelationshipSummary({
   generatedFrom: string;
 }) {
   const now = new Date().toISOString();
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await contactsRepository
     .from("contact_relationship_summaries")
     .upsert(
       {

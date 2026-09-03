@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { callAnthropic, type AnthropicMessage } from '@/lib/anthropic'
-import { AiUsageLimitError, getAiUsageSummary } from '@/lib/ai-usage'
+import { AiUsageLimitError } from '@/lib/ai-usage'
+import { metering } from '@/lib/metering'
 import { withAiMetering } from '@/lib/ai-metering'
 import { getExtensionProfile } from '@/lib/extension-auth'
 import { trackBetaEvent } from '@/lib/beta-events'
@@ -9,7 +10,6 @@ import { parseJsonObject } from '@/lib/ai-json'
 import {
   WEB_CREDITS_ENABLED,
   WebCreditLimitError,
-  getWebCreditSummary,
 } from '@/lib/web-credits'
 
 type ExtensionAiAction =
@@ -73,8 +73,8 @@ export async function POST(req: NextRequest) {
     const cleaned = text.trim()
 
     const currentUsage = WEB_CREDITS_ENABLED
-      ? await getWebCreditSummary(profile.id)
-      : await getAiUsageSummary(profile.id)
+      ? await metering.web.report(profile.id)
+      : await metering.ai.report({ userId: profile.id })
 
     await trackBetaEvent({
       userId: profile.id,

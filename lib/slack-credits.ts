@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/server-admin";
+import { slackRepository } from "@/lib/repositories/slack-repository";
 import { getWebCreditSummary } from "@/lib/web-credits";
 
 export const SLACK_GUEST_DAILY_CREDITS = 5;
@@ -27,8 +27,8 @@ export async function getSlackCreditSummary(input: { teamId: string; slackUserId
       return { linked: true, plan: summary.plan, limit: summary.daily.limit, used: summary.daily.used, remaining: summary.daily.remaining, resetsAt: summary.daily.resetsAt };
     }
     const [{ data: profile, error: profileError }, { data: events, error: eventError }] = await Promise.all([
-      supabaseAdmin.from("profiles").select("plan").eq("id", input.beckettUserId).maybeSingle(),
-      supabaseAdmin.from("web_credit_events").select("credits").eq("user_id", input.beckettUserId).gte("created_at", utcDayStart().toISOString()),
+      slackRepository.from("profiles").select("plan").eq("id", input.beckettUserId).maybeSingle(),
+      slackRepository.from("web_credit_events").select("credits").eq("user_id", input.beckettUserId).gte("created_at", utcDayStart().toISOString()),
     ]);
     if (profileError) throw profileError;
     if (eventError) throw eventError;
@@ -38,7 +38,7 @@ export async function getSlackCreditSummary(input: { teamId: string; slackUserId
     return { linked: true, plan, limit, used, remaining: Math.max(limit - used, 0), resetsAt: nextUtcDay() };
   }
 
-  const { data, error } = await supabaseAdmin.from("slack_usage_events")
+  const { data, error } = await slackRepository.from("slack_usage_events")
     .select("credits_charged")
     .eq("slack_team_id", input.teamId)
     .eq("slack_user_id", input.slackUserId)
@@ -51,7 +51,7 @@ export async function getSlackCreditSummary(input: { teamId: string; slackUserId
 
 export async function reserveSlackCredit(input: { requestId: string; teamId: string; slackUserId: string; beckettUserId?: string | null }) {
   const summary = await getSlackCreditSummary(input);
-  const { data, error } = await supabaseAdmin.rpc("reserve_slack_credit", {
+  const { data, error } = await slackRepository.rpc("reserve_slack_credit", {
     p_request_id: input.requestId,
     p_slack_team_id: input.teamId,
     p_slack_user_id: input.slackUserId,
@@ -66,13 +66,13 @@ export async function reserveSlackCredit(input: { requestId: string; teamId: str
 }
 
 export async function commitSlackCredit(reservationId: string, eventType: string, flowType: string) {
-  const { data, error } = await supabaseAdmin.rpc("commit_slack_credit", { p_reservation_id: reservationId, p_event_type: eventType, p_flow_type: flowType });
+  const { data, error } = await slackRepository.rpc("commit_slack_credit", { p_reservation_id: reservationId, p_event_type: eventType, p_flow_type: flowType });
   if (error) throw error;
   return data;
 }
 
 export async function releaseSlackCredit(reservationId: string) {
-  const { error } = await supabaseAdmin.rpc("release_slack_credit", { p_reservation_id: reservationId });
+  const { error } = await slackRepository.rpc("release_slack_credit", { p_reservation_id: reservationId });
   if (error) throw error;
 }
 

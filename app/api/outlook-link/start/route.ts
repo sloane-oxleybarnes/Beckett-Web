@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMicrosoftProfile } from "@/lib/microsoft-oauth";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     if (!profile.id) return NextResponse.json({ error: "Microsoft could not identify this account." }, { status: 401 });
     const id = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    const { error } = await supabaseAdmin.from("outlook_sso_link_attempts").upsert({
+    const { error } = await integrationsRepository.from("outlook_sso_link_attempts").upsert({
       id,
       microsoft_user_id: profile.id,
       user_id: null,

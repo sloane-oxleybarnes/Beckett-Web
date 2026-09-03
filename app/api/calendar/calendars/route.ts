@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { decryptGoogleAccessToken } from "@/lib/google-token-security";
 import { getGoogleCalendarOAuthConfig, parseGoogleCalendarCredential } from "@/lib/google-calendar-oauth";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 type CalendarMetadata = {
@@ -21,7 +21,7 @@ async function currentIntegration(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: "Unauthorized." }, { status: 401 }) };
 
-  const { data: integration, error } = await supabaseAdmin
+  const { data: integration, error } = await integrationsRepository
     .from("user_integrations")
     .select("id, access_token, metadata")
     .eq("user_id", user.id)
@@ -73,7 +73,7 @@ export async function PUT(request: NextRequest) {
     : [];
   if (!selected.length) return NextResponse.json({ error: "Choose at least one calendar." }, { status: 400 });
 
-  const { error } = await supabaseAdmin
+  const { error } = await integrationsRepository
     .from("user_integrations")
     .update({ metadata: { ...result.integration.metadata, selectedCalendarIds: selected }, updated_at: new Date().toISOString() })
     .eq("id", result.integration.id);

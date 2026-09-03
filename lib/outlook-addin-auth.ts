@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getMicrosoftProfile } from "@/lib/microsoft-oauth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 
 type OutlookAddinUser = { id: string };
 
@@ -17,13 +17,13 @@ export async function getOutlookAddinUser(request: NextRequest): Promise<Outlook
   if (cookieUser) return { id: cookieUser.id };
 
   if (!bearerToken) return null;
-  const { data: { user: beckettUser } } = await supabaseAdmin.auth.getUser(bearerToken);
+  const { data: { user: beckettUser } } = await integrationsRepository.auth.getUser(bearerToken);
   if (beckettUser) return { id: beckettUser.id };
 
   try {
     const profile = await getMicrosoftProfile(bearerToken);
     if (!profile.id) return null;
-    const { data: integration, error } = await supabaseAdmin
+    const { data: integration, error } = await integrationsRepository
       .from("user_integrations")
       .select("user_id")
       .eq("provider", "microsoft")
@@ -48,7 +48,7 @@ export async function hasUnlinkedMicrosoftAccount(request: NextRequest): Promise
   try {
     const profile = await getMicrosoftProfile(bearerToken);
     if (!profile.id) return false;
-    const { data: integration, error } = await supabaseAdmin
+    const { data: integration, error } = await integrationsRepository
       .from("user_integrations")
       .select("user_id")
       .eq("provider", "microsoft")

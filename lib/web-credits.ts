@@ -1,16 +1,16 @@
-import { supabaseAdmin } from "./server-admin";
+import { platformRepository } from "@/lib/repositories/platform-repository";
 
 export const WEB_CREDITS_ENABLED = process.env.WEB_CREDIT_SYSTEM_ENABLED === "true";
 
 type CreditPlan = "free" | "beta" | "pro" | "team";
 
 async function isUnlimitedWebCreditUser(userId: string) {
-  const { data: profile } = await supabaseAdmin
+  const { data: profile } = await platformRepository
     .from("profiles")
     .select("email")
     .eq("id", userId)
     .maybeSingle();
-  const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+  const { data: authUser } = await platformRepository.auth.admin.getUserById(userId);
   const email = (profile?.email || authUser.user?.email || "").trim().toLowerCase();
   const configured = (process.env.WEB_UNLIMITED_CREDIT_EMAILS || "")
     .split(",")
@@ -52,7 +52,7 @@ function addUtcMonths(value: Date, months: number) {
 }
 
 async function getPlan(userId: string) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await platformRepository
     .from("profiles")
     .select("plan, created_at")
     .eq("id", userId)
@@ -74,7 +74,7 @@ function limitsFor(plan: CreditPlan, createdAt: Date, now: Date) {
 }
 
 async function countCredits(userId: string, since: Date) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await platformRepository
     .from("web_credit_events")
     .select("credits")
     .eq("user_id", userId)
@@ -99,7 +99,7 @@ export async function getWebCreditSummary(userId: string) {
 
   let coursesUsed = 0;
   if (limits.courses !== null) {
-    const { count, error } = await supabaseAdmin
+    const { count, error } = await platformRepository
       .from("web_course_unlocks")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
@@ -142,7 +142,7 @@ export async function reserveWebCredit(userId: string, input: {
   const summary = await getWebCreditSummary(userId);
   if (!summary.enabled || summary.unlimited) return null;
 
-  const { data, error } = await supabaseAdmin.rpc("reserve_web_credit", {
+  const { data, error } = await platformRepository.rpc("reserve_web_credit", {
     p_request_id: input.requestId,
     p_user_id: userId,
     p_source: input.source,
@@ -164,14 +164,14 @@ export async function reserveWebCredit(userId: string, input: {
 }
 
 export async function commitWebCredit(reservationId: string) {
-  const { error } = await supabaseAdmin.rpc("commit_web_credit", {
+  const { error } = await platformRepository.rpc("commit_web_credit", {
     p_reservation_id: reservationId,
   });
   if (error) throw error;
 }
 
 export async function releaseWebCredit(reservationId: string) {
-  const { error } = await supabaseAdmin.rpc("release_web_credit", {
+  const { error } = await platformRepository.rpc("release_web_credit", {
     p_reservation_id: reservationId,
   });
   if (error) throw error;
@@ -186,7 +186,7 @@ export async function ensureWebCourseAccess(userId: string, plan: string | null 
   if (!WEB_CREDITS_ENABLED || plan !== "free") throw new WebCourseLimitError();
 
   const periodStart = utcMonthStart().toISOString().slice(0, 10);
-  const { error } = await supabaseAdmin.rpc("ensure_web_course_access", {
+  const { error } = await platformRepository.rpc("ensure_web_course_access", {
     p_user_id: userId,
     p_course_id: courseId,
     p_period_start: periodStart,

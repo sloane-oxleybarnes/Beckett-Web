@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { trackBetaEvent } from "@/lib/beta-events";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 const CONNECTED_PROVIDERS = ["google_workspace_addon", "google_calendar", "microsoft", "slack"] as const;
@@ -41,7 +41,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ prov
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const { data: integration, error: readError } = await supabaseAdmin
+  const { data: integration, error: readError } = await integrationsRepository
     .from("user_integrations")
     .select("access_token, external_user_id, metadata")
     .eq("user_id", user.id)
@@ -56,7 +56,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ prov
 
   if (provider === "google_workspace_addon" && integration?.external_user_id) {
     const now = new Date().toISOString();
-    const { error: disabledError } = await supabaseAdmin.from("user_integrations").upsert(
+    const { error: disabledError } = await integrationsRepository.from("user_integrations").upsert(
       {
         user_id: user.id,
         provider: "google_workspace_addon_disabled",
@@ -75,7 +75,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ prov
     if (disabledError) return NextResponse.json({ error: "Could not disconnect the Gmail add-on." }, { status: 500 });
   }
 
-  const { error: deleteError } = await supabaseAdmin
+  const { error: deleteError } = await integrationsRepository
     .from("user_integrations")
     .delete()
     .eq("user_id", user.id)

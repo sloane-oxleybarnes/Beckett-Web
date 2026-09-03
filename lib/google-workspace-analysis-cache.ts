@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import {
   normalizeWorkspaceAnalysisSections,
   type WorkspaceAnalysisSections,
 } from "@/lib/google-workspace-analysis-card";
 import type { SelectedGmailThread } from "@/lib/google-workspace-gmail";
+import { logError } from "@/lib/structured-logger";
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 
@@ -22,7 +23,7 @@ export async function loadWorkspaceAnalysisCache({
   thread: SelectedGmailThread;
 }) {
   const revision = workspaceAnalysisThreadRevision(thread);
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await integrationsRepository
     .from("google_workspace_analysis_cache")
     .select("sections")
     .eq("user_id", userId)
@@ -32,11 +33,7 @@ export async function loadWorkspaceAnalysisCache({
     .maybeSingle();
 
   if (error) {
-    console.error("Google Workspace analysis cache read failed", {
-      userId,
-      threadId: thread.id,
-      message: error.message,
-    });
+    logError("google_workspace.cache_read_failed", error, { provider: "gmail", operation: "cache_read" });
     return null;
   }
 
@@ -52,7 +49,7 @@ export async function loadWorkspaceAnalysisCacheByThreadId({
 }) {
   if (!threadId) return null;
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await integrationsRepository
     .from("google_workspace_analysis_cache")
     .select("sections")
     .eq("user_id", userId)
@@ -61,11 +58,7 @@ export async function loadWorkspaceAnalysisCacheByThreadId({
     .maybeSingle();
 
   if (error) {
-    console.error("Google Workspace analysis cache thread lookup failed", {
-      userId,
-      threadId,
-      message: error.message,
-    });
+    logError("google_workspace.cache_thread_lookup_failed", error, { provider: "gmail", operation: "cache_lookup" });
     return null;
   }
 
@@ -85,7 +78,7 @@ export async function loadWorkspaceAnalysisCacheByMessageId({
     ? BigInt(legacyMessageId[1]).toString(16)
     : messageId;
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await integrationsRepository
     .from("google_workspace_analysis_cache")
     .select("sections")
     .eq("user_id", userId)
@@ -94,11 +87,7 @@ export async function loadWorkspaceAnalysisCacheByMessageId({
     .maybeSingle();
 
   if (error) {
-    console.error("Google Workspace analysis cache message lookup failed", {
-      userId,
-      messageId,
-      message: error.message,
-    });
+    logError("google_workspace.cache_message_lookup_failed", error, { provider: "gmail", operation: "cache_lookup" });
     return null;
   }
 
@@ -116,7 +105,7 @@ export async function storeWorkspaceAnalysisCache({
 }) {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + CACHE_TTL_MS);
-  const { error } = await supabaseAdmin.from("google_workspace_analysis_cache").upsert(
+  const { error } = await integrationsRepository.from("google_workspace_analysis_cache").upsert(
     {
       user_id: userId,
       thread_id: thread.id,
@@ -131,7 +120,7 @@ export async function storeWorkspaceAnalysisCache({
 
   if (error) throw error;
 
-  await supabaseAdmin
+  await integrationsRepository
     .from("google_workspace_analysis_cache")
     .delete()
     .eq("user_id", userId)

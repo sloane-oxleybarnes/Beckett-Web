@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "./server-admin";
+import { platformRepository } from "@/lib/repositories/platform-repository";
 
 export function isBetaInviteOnly() {
   return process.env.BETA_INVITE_ONLY !== "false";
@@ -17,7 +17,7 @@ export async function hasApprovedBetaAccess(input: { email?: string | null; plan
   if (isInternalTester(email)) return true;
   if (input.plan === "beta" || input.plan === "pro" || input.plan === "team") return true;
 
-  const { data } = await supabaseAdmin
+  const { data } = await platformRepository
     .from("beta_signups")
     .select("approved")
     .eq("email", email)
@@ -37,7 +37,7 @@ export async function ensureApprovedBetaPlan(input: {
   const email = input.email?.trim().toLowerCase();
   if (!email || isInternalTester(email)) return input.plan;
 
-  const { data: signup } = await supabaseAdmin
+  const { data: signup } = await platformRepository
     .from("beta_signups")
     .select("approved")
     .eq("email", email)
@@ -46,7 +46,7 @@ export async function ensureApprovedBetaPlan(input: {
 
   if (!signup?.approved) return input.plan;
 
-  const { error } = await supabaseAdmin
+  const { error } = await platformRepository
     .from("profiles")
     .update({ plan: "beta" })
     .eq("id", input.userId);

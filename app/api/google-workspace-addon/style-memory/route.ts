@@ -10,7 +10,7 @@ import {
   textWidget,
   workspaceAddOnRoute,
 } from "@/lib/google-workspace-addon";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     if (!profile) return cardUpdateResponse(await signInCard(request, event));
 
     const enabled = event.commonEventObject?.parameters?.enabled === "true";
-    const { error } = await supabaseAdmin
+    const { error } = await integrationsRepository
       .from("profiles")
       .update({ pattern_model_enabled: enabled, updated_at: new Date().toISOString() })
       .eq("id", profile.id);

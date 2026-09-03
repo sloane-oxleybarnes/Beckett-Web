@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { workdayRepository } from "@/lib/repositories/workday-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 const statuses = ["proposed", "remembered", "dismissed", "blocked"] as const;
@@ -14,7 +14,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: "Choose a pattern preference." }, { status: 400 });
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await workdayRepository
     .from("workday_pattern_summaries")
     .update({ status: body.status, acknowledged_at: new Date().toISOString() })
     .eq("id", (await params).id)
@@ -31,7 +31,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const { error } = await supabaseAdmin
+  const { error } = await workdayRepository
     .from("workday_pattern_summaries")
     .delete()
     .eq("id", (await params).id)

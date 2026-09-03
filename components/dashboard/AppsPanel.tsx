@@ -5,6 +5,8 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CONNECTED_APPS, type ConnectedAppDefinition, type ConnectedAppId } from "@/lib/connected-apps";
 
+const APPS_PAGE_APPS = CONNECTED_APPS.filter((app) => app.id !== "chrome");
+
 type AppsState = {
   selectedAppIds: ConnectedAppId[];
   connected: Record<ConnectedAppId, boolean>;
@@ -91,8 +93,8 @@ export default function AppsPanel() {
   }, [load]);
 
   const selected = useMemo(() => new Set(state?.selectedAppIds || []), [state?.selectedAppIds]);
-  const yourApps = CONNECTED_APPS.filter((app) => selected.has(app.id));
-  const availableApps = CONNECTED_APPS.filter((app) => !selected.has(app.id));
+  const yourApps = APPS_PAGE_APPS.filter((app) => selected.has(app.id));
+  const availableApps = APPS_PAGE_APPS.filter((app) => !selected.has(app.id));
 
   async function toggleApp(app: ConnectedAppDefinition) {
     if (!state) return;

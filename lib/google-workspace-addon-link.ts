@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import {
   createWorkspaceAddOnLinkToken,
   hashWorkspaceAddOnLinkToken,
@@ -28,12 +28,12 @@ export async function createWorkspaceAddOnConnectUrl(
   const token = createWorkspaceAddOnLinkToken();
   const now = new Date();
 
-  await supabaseAdmin
+  await integrationsRepository
     .from("google_workspace_addon_link_sessions")
     .delete()
     .lt("expires_at", now.toISOString());
 
-  const { error } = await supabaseAdmin.from("google_workspace_addon_link_sessions").insert({
+  const { error } = await integrationsRepository.from("google_workspace_addon_link_sessions").insert({
     token_hash: hashWorkspaceAddOnLinkToken(token),
     google_subject: user.sub,
     google_email: user.email!.trim().toLowerCase(),
@@ -50,7 +50,7 @@ export async function createWorkspaceAddOnConnectUrl(
 export async function getWorkspaceAddOnLinkSession(token: string) {
   if (!isWorkspaceAddOnLinkToken(token)) return null;
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await integrationsRepository
     .from("google_workspace_addon_link_sessions")
     .select("id,google_subject,google_email,expires_at")
     .eq("token_hash", hashWorkspaceAddOnLinkToken(token))
@@ -70,7 +70,7 @@ export async function connectWorkspaceAddOnAccount({
   const session = await getWorkspaceAddOnLinkSession(token);
   if (!session) return { ok: false as const, error: "link_expired" };
 
-  const { data: existingSubject } = await supabaseAdmin
+  const { data: existingSubject } = await integrationsRepository
     .from("user_integrations")
     .select("user_id")
     .eq("provider", "google_workspace_addon")
@@ -81,7 +81,7 @@ export async function connectWorkspaceAddOnAccount({
   }
 
   const now = new Date().toISOString();
-  const { error } = await supabaseAdmin.from("user_integrations").upsert(
+  const { error } = await integrationsRepository.from("user_integrations").upsert(
     {
       user_id: userId,
       provider: "google_workspace_addon",
@@ -97,14 +97,14 @@ export async function connectWorkspaceAddOnAccount({
   );
   if (error) throw error;
 
-  await supabaseAdmin
+  await integrationsRepository
     .from("user_integrations")
     .delete()
     .eq("user_id", userId)
     .eq("provider", "google_workspace_addon_disabled")
     .eq("external_user_id", session.google_subject);
 
-  await supabaseAdmin
+  await integrationsRepository
     .from("google_workspace_addon_link_sessions")
     .delete()
     .eq("id", session.id);

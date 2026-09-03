@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/server-admin";
+import { slackRepository } from "@/lib/repositories/slack-repository";
 import {
   buildBeckettPayload,
   fetchSlackConversationContext,
@@ -26,7 +26,7 @@ import {
   upsertSlackZeroCopyFlowSession,
   type SlackZeroCopyFlowSession,
 } from "@/lib/slack-zero-copy-store";
-import { getWebCreditSummary } from "@/lib/web-credits";
+import { metering } from "@/lib/metering";
 
 export const SLACK_HISTORY_CONTINUE_ACTION_ID = "beckett_history_continue";
 export const SLACK_HISTORY_ARCHIVE_ACTION_ID = "beckett_history_archive";
@@ -578,7 +578,7 @@ export async function completeActiveSlackSessionsForThread({
   threadId: string;
   userId: string;
 }) {
-  const zeroCopyResult = await supabaseAdmin
+  const zeroCopyResult = await slackRepository
     .from("slack_agent_sessions")
     .update({
       status: "completed",
@@ -772,7 +772,7 @@ export async function publishSlackHome({
       message: error instanceof Error ? error.message : String(error),
     });
   }
-  const credits = await getWebCreditSummary(userId).catch(() => null);
+  const credits = await metering.web.report(userId).catch(() => null);
   const creditLine = credits?.enabled
     ? `*${credits.daily.remaining} coaching credits remaining today* · ${credits.plan} plan · resets daily at 00:00 UTC`
     : null;
@@ -873,7 +873,7 @@ export async function cancelSlackInactivityStartCard({
 }) {
   if (!botAccessToken || !channelId) return;
 
-  const { data: reservation } = await supabaseAdmin
+  const { data: reservation } = await slackRepository
     .from("slack_inactivity_schedules")
     .select("scheduled_message_id")
     .eq("channel_id", channelId)
@@ -899,7 +899,7 @@ export async function cancelSlackInactivityStartCard({
     }).catch(() => null);
   }
 
-  await supabaseAdmin
+  await slackRepository
     .from("slack_inactivity_schedules")
     .delete()
     .eq("channel_id", channelId);
@@ -926,12 +926,12 @@ export async function scheduleSlackInactivityStartCard({
 
   const payload = buildSlackStartCardPayload("inactivity");
   const generation = crypto.randomUUID();
-  const { data: previousSchedule, error: previousScheduleError } = await supabaseAdmin
+  const { data: previousSchedule, error: previousScheduleError } = await slackRepository
     .from("slack_inactivity_schedules")
     .select("scheduled_message_id")
     .eq("channel_id", channelId)
     .maybeSingle();
-  const { error: reservationError } = await supabaseAdmin
+  const { error: reservationError } = await slackRepository
     .from("slack_inactivity_schedules")
     .upsert({
       channel_id: channelId,
@@ -994,7 +994,7 @@ export async function scheduleSlackInactivityStartCard({
   if (!scheduled.ok) throw new Error(scheduled.error || "slack_schedule_message_failed");
   if (scheduled.scheduled_message_id) {
     if (durableReservation) {
-      await supabaseAdmin
+      await slackRepository
         .from("slack_inactivity_schedules")
         .update({
           scheduled_message_id: scheduled.scheduled_message_id,
@@ -1002,7 +1002,7 @@ export async function scheduleSlackInactivityStartCard({
         })
         .eq("channel_id", channelId)
         .eq("generation", generation);
-      const { data: currentReservation } = await supabaseAdmin
+      const { data: currentReservation } = await slackRepository
         .from("slack_inactivity_schedules")
         .select("generation")
         .eq("channel_id", channelId)

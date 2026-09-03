@@ -1,5 +1,5 @@
 import type { SelectedGmailThread } from "@/lib/google-workspace-gmail";
-import { supabaseAdmin } from "@/lib/server-admin";
+import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { summarizeSelectedGmailVoicePattern } from "@/lib/google-workspace-voice-pattern-summary";
 
 export async function recordOptInGmailVoicePattern({
@@ -11,7 +11,7 @@ export async function recordOptInGmailVoicePattern({
   userEmail: string;
   thread: SelectedGmailThread;
 }) {
-  const { data: profile } = await supabaseAdmin
+  const { data: profile } = await integrationsRepository
     .from("profiles")
     .select("pattern_model_enabled")
     .eq("id", userId)
@@ -21,7 +21,7 @@ export async function recordOptInGmailVoicePattern({
   const pattern = summarizeSelectedGmailVoicePattern(thread, userEmail);
   if (!pattern) return { recorded: false, reason: "no_user_samples" as const };
 
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await integrationsRepository
     .from("user_pattern_observations")
     .select("id")
     .eq("user_id", userId)
@@ -41,8 +41,8 @@ export async function recordOptInGmailVoicePattern({
   };
 
   const { error } = existing
-    ? await supabaseAdmin.from("user_pattern_observations").update(values).eq("id", existing.id)
-    : await supabaseAdmin.from("user_pattern_observations").insert({
+    ? await integrationsRepository.from("user_pattern_observations").update(values).eq("id", existing.id)
+    : await integrationsRepository.from("user_pattern_observations").insert({
         user_id: userId,
         pattern_key: "gmail_writing_style",
         ...values,
