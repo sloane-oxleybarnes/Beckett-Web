@@ -1213,6 +1213,36 @@ export type Database = {
         }
         Relationships: []
       }
+      site_content: {
+        Row: {
+          input_type: string
+          key: string
+          label: string
+          section: string
+          updated_at: string
+          updated_by: string | null
+          value: string
+        }
+        Insert: {
+          input_type?: string
+          key: string
+          label: string
+          section?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string
+        }
+        Update: {
+          input_type?: string
+          key?: string
+          label?: string
+          section?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
       slack_agent_sessions: {
         Row: {
           answers: Json
@@ -1272,13 +1302,6 @@ export type Database = {
           zero_copy_flow_session_id?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "slack_agent_sessions_coaching_thread_id_fkey"
-            columns: ["coaching_thread_id"]
-            isOneToOne: false
-            referencedRelation: "slack_coaching_threads"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "slack_agent_sessions_zero_copy_flow_session_id_fkey"
             columns: ["zero_copy_flow_session_id"]
@@ -1957,6 +1980,36 @@ export type Database = {
         }
         Relationships: []
       }
+      trusted_people: {
+        Row: {
+          communication_style: string | null
+          created_at: string | null
+          id: string
+          name: string
+          notes: string | null
+          relationship: string | null
+          user_id: string
+        }
+        Insert: {
+          communication_style?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          relationship?: string | null
+          user_id: string
+        }
+        Update: {
+          communication_style?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          relationship?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       upgrade_intents: {
         Row: {
           created_at: string | null
@@ -2614,12 +2667,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2643,11 +2696,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2668,11 +2721,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2693,11 +2746,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2710,11 +2763,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
