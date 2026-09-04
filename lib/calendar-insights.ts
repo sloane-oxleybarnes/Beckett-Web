@@ -43,14 +43,24 @@ export type DaySuggestion = {
 };
 
 export function hasLunchOpening(events: CalendarEvent[], day: Date) {
-  const lunchStart = new Date(day);
-  lunchStart.setHours(11, 30, 0, 0);
-  const lunchEnd = new Date(day);
-  lunchEnd.setHours(14, 30, 0, 0);
   const timedEvents = events
     .filter((event) => event.end)
     .map((event) => ({ start: new Date(event.start), end: new Date(event.end as string) }))
     .sort((left, right) => left.start.getTime() - right.start.getTime());
+  const referenceEvent = events.find((event) => event.end);
+  const referenceMatch = referenceEvent?.start.match(/^(\d{4}-\d{2}-\d{2})T.*(Z|[+-]\d{2}:\d{2})$/);
+  const lunchDate = referenceMatch?.[1] || `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+  const lunchOffset = referenceMatch?.[2] || "";
+  const lunchStart = referenceMatch
+    ? new Date(`${lunchDate}T11:30:00${lunchOffset}`)
+    : new Date(day);
+  const lunchEnd = referenceMatch
+    ? new Date(`${lunchDate}T14:30:00${lunchOffset}`)
+    : new Date(day);
+  if (!referenceMatch) {
+    lunchStart.setHours(11, 30, 0, 0);
+    lunchEnd.setHours(14, 30, 0, 0);
+  }
   let openingStart = lunchStart;
 
   for (const event of timedEvents) {
