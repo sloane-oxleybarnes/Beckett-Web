@@ -29,7 +29,7 @@ test("public Slack journey preserves guest installation and warns before OAuth",
 test("Slack acquisition and support disclose permissions, routing, admin approval, and credits", () => {
   const copy = read("lib/slack-install-copy.ts");
   const support = read("app/support/page.tsx");
-  const home = read("app/page.tsx");
+  const home = read("app/slack/page.tsx");
   const integrations = read("app/integrations/page.tsx");
   const apps = read("components/dashboard/AppsPanel.tsx");
   const connectedApps = read("lib/connected-apps.ts");
