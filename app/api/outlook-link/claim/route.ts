@@ -10,13 +10,17 @@ function destination(request: NextRequest, state: "linked" | "expired" | "error"
 
 export async function GET(request: NextRequest) {
   const attempt = request.nextUrl.searchParams.get("attempt") || "";
+  const requestMailPermission = request.nextUrl.searchParams.get("permission") === "mail";
   if (!attempt) return NextResponse.redirect(destination(request, "error"));
 
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     const login = new URL("/auth/login", request.url);
-    login.searchParams.set("next", `${request.nextUrl.pathname}?attempt=${encodeURIComponent(attempt)}`);
+    const claimPath = new URL(request.nextUrl.pathname, request.url);
+    claimPath.searchParams.set("attempt", attempt);
+    if (requestMailPermission) claimPath.searchParams.set("permission", "mail");
+    login.searchParams.set("next", `${claimPath.pathname}${claimPath.search}`);
     return NextResponse.redirect(login);
   }
 
@@ -64,5 +68,11 @@ export async function GET(request: NextRequest) {
   }
 
   await integrationsRepository.from("outlook_sso_link_attempts").update({ user_id: user.id, updated_at: now }).eq("id", attempt);
+  if (requestMailPermission) {
+    const connect = new URL("/api/microsoft/connect", request.url);
+    connect.searchParams.set("kind", "mail");
+    connect.searchParams.set("next", "/dashboard/settings?outlook_link=linked#connected-accounts");
+    return NextResponse.redirect(connect);
+  }
   return NextResponse.redirect(destination(request, "linked"));
 }

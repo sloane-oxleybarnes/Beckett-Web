@@ -30,7 +30,7 @@ function normalizeSection(value: unknown): CourseSection {
 }
 
 function normalizeIllustration(value: unknown): CourseIllustration {
-  return value === "date" || value === "colleague" || value === "clarity" || value === "no"
+  return value === "date" || value === "colleague" || value === "clarity" || value === "feedback" || value === "no"
     ? value
     : "clarity";
 }

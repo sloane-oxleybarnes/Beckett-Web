@@ -36,7 +36,7 @@ Use the exact scopes in `google-workspace-addon/deployment.production.json`:
 
 - `gmail.addons.current.message.action` — access the open message only after an add-on action.
 - `gmail.addons.current.action.compose` — create a Gmail draft after the user selects **Use in Gmail draft**; Beckett does not send it.
-- `userinfo.email` and `openid` — receive and verify the user's Google identity for account matching.
+- `userinfo.email`, `userinfo.profile`, and `openid` — receive and verify the user's Google identity for account matching, including a display name/profile image when available.
 - `gmail.addons.execute` — add-on execution compatibility in the HTTP deployment.
 
 Do not add broad `gmail.readonly`, `gmail.compose`, `gmail.modify`, or `mail.google.com` scopes. The current add-on-specific scopes avoid restricted, mailbox-wide access.

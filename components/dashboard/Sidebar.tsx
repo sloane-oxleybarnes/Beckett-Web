@@ -16,13 +16,13 @@ const planBadgeColor: Record<string, string> = {
 
 const navItems = [
   { href: "/dashboard", label: "Home" },
+  { href: "/dashboard/message-help", label: "Message Help" },
   { href: "/dashboard/practice", label: "Practice" },
   { href: "/dashboard/skills", label: "Skills" },
+  { href: "/dashboard/calendar", label: "Calendar" },
   { href: "/dashboard/contacts", label: "Contacts" },
-  { href: "/dashboard/calendar", label: "Calendar & Meetings" },
-  { href: "/dashboard/about", label: "About Me" },
   { href: "/dashboard/apps", label: "Apps" },
-  { href: "/dashboard/settings", label: "Settings" },
+  { href: "/dashboard/settings", label: "Settings & About Me", tourKey: "settings" },
 ];
 
 export default function DashboardSidebar({
@@ -92,7 +92,7 @@ export default function DashboardSidebar({
             <Link
               key={item.href}
               href={item.href}
-              data-tour={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+              data-tour={`nav-${item.tourKey || item.label.toLowerCase().replace(/\s+/g, "-")}`}
               onClick={() => setMobileOpen(false)}
               className={`flex items-center px-3 py-2 rounded-sm text-sm transition-colors ${
                 pathname === item.href || (item.href === "/dashboard/contacts" && pathname.startsWith("/dashboard/trusted-people"))

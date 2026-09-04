@@ -77,33 +77,54 @@ export function buildGuestSlashCoachingPrompt(
 export function extractGuestPrepOutcomeAndConcern(text: string) {
   const cleaned = text.replace(/\s+/g, " ").trim();
   const concernMatch = cleaned.match(
-    /\b(?:i(?:['’]m| am) (?:worried|concerned|afraid|nervous)|my (?:main )?concern is|i fear|i (?:do not|don['’]t) want)\b/i
+    /\b(?:i worry|i(?:['’]m| am) (?:worried|concerned|afraid|nervous)|my (?:main )?concern is|i fear|i expect pushback|i expect (?:them|him|her) to|they may say|they might say|i (?:do not|don['’]t) want)\b/i
   );
-  if (!concernMatch || concernMatch.index === undefined) {
-    return { outcome: cleaned || null, concern: null };
-  }
-
-  const beforeConcern = cleaned
-    .slice(0, concernMatch.index)
+  const beforeConcern = (concernMatch?.index === undefined ? cleaned : cleaned.slice(0, concernMatch.index))
     .replace(/[\s,;:-]*(?:but|and)?\s*$/i, "")
     .trim();
   const outcomeMarkers = Array.from(beforeConcern.matchAll(
-    /\b(?:i|we)\s+(?:want|would like|hope)(?:\s+(?:us|them|him|her|my manager|our manager|the team|you))?\s+to\b|\bmy\s+(?:goal|desired outcome)\s+is\b|\bi\s+need\s+(?:us|them|him|her|my manager|the team|you)\s+to\b/gi
+    /\b(?:i|we)\s+(?:want|would like|hope)\b|\bmy\s+(?:goal|desired outcome)\s+is\b|\bi\s+need\s+(?:us|them|him|her|my manager|the team|you)\s+to\b/gi
   ));
   const lastOutcomeMarker = outcomeMarkers.at(-1);
-  const explicitOutcome = lastOutcomeMarker?.index === undefined
-    ? beforeConcern
+  const outcomeCandidate = lastOutcomeMarker?.index === undefined
+    ? null
     : beforeConcern.slice(lastOutcomeMarker.index).trim();
-  const concernTail = cleaned.slice(concernMatch.index).trim();
+  const explicitOutcome = outcomeCandidate && !/^(?:i|we)\s+(?:want|would like|hope)\s+to\s+(?:talk|ask|speak|meet|discuss|prepare)\b/i.test(outcomeCandidate)
+    ? outcomeCandidate
+    : null;
+  const concernTail = concernMatch?.index === undefined ? "" : cleaned.slice(concernMatch.index).trim();
   const firstConcernSentence = concernTail.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim();
-  const concern = (firstConcernSentence || concernTail)
-    .replace(/\s+(?:where|what(?:'s| is) the best place|should (?:i|we) have)\b[\s\S]*$/i, "")
-    .trim();
+  const concern = concernTail
+    ? (firstConcernSentence || concernTail)
+        .replace(/\s+(?:where|what(?:'s| is) the best place|should (?:i|we) have)\b[\s\S]*$/i, "")
+        .trim()
+    : null;
 
   return {
     outcome: explicitOutcome || null,
     concern: concern || null,
   };
+}
+
+export function initialPrepOutcomeAndConcern(text: string, inferredOutcome?: string | null) {
+  const extracted = extractGuestPrepOutcomeAndConcern(text);
+  return {
+    outcome: extracted.outcome || inferredOutcome || null,
+    concern: extracted.concern,
+  };
+}
+
+export function nextMissingPrepDetail(input: {
+  person?: string | null;
+  location?: string | null;
+  outcome?: string | null;
+  concern?: string | null;
+}) {
+  if (!input.person) return "person" as const;
+  if (!input.location) return "location" as const;
+  if (!input.outcome) return "outcome" as const;
+  if (!input.concern) return "concern" as const;
+  return null;
 }
 
 export function inferGuestPrepLocation(text: string): "written" | "call" | "in_person" | null {

@@ -8,7 +8,7 @@ const sections = [
     body: [
       "During beta, Beckett can use Gmail, Google Calendar, Microsoft 365 Calendar, Outlook, Slack, and Chrome extension context only when you connect those tools and ask Beckett for coaching, or when you turn on an analysis setting yourself.",
       "In the Gmail add-on, Beckett uses add-on-specific access to the open message or available thread context after you choose an analysis action. If you separately connect Gmail in the Beckett web app, Beckett uses the read-only access you approve for the feature you request.",
-      "For Slack, Beckett uses connected workspace context and may search relevant Slack history across authorized channels, DMs, group DMs, and private channels when you ask for coaching.",
+      "For Slack, Beckett processes only the message or conversation context you deliberately send to the app for a coaching request. The Marketplace app does not request broad Slack search access and does not search your workspace history.",
       "For Google Calendar, Beckett uses read-only access to list the calendars you choose and to read upcoming event titles, timing, and attendees from those calendars. This lets Beckett show your day and offer meeting context. Beckett does not create, edit, cancel, or respond to calendar events during beta.",
       "For Microsoft 365, Beckett uses delegated read-only access to list the calendars you choose and read basic event titles, timing, and attendees. If you choose Analyze full thread in the Outlook add-in, Beckett also reads the messages in that one selected Outlook conversation. Beckett does not request Microsoft calendar write access, mail sending access, Teams access, or background change notifications.",
       "The Beckett Outlook add-in reads a message or draft only after you choose it in Outlook and select Analyze message. Full-thread analysis is a separate action. Message content is sent for coaching only after you choose an analysis action. You may separately copy a response or insert it into an open draft, but Beckett never sends it.",
@@ -20,7 +20,7 @@ const sections = [
     body: [
       "Beckett stores account details, beta access status, onboarding answers, connection status, usage counts, timestamps, contacts you choose to add, coaching settings, and voluntary workday choices such as check-ins, reminder preferences, and a same-day focus when you save one. If you save or dismiss an earned learning suggestion, Beckett stores that explicit choice and the safe recommendation metadata shown to you.",
       "This can include personal information such as your name and email address, authentication and connection information, user-provided communication preferences, and workplace communication context you choose to send for coaching.",
-      "Beckett does not store full Gmail or Slack message history by default, including raw Slack search results used for a coaching response. For product analytics and CRM, Beckett uses counts, timestamps, connection status, and safe event names, not raw message content.",
+      "Beckett does not retain Slack message content, prompts, generated responses, thread transcripts, or raw Slack context after producing the requested response. It stores only the operational identifiers, flow state, credit usage, timestamps, and connection status required to run the Slack app. For product analytics and CRM, Beckett uses counts, timestamps, connection status, and safe event names, not raw message content.",
       "Beckett does not store Google Calendar events. We retain a Google connection credential only while you keep that connection active, and remove it when you disconnect the service or delete your account.",
       "Beckett does not store Microsoft Calendar events or selected Outlook message bodies by default. Microsoft OAuth credentials are encrypted while the connection is active and removed from Beckett when you disconnect Microsoft 365.",
       "When a selected Gmail conversation matches a confirmed Beckett contact, Beckett may store a short derived interaction summary so future coaching has continuity. Optional email-style learning is off by default and stores compact observations such as typical length or formatting, not full email bodies.",
@@ -48,7 +48,7 @@ const sections = [
     title: "Who Beckett shares data with",
     body: [
       "Beckett shares user data only with service providers and systems needed to run, secure, support, and improve Beckett.",
-      "These may include authentication and database providers such as Supabase, AI providers such as Anthropic for generating coaching responses, Google, Microsoft, and Slack APIs when you connect those services, hosting and infrastructure providers, analytics and debugging tools, email delivery tools, and beta/customer-support tools such as HubSpot and Loops.",
+      "These may include authentication and database providers such as Supabase, AI providers such as Anthropic for generating coaching responses, Google, Microsoft, and Slack APIs when you connect those services (including selected Teams message text when you explicitly request a Teams coaching action), hosting and infrastructure providers, analytics and debugging tools, email delivery tools, and beta/customer-support tools such as HubSpot and Loops.",
       "Service providers receive only the information needed for their role. Beckett does not sell personal data or transfer user data to advertising platforms, data brokers, or other information resellers.",
     ],
   },
@@ -162,7 +162,7 @@ export default function PrivacyPage() {
           how it uses and shares data, what feedback can include, and where the coaching
           boundaries are.
         </p>
-        <p className="mt-4 text-sm text-ink-light">Last updated: August 5, 2026</p>
+        <p className="mt-4 text-sm text-ink-light">Last updated: August 17, 2026</p>
       </section>
 
       <section className="mx-auto grid w-full max-w-4xl gap-5 px-5 pb-12">

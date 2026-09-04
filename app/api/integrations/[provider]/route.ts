@@ -3,7 +3,7 @@ import { trackBetaEvent } from "@/lib/beta-events";
 import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
-const CONNECTED_PROVIDERS = ["google", "google_calendar", "microsoft", "slack"] as const;
+const CONNECTED_PROVIDERS = ["google", "google_calendar", "microsoft"] as const;
 type ConnectedProvider = (typeof CONNECTED_PROVIDERS)[number];
 
 function isConnectedProvider(value: string): value is ConnectedProvider {
@@ -13,18 +13,10 @@ function isConnectedProvider(value: string): value is ConnectedProvider {
 async function revokeProviderToken(provider: ConnectedProvider, token: string) {
   try {
     if (provider === "microsoft") return;
-    if (provider !== "slack") {
-      await fetch("https://oauth2.googleapis.com/revoke", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ token }),
-      });
-      return;
-    }
-
-    await fetch("https://slack.com/api/auth.revoke", {
+    await fetch("https://oauth2.googleapis.com/revoke", {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token }),
     });
   } catch {
     // Local removal is still enough to stop Beckett from accessing this provider.

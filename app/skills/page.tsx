@@ -3,142 +3,25 @@ import Footer from "@/components/marketing/Footer";
 import Link from "next/link";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = {
-  title: "Skill Modules",
-  description:
-    "Practice difficult conversations with Beckett skill modules for feedback, conflict, saying no, asking for support, and written workplace communication.",
-  alternates: {
-    canonical: "/skills",
-  },
-};
+export const metadata: Metadata = { title: "Skills", description: "Workplace communication skill courses available now and coming during the Beckett beta.", alternates: { canonical: "/skills" } };
 
-const skillModules = [
-  {
-    title: "Giving feedback",
-    description:
-      "Learn to deliver feedback that is direct, kind, and actually heard. Practice frameworks for difficult conversations with your manager, peers, and reports.",
-    difficulty: "Beginner",
-    sessions: 4,
-    icon: "💬",
-  },
-  {
-    title: "Navigating conflict",
-    description:
-      "Build the skills to stay grounded in tense moments, de-escalate without backing down, and repair relationships after ruptures.",
-    difficulty: "Intermediate",
-    sessions: 5,
-    icon: "🤝",
-  },
-  {
-    title: "Saying no well",
-    description:
-      "Set limits without guilt or over-explaining. Practice declining requests, pushing back on scope, and holding your ground.",
-    difficulty: "Beginner",
-    sessions: 3,
-    icon: "🛑",
-  },
-  {
-    title: "Asking for what you need",
-    description:
-      "Get comfortable making requests — for support, flexibility, recognition, or a promotion. Practice making asks that land.",
-    difficulty: "Intermediate",
-    sessions: 4,
-    icon: "🙋",
-  },
-  {
-    title: "Communicating under pressure",
-    description:
-      "When stakes are high and time is short, communication often breaks down first. Learn to stay clear when it matters most.",
-    difficulty: "Advanced",
-    sessions: 6,
-    icon: "⚡",
-  },
-  {
-    title: "Written communication",
-    description:
-      "Emails, Slack messages, and documents that get read, understood, and acted on. Less revision, more impact.",
-    difficulty: "Beginner",
-    sessions: 4,
-    icon: "✍️",
-  },
+const available = [
+  { title: "Introducing yourself to a new colleague", description: "Build a natural introduction that shares what is useful about how you work without over-explaining.", sessions: 5, icon: "👋" },
+  { title: "Asking your manager for clarity", description: "Turn a vague assignment into specific questions, shared expectations, and a workable next step.", sessions: 5, icon: "🔎" },
+];
+const coming = [
+  { title: "Giving and receiving feedback", icon: "💬" },
+  { title: "Navigating conflict", icon: "🤝" },
+  { title: "Saying no and setting limits", icon: "🛑" },
+  { title: "Asking for workplace support", icon: "🙋" },
+  { title: "Written communication", icon: "✍️" },
 ];
 
-const difficultyColor: Record<string, string> = {
-  Beginner: "bg-green-50 text-green-700 border border-green-200",
-  Intermediate: "bg-amber-50 text-amber-700 border border-amber-200",
-  Advanced: "bg-red-50 text-red-700 border border-red-200",
-};
-
 export default function SkillsPage() {
-  return (
-    <div className="min-h-screen bg-bg">
-      <Nav />
-
-      <div className="pt-32 pb-20 px-4 sm:px-6 max-w-6xl mx-auto">
-        <div className="text-center mb-16">
-          <h1
-            className="text-4xl sm:text-5xl text-ink mb-4"
-            style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-          >
-            Skills for neurodivergent work communication
-          </h1>
-          <p className="text-ink-mid max-w-xl mx-auto text-lg">
-            Structured coaching for the workplace moments where subtext, pressure,
-            and unwritten rules make communication harder than it should be.
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {skillModules.map((s) => (
-            <div
-              key={s.title}
-              className="bg-white rounded-card border border-border p-7 flex flex-col"
-            >
-              <div className="text-3xl mb-4" aria-hidden="true">{s.icon}</div>
-              <div className="flex items-center gap-2 mb-3">
-                <span
-                  className={`text-xs font-medium rounded-pill px-2.5 py-0.5 ${difficultyColor[s.difficulty]}`}
-                >
-                  {s.difficulty}
-                </span>
-                <span className="text-xs text-ink-light">
-                  {s.sessions} sessions
-                </span>
-              </div>
-              <h3
-                className="text-lg text-ink mb-2"
-                style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-              >
-                {s.title}
-              </h3>
-              <p className="text-sm text-ink-mid leading-relaxed flex-1">
-                {s.description}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-16 bg-primary-light border border-primary/20 rounded-card p-8 text-center">
-          <h2
-            className="text-2xl text-ink mb-3"
-            style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-          >
-            Built for beta access
-          </h2>
-          <p className="text-ink-mid mb-6">
-            All skill modules are included in Pro. Join the beta for full
-            access, free.
-          </p>
-          <Link
-            href="/beta"
-            className="bg-primary text-white rounded-pill px-8 py-3 text-sm font-medium hover:bg-primary-dark transition-colors inline-block"
-          >
-            Join the beta for full access
-          </Link>
-        </div>
-      </div>
-
-      <Footer />
-    </div>
-  );
+  return <main className="min-h-screen bg-bg"><Nav /><div className="mx-auto max-w-6xl px-4 pb-20 pt-32 sm:px-6">
+    <div className="mb-14 text-center"><h1 className="mb-4 text-4xl text-ink sm:text-5xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Workplace communication skills</h1><p className="mx-auto max-w-2xl text-lg text-ink-mid">Short, practical courses for the work conversations where subtext and unwritten rules get in the way.</p></div>
+    <section><div className="mb-5 flex items-end justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-wide text-primary">Available now</p><h2 className="mt-1 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Start during beta</h2></div><span className="rounded-pill bg-green-50 px-3 py-1 text-xs font-medium text-green-700">Included</span></div><div className="grid gap-6 md:grid-cols-2">{available.map((skill) => <article key={skill.title} className="flex flex-col rounded-card border border-border bg-white p-7"><div className="text-3xl" aria-hidden="true">{skill.icon}</div><p className="mt-4 text-xs font-medium uppercase tracking-wide text-green-700">Available now · {skill.sessions} activities</p><h3 className="mt-2 text-xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{skill.title}</h3><p className="mt-2 flex-1 text-sm leading-relaxed text-ink-mid">{skill.description}</p></article>)}</div></section>
+    <section className="mt-14"><p className="text-xs font-medium uppercase tracking-wide text-primary">Coming during beta</p><h2 className="mt-1 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>More skills are on the way</h2><p className="mt-2 max-w-2xl text-sm text-ink-mid">These modules are planned and may change as beta testers help us refine the curriculum.</p><div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{coming.map((skill) => <article key={skill.title} className="rounded-card border border-dashed border-border bg-white/70 p-5"><span className="text-2xl" aria-hidden="true">{skill.icon}</span><h3 className="mt-3 font-medium text-ink">{skill.title}</h3><p className="mt-1 text-xs text-ink-light">Coming during beta</p></article>)}</div></section>
+    <div className="mt-14 rounded-card border border-primary/20 bg-primary-light p-8 text-center"><h2 className="text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>All available courses are included</h2><p className="mx-auto mt-2 max-w-xl text-sm text-ink-mid">Course activities do not use your daily or monthly coaching credits.</p><Link href="/auth/signup" className="mt-6 inline-block rounded-pill bg-primary px-6 py-3 text-sm font-medium text-white hover:bg-primary-dark">Create your beta account</Link></div>
+  </div><Footer /></main>;
 }

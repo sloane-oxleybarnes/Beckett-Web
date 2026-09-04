@@ -3,18 +3,18 @@ import { decryptOAuthToken, encryptOAuthToken } from "@/lib/oauth-token-crypto";
 import { integrationsRepository } from "@/lib/repositories/integrations-repository";
 import type { CalendarEvent } from "@/lib/calendar-insights";
 
-export const MICROSOFT_CALENDAR_SCOPES = [
+const MICROSOFT_BASE_SCOPES = [
   "openid",
   "profile",
   "email",
   "offline_access",
   "User.Read",
-  "Calendars.ReadBasic",
 ].join(" ");
 
-export const MICROSOFT_MAIL_SCOPES = `${MICROSOFT_CALENDAR_SCOPES} Mail.Read`;
+export const MICROSOFT_CALENDAR_SCOPES = `${MICROSOFT_BASE_SCOPES} Calendars.ReadBasic`;
+export const MICROSOFT_MAIL_SCOPES = `${MICROSOFT_BASE_SCOPES} Mail.Read`;
 export const MICROSOFT_CALENDAR_WRITE_SCOPES = `${MICROSOFT_CALENDAR_SCOPES} Calendars.ReadWrite`;
-export const MICROSOFT_MAIL_WRITE_SCOPES = `${MICROSOFT_CALENDAR_SCOPES} Mail.ReadWrite`;
+export const MICROSOFT_MAIL_WRITE_SCOPES = `${MICROSOFT_BASE_SCOPES} Mail.ReadWrite`;
 export const MICROSOFT_SCOPES = MICROSOFT_CALENDAR_SCOPES;
 
 const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
@@ -22,11 +22,19 @@ const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
 type MicrosoftTokenResponse = {
   access_token?: string;
   refresh_token?: string;
+  id_token?: string;
   expires_in?: number;
   token_type?: string;
   scope?: string;
   error?: string;
   error_description?: string;
+};
+
+type MicrosoftIdTokenClaims = {
+  aud?: string;
+  tid?: string;
+  iss?: string;
+  exp?: number;
 };
 
 type MicrosoftMetadata = {
@@ -78,7 +86,9 @@ function mergeMicrosoftScopes(...values: Array<string | null | undefined>) {
 }
 
 function authority() {
-  const tenant = process.env.MICROSOFT_TENANT_ID?.trim() || "common";
+  const tenant = process.env.MICROSOFT_SINGLE_TENANT === "true"
+    ? process.env.MICROSOFT_TENANT_ID?.trim() || "common"
+    : "common";
   return `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0`;
 }
 
@@ -98,6 +108,29 @@ export function getMicrosoftClientSecret() {
 export function getMicrosoftRedirectUri(requestOrigin?: string) {
   return process.env.MICROSOFT_REDIRECT_URI?.trim()
     || (requestOrigin ? `${requestOrigin}/api/microsoft/oauth/callback` : "");
+}
+
+/**
+ * Returns the tenant from the ID token issued during the authorization-code
+ * exchange. Existing connections intentionally cannot be backfilled: a
+ * reconnect is required before Teams can use the Microsoft integration.
+ */
+export function extractMicrosoftTenantId(idToken: string | null | undefined) {
+  if (!idToken) return null;
+  const parts = idToken.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as MicrosoftIdTokenClaims;
+    const tenantId = typeof claims.tid === "string" ? claims.tid.trim() : "";
+    const audience = typeof claims.aud === "string" ? claims.aud.trim() : "";
+    const issuer = typeof claims.iss === "string" ? claims.iss.trim() : "";
+    const expiresAt = typeof claims.exp === "number" ? claims.exp * 1000 : 0;
+    if (!tenantId || audience !== getMicrosoftClientId() || !issuer.includes(`/${tenantId}/`)) return null;
+    if (!expiresAt || expiresAt <= Date.now()) return null;
+    return tenantId;
+  } catch {
+    return null;
+  }
 }
 
 export function isMicrosoftConfigured(requestOrigin?: string) {
@@ -183,6 +216,7 @@ export async function saveMicrosoftConnection(
   userId: string,
   token: MicrosoftTokenResponse,
   profile: { id?: string; displayName?: string; mail?: string; userPrincipalName?: string },
+  tenantId: string | null,
 ) {
   const { data: existing, error: readError } = await integrationsRepository
     .from("user_integrations")
@@ -216,6 +250,7 @@ export async function saveMicrosoftConnection(
     provider: "microsoft",
     access_token: encryptOAuthToken(token.access_token || ""),
     external_user_id: profile.id || email,
+    external_tenant_id: tenantId,
     external_team_id: null,
     external_team_name: null,
     metadata,

@@ -1,5 +1,12 @@
 import { createBrowserClient } from '@supabase/ssr'
-import type { CoachingTone } from './onboarding'
+import type {
+  CoachingPriorityRating,
+  CoachingStyleRating,
+  CoachingTone,
+  RatingMap,
+  StrengthRating,
+  WorkplaceEffortRating,
+} from './onboarding'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -15,6 +22,10 @@ export type Profile = {
   first_name?: string | null;
   last_name?: string | null;
   display_name?: string | null;
+  communication_strength_ratings?: RatingMap<StrengthRating> | null;
+  workplace_effort_ratings?: RatingMap<WorkplaceEffortRating> | null;
+  coaching_priority_ratings?: RatingMap<CoachingPriorityRating> | null;
+  coaching_style_ratings?: RatingMap<CoachingStyleRating> | null;
   strengths?: string[] | null;
   workplace_triggers?: string[] | null;
   communication_preferences?: string[] | null;

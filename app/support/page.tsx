@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata = {
   title: "Support - Beckett",
   description:
-    "Get help with Beckett for Gmail and Outlook, including setup, account access, analysis, drafts, and privacy.",
+    "Get help with Beckett in Google Workspace, Slack, Microsoft 365, and Chrome, including connection status, analysis, drafts, and privacy.",
   alternates: { canonical: "/support" },
 };
 
@@ -20,9 +20,26 @@ const gmailSteps = [
 const outlookSteps = [
   "Open a message or draft in Outlook.",
   "Choose Beckett from the Outlook ribbon or Apps menu.",
-  "Select Read selected item. Beckett does not read the item before this step.",
-  "Select Decode with Beckett to request coaching.",
-  "In a draft, choose Insert into current draft if you want to use the result. Beckett never sends the message.",
+  "Connect your Microsoft account. If seamless Microsoft sign-in is unavailable, choose Sign in to Beckett and finish in the secure Outlook dialog.",
+  "Choose Analyze message. Beckett reads and processes only the message or draft you selected.",
+  "Optional: choose Analyze full thread and approve Microsoft's read-only Mail.Read permission to analyze that selected conversation.",
+  "Copy a response, insert it into an open draft, or open a reply with it. Review and send it yourself; Beckett never sends email.",
+];
+
+const slackSteps = [
+  "Open the Beckett for Slack page, review the beta warning and six bot permissions, then choose Install Beckett for Slack.",
+  "Slack currently displays “App is not approved by Slack” because Beckett has not completed Marketplace review. Installation can still continue; some workspaces require an administrator to approve it.",
+  "Select the workspace and approve commands, chat:write, assistant:write, im:history, im:write, and users:read. Beckett does not request user tokens, workspace search, or channel-history scopes.",
+  "Use /beckett or a Beckett message action. Beckett routes the coaching to your private Beckett conversation instead of posting the result in the source channel.",
+  "A Beckett account is optional. Guest credits work immediately; link an account later if you want Slack coaching to use your saved preferences and subscription credits.",
+  "Return to Beckett Apps to add another workspace, reconnect or upgrade a connection, or unlink your account without uninstalling Beckett for other workspace members.",
+];
+
+const calendarSteps = [
+  "Open Beckett Apps and choose Google Workspace or Microsoft Calendar.",
+  "Connect only the calendar capability you want. Gmail and Google Calendar can be connected independently.",
+  "Choose which calendars Beckett may read. Beckett does not edit events.",
+  "Open Calendar in Beckett to view your week and prepare for meetings with other attendees.",
 ];
 
 const troubleshooting = [
@@ -44,11 +61,15 @@ const troubleshooting = [
   },
   {
     title: "Outlook asks you to sign in",
-    body: "Use Sign in in a new tab, finish signing in to your approved Beckett account, return to Outlook, and select Refresh sign-in.",
+    body: "Try Connect Microsoft account first. If Microsoft SSO is unavailable for that mailbox, choose Sign in to Beckett and complete sign-in in the secure Outlook dialog. The pane updates automatically.",
   },
   {
-    title: "Read selected item is unavailable",
-    body: "Open the Beckett pane from an email message or draft. The command is not intended to read your mailbox in the background.",
+    title: "Analyze message is unavailable",
+    body: "Open the Beckett pane from an email message or draft and finish sign-in. Beckett does not read your mailbox in the background.",
+  },
+  {
+    title: "Full-thread analysis asks for permission",
+    body: "Analyze full thread uses Microsoft's delegated, read-only Mail.Read permission. Approve it in the Microsoft window, return to Outlook, and choose Analyze full thread again.",
   },
   {
     title: "Text cannot be inserted",
@@ -57,6 +78,22 @@ const troubleshooting = [
   {
     title: "The pane does not appear after installation",
     body: "Restart Outlook, then look for Beckett under Apps or the message ribbon. Organization-managed installations can take time to appear.",
+  },
+  {
+    title: "An app shows the wrong connection state",
+    body: "Return to Beckett Apps and refresh the page. Google Workspace may be partially connected, so Gmail and Calendar can show different capability states inside one app card.",
+  },
+  {
+    title: "Slack says reconnect or degraded",
+    body: "Open Beckett Apps, choose Manage workspaces on the Slack card, and reconnect the affected workspace. You can unlink an old connection without uninstalling Beckett for anyone else.",
+  },
+  {
+    title: "Slack says the app is not approved",
+    body: "That notice means Beckett has not completed Slack Marketplace review. During the public beta, review the listed permissions and continue only if you are comfortable. If installation is blocked, ask a workspace owner or administrator to approve Beckett.",
+  },
+  {
+    title: "A Slack connection needs an upgrade",
+    body: "Open Beckett Apps, choose Manage workspaces, and select Upgrade/relink for the affected workspace. The new zero-copy connection uses six bot permissions and does not request workspace search or broad channel history.",
   },
 ];
 
@@ -98,7 +135,7 @@ export default function SupportPage() {
           <a className="text-primary hover:underline" href="mailto:hello@meetbeckett.co">
             hello@meetbeckett.co
           </a>{" "}
-          for account, privacy, security, or Beckett for Gmail and Outlook
+          for account, privacy, security, or connected-app
           support. Please
           do not include private message content unless our support team asks
           for a redacted example.
@@ -123,6 +160,17 @@ export default function SupportPage() {
               </li>
             ))}
           </ol>
+        </article>
+
+        <article className="rounded-card border border-border bg-white p-6">
+          <h2 className="mb-3 text-2xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Using Beckett in Slack</h2>
+          <ol className="space-y-3">{slackSteps.map((step, index) => <li key={step} className="flex gap-3 text-sm leading-relaxed text-ink-mid"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-xs font-medium text-primary">{index + 1}</span><span>{step}</span></li>)}</ol>
+          <div className="mt-5 flex flex-wrap gap-4 text-sm font-medium"><Link href="/slack" className="text-primary hover:underline">Beckett for Slack installation guide</Link><Link href="/slack/privacy" className="text-primary hover:underline">Slack privacy details</Link></div>
+        </article>
+
+        <article className="rounded-card border border-border bg-white p-6">
+          <h2 className="mb-3 text-2xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Connecting calendars</h2>
+          <ol className="space-y-3">{calendarSteps.map((step, index) => <li key={step} className="flex gap-3 text-sm leading-relaxed text-ink-mid"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-xs font-medium text-primary">{index + 1}</span><span>{step}</span></li>)}</ol>
         </article>
 
         <article className="rounded-card border border-border bg-white p-6">
@@ -175,6 +223,11 @@ export default function SupportPage() {
             emailing support.
           </p>
         </article>
+
+        <div className="flex flex-wrap gap-3">
+          <Link href="/dashboard/apps" className="rounded-pill bg-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-dark">Return to Apps</Link>
+          <Link href="/dashboard" className="rounded-pill border border-border bg-white px-5 py-2.5 text-sm font-medium text-ink hover:bg-primary-light">Return to dashboard</Link>
+        </div>
       </section>
     </main>
   );

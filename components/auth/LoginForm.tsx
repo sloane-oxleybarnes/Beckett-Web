@@ -7,7 +7,7 @@ import Link from "next/link";
 import { hasCurrentBetaConsent } from "@/lib/beta-consent";
 import { safeInternalPath } from "@/lib/auth-next";
 
-export default function LoginPage({ inviteOnly = true }: { inviteOnly?: boolean }) {
+export default function LoginPage() {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -169,10 +169,10 @@ export default function LoginPage({ inviteOnly = true }: { inviteOnly?: boolean 
           <p className="text-center text-sm text-ink-light mt-6">
             Don&apos;t have an account?{" "}
             <Link
-              href={inviteOnly ? "/beta" : `/auth/signup${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""}`}
+              href={`/auth/signup${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""}`}
               className="text-primary hover:underline"
             >
-              {inviteOnly ? "Request beta access" : "Create a free account"}
+              Create a free account
             </Link>
           </p>
         </div>
