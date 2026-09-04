@@ -1,14 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import type { Profile } from "@/lib/supabase";
 import {
-  coachingToneOptions,
+  coachingPriorityRatingOptions,
+  coachingStyleDimensions,
+  coachingStyleRatingOptions,
   communicationPreferenceOptions,
-  type CoachingTone,
+  coachingStyleRatingsFromTone,
+  deriveLegacyCoachingProfile,
+  hasCompleteRatingMap,
+  normalizeRatingMap,
+  ratingMapFromLegacySelections,
+  type CoachingPriorityRating,
+  type CoachingStyleRating,
+  type RatingMap,
 } from "@/lib/onboarding";
+import RatingQuestion from "@/components/profile/RatingQuestion";
 
 const planBadgeColor: Record<string, string> = {
   free: "bg-ink-light/20 text-ink-mid",
@@ -17,184 +27,9 @@ const planBadgeColor: Record<string, string> = {
   team: "bg-amber-100 text-amber-700",
 };
 
-function toggleValue(list: string[], value: string, max?: number) {
-  if (list.includes(value)) return list.filter((item) => item !== value);
-  if (max && list.length >= max) return list;
-  return [...list, value];
-}
-
-function splitCustomEntries(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function mergeCustomEntries(list: string[], value: string) {
-  const next = [...list];
-  const existing = new Set(next.map((item) => item.toLowerCase()));
-
-  for (const entry of splitCustomEntries(value)) {
-    const key = entry.toLowerCase();
-    if (existing.has(key)) continue;
-    next.push(entry);
-    existing.add(key);
-  }
-
-  return next;
-}
-
 function getCustomValues(values: string[], presetOptions: string[]) {
   const presets = new Set(presetOptions.map((item) => item.toLowerCase()));
   return values.filter((value) => !presets.has(value.toLowerCase()));
-}
-
-function SettingsOption({
-  label,
-  selected,
-  onClick,
-  disabled,
-}: {
-  label: string;
-  selected: boolean;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`text-left rounded-sm border px-3 py-2 text-xs transition-colors ${
-        selected
-          ? "border-primary bg-primary-light text-primary"
-          : "border-border text-ink hover:border-primary-mid"
-      } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function CustomPreferenceControls({
-  value,
-  onChange,
-  onAdd,
-  values,
-  onRemove,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  onAdd: () => void;
-  values: string[];
-  onRemove: (value: string) => void;
-}) {
-  const customValues = getCustomValues(values, communicationPreferenceOptions);
-
-  return (
-    <div className="mt-4 rounded-sm border border-border bg-bg/60 p-3">
-      <label className="block text-xs font-medium uppercase tracking-wide text-ink-light">
-        Add your own
-      </label>
-      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Separate each preference with a comma"
-          className="min-w-0 flex-1 rounded-sm border border-border bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-        <button
-          type="button"
-          onClick={onAdd}
-          disabled={splitCustomEntries(value).length === 0}
-          className="rounded-pill border border-border bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-primary-mid hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Add
-        </button>
-      </div>
-      {customValues.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {customValues.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => onRemove(item)}
-              className="rounded-pill bg-white px-3 py-1 text-xs text-ink-mid transition-colors hover:bg-red-50 hover:text-red-700"
-              aria-label={`Remove ${item}`}
-            >
-              {item} x
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-type Diagnostics = {
-  beckett: {
-    authenticated: boolean;
-    email: string | null;
-    plan: string;
-  };
-  extension: {
-    tokenIssued: boolean;
-    lastProfileSyncAt: string | null;
-  };
-  integrations: {
-    slack: {
-      connected: boolean;
-      userId?: string | null;
-      teamId?: string | null;
-      teamName?: string | null;
-      connectedAt?: string | null;
-      updatedAt?: string | null;
-    };
-    google: {
-      connected: boolean;
-      email?: string | null;
-      connectedAt?: string | null;
-      updatedAt?: string | null;
-    };
-    microsoft: {
-      connected: boolean;
-      email?: string | null;
-      connectedAt?: string | null;
-      updatedAt?: string | null;
-    };
-  };
-  aiUsage: {
-    limit: number;
-    used: number;
-    remaining: number;
-    unlimited?: boolean;
-  };
-  api: {
-    reachable: boolean;
-    checkedAt: string;
-  };
-};
-
-function HealthPill({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-pill px-2.5 py-1 text-xs font-medium ${
-        ok ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
-      }`}
-    >
-      {ok ? "OK" : "!"} {label}
-    </span>
-  );
-}
-
-function formatDiagnosticDate(value?: string | null) {
-  if (!value) return "Not recorded";
-  return new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 export default function SettingsPage() {
@@ -208,14 +43,11 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [pwSaved, setPwSaved] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
-  const [preferences, setPreferences] = useState<string[]>([]);
-  const [coachingTone, setCoachingTone] = useState<CoachingTone>("direct_kind");
-  const [customPreferences, setCustomPreferences] = useState("");
+  const [coachingPriorityRatings, setCoachingPriorityRatings] = useState<RatingMap<CoachingPriorityRating>>({});
+  const [coachingStyleRatings, setCoachingStyleRatings] = useState<RatingMap<CoachingStyleRating>>({});
+  const [coachingSettingsEditing, setCoachingSettingsEditing] = useState(false);
   const [deletionNotes, setDeletionNotes] = useState("");
   const [deletionStatus, setDeletionStatus] = useState<"idle" | "loading" | "requested" | "error">("idle");
-  const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
-  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
-  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -229,29 +61,30 @@ export default function SettingsPage() {
         .then(({ data: profileData }) => {
           setProfile(profileData as Profile);
           setFullName(profileData?.full_name || "");
-          setPreferences(profileData?.communication_preferences || []);
-          setCoachingTone(profileData?.coaching_tone || "direct_kind");
+          const loadedPriorityRatings = normalizeRatingMap(
+            profileData?.coaching_priority_ratings,
+            communicationPreferenceOptions,
+            coachingPriorityRatingOptions.map((option) => option.value),
+          );
+          const loadedStyleRatings = normalizeRatingMap(
+            profileData?.coaching_style_ratings,
+            coachingStyleDimensions.map((option) => option.id),
+            coachingStyleRatingOptions.map((option) => option.value),
+          );
+          setCoachingPriorityRatings(Object.keys(loadedPriorityRatings).length
+            ? loadedPriorityRatings
+            : ratingMapFromLegacySelections(
+                communicationPreferenceOptions,
+                profileData?.communication_preferences,
+                "important",
+                "not_priority",
+              ));
+          setCoachingStyleRatings(Object.keys(loadedStyleRatings).length
+            ? loadedStyleRatings
+            : coachingStyleRatingsFromTone(profileData?.coaching_tone));
         });
     });
   }, [supabase]);
-
-  const loadDiagnostics = useCallback(async () => {
-    setDiagnosticsLoading(true);
-    setDiagnosticsError(null);
-    try {
-      const res = await fetch("/api/extension/diagnostics", { cache: "no-store" });
-      if (!res.ok) throw new Error("Could not load diagnostics.");
-      setDiagnostics((await res.json()) as Diagnostics);
-    } catch (error) {
-      setDiagnosticsError(error instanceof Error ? error.message : "Could not load diagnostics.");
-    } finally {
-      setDiagnosticsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadDiagnostics();
-  }, [loadDiagnostics]);
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -271,14 +104,27 @@ export default function SettingsPage() {
     const user = data.user;
     if (!user) return;
 
+    const legacyProfile = deriveLegacyCoachingProfile({
+      strengthRatings: {},
+      workplaceEffortRatings: {},
+      coachingPriorityRatings,
+      coachingStyleRatings,
+    });
+    const customPreferences = getCustomValues(
+      profile?.communication_preferences || [],
+      communicationPreferenceOptions,
+    );
     const update = {
-      communication_preferences: preferences,
-      coaching_tone: coachingTone,
+      coaching_priority_ratings: coachingPriorityRatings,
+      coaching_style_ratings: coachingStyleRatings,
+      communication_preferences: [...legacyProfile.communicationPreferences, ...customPreferences],
+      coaching_tone: legacyProfile.coachingTone,
       updated_at: new Date().toISOString(),
     };
 
     await supabase.from("profiles").update(update).eq("id", user.id);
     setProfile((current) => current ? { ...current, ...update } : current);
+    setCoachingSettingsEditing(false);
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 3000);
   }
@@ -287,9 +133,8 @@ export default function SettingsPage() {
     if (!window.confirm("Clear your Beckett coaching settings? You can add them again later.")) {
       return;
     }
-    setPreferences([]);
-    setCoachingTone("direct_kind");
-    setCustomPreferences("");
+    setCoachingPriorityRatings({});
+    setCoachingStyleRatings({});
 
     const { data } = await supabase.auth.getUser();
     const user = data.user;
@@ -297,16 +142,46 @@ export default function SettingsPage() {
     await supabase
       .from("profiles")
       .update({
+        coaching_priority_ratings: {},
+        coaching_style_ratings: {},
         communication_preferences: [],
         coaching_tone: "direct_kind",
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id);
+    setProfile((current) => current ? {
+      ...current,
+      coaching_priority_ratings: {},
+      coaching_style_ratings: {},
+      communication_preferences: [],
+      coaching_tone: "direct_kind",
+    } : current);
+    setCoachingSettingsEditing(false);
   }
 
-  function addCustomPreferences() {
-    setPreferences((current) => mergeCustomEntries(current, customPreferences));
-    setCustomPreferences("");
+  function cancelCoachingSettingsEdit() {
+    const loadedPriorityRatings = normalizeRatingMap(
+      profile?.coaching_priority_ratings,
+      communicationPreferenceOptions,
+      coachingPriorityRatingOptions.map((option) => option.value),
+    );
+    const loadedStyleRatings = normalizeRatingMap(
+      profile?.coaching_style_ratings,
+      coachingStyleDimensions.map((option) => option.id),
+      coachingStyleRatingOptions.map((option) => option.value),
+    );
+    setCoachingPriorityRatings(Object.keys(loadedPriorityRatings).length
+      ? loadedPriorityRatings
+      : ratingMapFromLegacySelections(
+          communicationPreferenceOptions,
+          profile?.communication_preferences,
+          "important",
+          "not_priority",
+        ));
+    setCoachingStyleRatings(Object.keys(loadedStyleRatings).length
+      ? loadedStyleRatings
+      : coachingStyleRatingsFromTone(profile?.coaching_tone));
+    setCoachingSettingsEditing(false);
   }
 
   async function changePassword(e: React.FormEvent) {
@@ -368,6 +243,20 @@ export default function SettingsPage() {
       </div>
     );
   }
+
+  const highlightedPriorities = communicationPreferenceOptions.filter((option) =>
+    ["important", "top_priority"].includes(coachingPriorityRatings[option]),
+  );
+  const emphasizedStyleIds = coachingStyleDimensions
+    .filter((option) => coachingStyleRatings[option.id] === "more")
+    .map((option) => option.label);
+  const coachingRatingsComplete = hasCompleteRatingMap(
+    coachingPriorityRatings,
+    communicationPreferenceOptions,
+  ) && hasCompleteRatingMap(
+    coachingStyleRatings,
+    coachingStyleDimensions.map((option) => option.id),
+  );
 
   return (
     <div className="max-w-xl">
@@ -475,55 +364,91 @@ export default function SettingsPage() {
 
       {/* Beckett coaching settings */}
       <section className="bg-white rounded-card border border-border p-6 mb-5">
-        <h2
-          className="text-lg text-ink mb-1"
-          style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-        >
-          Beckett&apos;s Coaching Settings
-        </h2>
-        <p className="text-sm text-ink-mid mb-5">
-          Choose how Beckett coaches, explains, and drafts with you. Personal profile details
-          live in About Me.
-        </p>
-        <form onSubmit={saveCoachingSettings} className="space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <h2
+            className="text-lg text-ink"
+            style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
+          >
+            Beckett&apos;s Coaching Settings
+          </h2>
+          {!coachingSettingsEditing && (
+            <button
+              type="button"
+              onClick={() => setCoachingSettingsEditing(true)}
+              aria-controls="coaching-settings-editor"
+              aria-expanded="false"
+              className="shrink-0 rounded-pill border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-primary-mid hover:bg-primary-light"
+            >
+              Edit
+            </button>
+          )}
+        </div>
+
+        {!coachingSettingsEditing ? (
+          <div className="mt-5 space-y-5">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Top coaching priorities</p>
+              {highlightedPriorities.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {highlightedPriorities.map((preference) => (
+                    <span key={preference} className="rounded-pill border border-primary/20 bg-primary-light px-3 py-1.5 text-xs text-primary">
+                      {preference}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-ink-light">No top priorities selected</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Coaching qualities to emphasize</p>
+              {emphasizedStyleIds.length ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {emphasizedStyleIds.map((label) => (
+                    <span key={label} className="rounded-pill border border-primary/20 bg-primary-light px-3 py-1.5 text-xs text-primary">
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-ink-light">No stronger emphasis selected</p>
+              )}
+            </div>
+          </div>
+        ) : (
+        <form id="coaching-settings-editor" onSubmit={saveCoachingSettings} className="mt-5 space-y-6">
+          <p className="text-sm text-ink-mid">
+            Choose how Beckett coaches, explains, and drafts with you. Personal profile details
+            live in About Me.
+          </p>
           <div>
-            <label className="block text-sm font-medium text-ink mb-2">What I Want Beckett to Help Me With</label>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <p className="block text-sm font-medium text-ink mb-1">How useful would Beckett’s help be in each area?</p>
+            <p className="mb-3 text-xs leading-relaxed text-ink-mid">Rate every area. “Not sure yet” counts as an answer.</p>
+            <div className="space-y-3">
               {communicationPreferenceOptions.map((option) => (
-                <SettingsOption
+                <RatingQuestion
                   key={option}
                   label={option}
-                  selected={preferences.includes(option)}
-                  onClick={() => setPreferences((current) => toggleValue(current, option))}
+                  value={coachingPriorityRatings[option]}
+                  options={coachingPriorityRatingOptions}
+                  onChange={(value) => setCoachingPriorityRatings((current) => ({ ...current, [option]: value }))}
                 />
               ))}
             </div>
-            <CustomPreferenceControls
-              value={customPreferences}
-              onChange={setCustomPreferences}
-              onAdd={addCustomPreferences}
-              values={preferences}
-              onRemove={(value) => setPreferences((current) => current.filter((item) => item !== value))}
-            />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-ink mb-2">Coaching tone</label>
-            <div className="space-y-2">
-              {coachingToneOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setCoachingTone(option.value)}
-                  className={`w-full text-left rounded-sm border px-3 py-3 transition-colors ${
-                    coachingTone === option.value
-                      ? "border-primary bg-primary-light"
-                      : "border-border hover:border-primary-mid"
-                  }`}
-                >
-                  <p className="text-sm font-medium text-ink">{option.label}</p>
-                  <p className="text-xs text-ink-mid mt-0.5">{option.description}</p>
-                </button>
+            <p className="block text-sm font-medium text-ink mb-1">How much of each coaching quality should Beckett use?</p>
+            <p className="mb-3 text-xs leading-relaxed text-ink-mid">These qualities work together; you do not have to fit one preset.</p>
+            <div className="space-y-3">
+              {coachingStyleDimensions.map((option) => (
+                <RatingQuestion
+                  key={option.id}
+                  label={option.label}
+                  value={coachingStyleRatings[option.id]}
+                  options={coachingStyleRatingOptions}
+                  onChange={(value) => setCoachingStyleRatings((current) => ({ ...current, [option.id]: value }))}
+                />
               ))}
             </div>
           </div>
@@ -531,7 +456,8 @@ export default function SettingsPage() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="submit"
-              className="bg-primary text-white text-sm rounded-pill px-5 py-2 hover:bg-primary-dark transition-colors"
+              disabled={!coachingRatingsComplete}
+              className="bg-primary text-white text-sm rounded-pill px-5 py-2 hover:bg-primary-dark transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
               {profileSaved ? "Saved ✓" : "Save coaching settings"}
             </button>
@@ -542,114 +468,16 @@ export default function SettingsPage() {
             >
               Clear settings
             </button>
+            <button
+              type="button"
+              onClick={cancelCoachingSettingsEdit}
+              className="text-sm px-2 py-2 text-ink-mid hover:text-ink transition-colors"
+            >
+              Cancel
+            </button>
           </div>
         </form>
-      </section>
-
-      {/* Beta diagnostics */}
-      <section className="bg-white rounded-card border border-border p-6 mb-5">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div>
-            <h2
-              className="text-lg text-ink mb-1"
-              style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-            >
-              Beta diagnostics
-            </h2>
-            <p className="text-sm text-ink-mid">
-              Quick health check for account access, integrations, and beta AI usage.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadDiagnostics()}
-            disabled={diagnosticsLoading}
-            className="shrink-0 text-xs border border-border rounded-pill px-4 py-1.5 text-ink hover:bg-bg transition-colors disabled:opacity-50"
-          >
-            {diagnosticsLoading ? "Checking..." : "Refresh"}
-          </button>
-        </div>
-
-        {diagnosticsError && (
-          <div
-            className="rounded-sm border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"
-            role="alert"
-          >
-            {diagnosticsError}
-          </div>
         )}
-
-        {diagnostics ? (
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <HealthPill ok={diagnostics.beckett.authenticated} label="Beckett login" />
-              <HealthPill ok={diagnostics.extension.tokenIssued} label="Extension token" />
-              <HealthPill ok={diagnostics.integrations.slack.connected} label="Slack" />
-              <HealthPill ok={diagnostics.integrations.google.connected} label="Google" />
-              <HealthPill ok={diagnostics.integrations.microsoft.connected} label="Microsoft 365" />
-              <HealthPill ok={diagnostics.api.reachable} label="API reachable" />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Account</p>
-                <p className="mt-1 text-sm text-ink">{diagnostics.beckett.email || profile.email}</p>
-                <p className="text-xs text-ink-light capitalize">Plan: {diagnostics.beckett.plan}</p>
-              </div>
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">AI usage today</p>
-                {diagnostics.aiUsage.unlimited ? (
-                  <>
-                    <p className="mt-1 text-sm text-ink">Unlimited tester access</p>
-                    <p className="text-xs text-ink-light">{diagnostics.aiUsage.used} calls logged today</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-1 text-sm text-ink">
-                      {diagnostics.aiUsage.used}/{diagnostics.aiUsage.limit} used
-                    </p>
-                    <p className="text-xs text-ink-light">{diagnostics.aiUsage.remaining} remaining</p>
-                  </>
-                )}
-              </div>
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Slack</p>
-                {diagnostics.integrations.slack.connected ? (
-                  <>
-                    <p className="mt-1 text-sm text-ink">
-                      {diagnostics.integrations.slack.teamName || "Workspace connected"}
-                    </p>
-                    <p className="text-xs text-ink-light">
-                      User: {diagnostics.integrations.slack.userId || "unknown"}
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-1 text-sm text-amber-700">Not connected in web app settings</p>
-                )}
-              </div>
-              <div className="rounded-sm border border-border bg-bg/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-light">Last check</p>
-                <p className="mt-1 text-sm text-ink">{formatDiagnosticDate(diagnostics.api.checkedAt)}</p>
-                <p className="text-xs text-ink-light">
-                  Extension sync: {formatDiagnosticDate(diagnostics.extension.lastProfileSyncAt)}
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs text-ink-light">
-              If Slack shows connected here but analysis still fails, reload the Chrome extension and reconnect
-              Slack from the extension popup so the local browser token is refreshed too.
-            </p>
-          </div>
-        ) : !diagnosticsError ? (
-          <div
-            className="rounded-sm border border-border bg-bg/60 p-4 text-sm text-ink-light"
-            role="status"
-            aria-live="polite"
-          >
-            {diagnosticsLoading ? "Checking beta systems..." : "Run a health check to see current status."}
-          </div>
-        ) : null}
       </section>
 
       {/* Beta code */}

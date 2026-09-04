@@ -17,6 +17,8 @@
 # production
 /build
 /dist
+/teams-app/build/
+/teams-app/beckett-teams.zip
 
 # misc
 .DS_Store

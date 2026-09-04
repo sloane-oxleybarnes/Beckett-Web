@@ -14,7 +14,7 @@ export const SHARED_WEB_CONTEXT_SURFACES = [
   "Home",
   "Practice",
   "Skills",
-  "Calendar & Meetings",
+  "Calendar",
   "About Me",
 ] as const;
 

@@ -1,40 +1,55 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Image from "next/image";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { SITE_CONTENT_DEFAULTS, contentValue } from "@/lib/site-content";
 import "./home.css";
 
-type Mode = "personal" | "professional";
+const features = [
+  { n: "01", title: "Coaching in your work apps", text: "Decode and respond from Gmail, Slack, Outlook, and supported pages in Chrome. Bring Beckett into the conversation instead of copying your work into another app.", action: "Connect your apps →" },
+  { n: "02", title: "Message decoder", text: "Separate what a message clearly says from uncertain tone, possible interpretations, and useful next steps.", action: "Decode a message →" },
+  { n: "03", title: "Conversation practice", text: "Rehearse the difficult conversation before it happens, including realistic questions, resistance, and follow-up.", action: "Practice a conversation →" },
+  { n: "04", title: "Calendar and meeting prep", text: "Connect only the calendars you want Beckett to read and prepare for meetings with other attendees. Beckett never edits events.", action: "Prepare for a meeting →" },
+  { n: "05", title: "Skills and support plans", text: "Build practical workplace communication skills in short courses, with more modules arriving during beta.", action: "Explore skills →" },
+];
+
+const workPatterns = [
+  { label: "I go blank in meetings and lose what I was about to say", beckett: "Helps you prepare talking points so you are not starting from scratch in the room." },
+  { label: "I cannot tell if a Slack message is passive-aggressive or just blunt", beckett: "Highlights observable cues, names uncertainty, and offers a grounded way to respond." },
+  { label: "I overthink every email before I can hit send", beckett: "Drafts a response you can adjust without leaving Gmail or Outlook." },
+  { label: "I shut down when I receive critical feedback", beckett: "Helps you process the message, identify the ask, and prepare a response when you are ready." },
+];
+
+const practiceConversations = [
+  { label: "New colleague", situation: "Introduce yourself and explain how you work without over-scripting it." },
+  { label: "Vague assignment", situation: "Ask your manager for clearer expectations without over-apologizing." },
+  { label: "Difficult feedback", situation: "Respond to critical feedback while staying grounded and specific." },
+  { label: "Scope pressure", situation: "Push back on an unrealistic deadline without sounding uncooperative." },
+  { label: "Credit for your work", situation: "Address a coworker who presented your contribution as their own." },
+  { label: "Salary conversation", situation: "Ask for a raise and respond when your manager pushes back." },
+];
 
 export default function HomePage() {
-  const [mode, setMode] = useState<Mode>("professional");
-  const [betaEmail, setBetaEmail] = useState("");
-  const [betaStatus, setBetaStatus] = useState<"idle" | "loading" | "done">("idle");
   const [activeSection, setActiveSection] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [siteContent, setSiteContent] = useState<Record<string, string>>(SITE_CONTENT_DEFAULTS);
   const router = useRouter();
-  const copy = (key: string) => contentValue(siteContent, key);
 
   useEffect(() => {
     const hash = window.location.hash;
     if (hash.includes("error=")) {
       const params = new URLSearchParams(hash.substring(1));
       const errorDesc = params.get("error_description");
-      if (errorDesc) router.push(`/auth/signin?error=${encodeURIComponent(errorDesc)}`);
+      if (errorDesc) router.push(`/auth/login?error=${encodeURIComponent(errorDesc)}`);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const sections = ["features", "triggers", "skills", "beta"];
     function onScroll() {
       let current = "";
       sections.forEach((id) => {
-        const el = document.getElementById(id);
-        if (el && window.scrollY >= el.offsetTop - 120) current = id;
+        const element = document.getElementById(id);
+        if (element && window.scrollY >= element.offsetTop - 120) current = id;
       });
       setActiveSection(current);
     }
@@ -43,481 +58,56 @@ export default function HomePage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/site-content")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled && data?.content) setSiteContent(data.content);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  async function submitBeta(e: React.FormEvent) {
-    e.preventDefault();
-    setBetaStatus("loading");
-    try {
-      await fetch("/api/beta-signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: betaEmail, plan: "beta", source: "landing_page" }),
-      });
-    } catch {}
-    setBetaStatus("done");
-  }
-
-  const features = [
-    {
-      n: "01",
-      title: "Home planning",
-      personal: "Start with how your day actually feels. Beckett turns your check-in into a small, useful next step for focus, rest, or a personal routine.",
-      professional: "See the shape of your day, check in with yourself, and get consent-first suggestions for breaks, focus time, and meeting preparation.",
-      action: "Plan your day →",
-    },
-    {
-      n: "02",
-      title: "Message decoder",
-      personal: "What did they actually mean? In beta, Beckett helps you practice decoding personal messages and dating signals. Mobile text, DM, and dating-app overlays are coming soon.",
-      professional: "Beckett helps separate what a Gmail or Slack message clearly says from uncertain tone, possible interpretations, and useful next steps.",
-      action: "Decode this message →",
-    },
-    {
-      n: "03",
-      title: "Conversation practice",
-      personal: "Practice asking someone out, telling a friend something hard, or navigating a difficult family conversation — with Beckett playing the other person realistically, including the pushback.",
-      professional: "Practice asking for a raise, addressing a coworker who's taking credit for your work, or holding your ground in a meeting — before the real thing happens.",
-      action: "Practice this conversation →",
-    },
-    {
-      n: "04",
-      title: "Skill scenarios",
-      personal: "Structured coaching for real situations. Small talk. Dating. Setting limits with family. Beckett walks you through what to say and practices with you until it feels natural.",
-      professional: "Structured coaching for workplace situations. Feedback. Salary conversations. Handling passive aggression. Beckett walks you through each one.",
-      action: "Start a scenario →",
-    },
-    {
-      n: "05",
-      title: "Calendar & meeting prep",
-      personal: "Use the same planning ideas for personal routines and goals, while meeting preparation stays focused on work calendars.",
-      professional: "Choose the calendars Beckett can read, view your week, and prepare for meetings when another attendee is involved. Beckett never edits your calendar.",
-      action: "See your week →",
-    },
-    {
-      n: "06",
-      title: "Skills and support plans",
-      personal: "Build practical strategies at your own pace, then keep the preferences and support plans that make them easier to use in real life.",
-      professional: "Short lessons cover communication, boundaries, organization, and self-advocacy. About Me, contacts, and support plans keep the guidance personal.",
-      action: "",
-    },
-  ];
-
-  const personalScenarios = [
-    { diff: "d-med", label: "Personal Preview", situation: "You matched with someone on a dating app and want to ask them out clearly without making it too intense.", action: "Practice this conversation →" },
-    { diff: "d-med", label: "Personal Preview", situation: "You like someone and want to understand whether the signals suggest interest, uncertainty, or a reason to slow down.", action: "Decode the signals →" },
-  ];
-
-  const professionalScenarios = [
-    { diff: "d-low", label: "Foundational", situation: "You need to introduce yourself to a new colleague and explain how you work without over-scripting it.", action: "Start this course →" },
-    { diff: "d-med", label: "Foundational", situation: "Your manager gave you a vague task and you need to ask for clarity without over-apologizing.", action: "Start this course →" },
-    { diff: "d-med", label: "Medium stakes", situation: "A client sent an email that seems passive-aggressive and you can't tell if you're reading it wrong.", action: "Decode this message →" },
-  ];
-
-  const triggers = [
-    { label: "I always over-explain and apologize too much", beckett: "Flags when you're over-qualifying and helps you land the point directly." },
-    { label: "I can't tell when someone is being sarcastic vs. serious", beckett: "Separates visible cues from uncertain interpretations and helps you choose a grounded next step." },
-    { label: "I freeze when conflict feels imminent", beckett: "Coaches you in the moment — what to say when you're drawing a blank." },
-    { label: "I say yes when I mean no and don't know how to stop", beckett: "Helps you practice setting limits before the conversation happens." },
-  ];
-
-  const professionalTriggers = [
-    { label: "I go blank in meetings and lose what I was about to say", beckett: "Helps you prepare talking points so you're never starting from scratch in the room." },
-    { label: "I can't tell if a Slack message is passive-aggressive or just blunt", beckett: "Highlights observable tone cues, names uncertainty, and offers a grounded way to respond." },
-    { label: "I overthink every email for too long before I can hit send", beckett: "Drafts a response you can adjust rather than writing from a blank page." },
-    { label: "I shut down when I receive critical feedback, even if it's fair", beckett: "Helps you process and respond when you're not still in the moment." },
-  ];
-
-  const personalTestimonials = [
-    { av: "qa1", initials: "SR", name: "Sam R.", role: "Freelance designer", quote: "I've always struggled to read texts — is this person annoyed? Joking? Interested? Beckett just tells me. It sounds small but it changes everything." },
-    { av: "qa2", initials: "JM", name: "Jordan M.", role: "Graduate student", quote: "I used to rehearse conversations in my head for days before having them. With Beckett I can actually practice and show up ready." },
-    { av: "qa3", initials: "CL", name: "Casey L.", role: "Teacher", quote: "Dating felt impossible — I never knew if someone liked me or was just being friendly. Beckett helps me decode what's actually going on." },
-  ];
-
-  const professionalTestimonials = [
-    { av: "qa1", initials: "AK", name: "Alex K.", role: "Software Engineer", quote: "I always knew what I wanted to say in meetings — getting it out clearly was the hard part. Beckett helps me prepare." },
-    { av: "qa2", initials: "MR", name: "Morgan R.", role: "Product Manager", quote: "Practicing the conversation helped me show up prepared instead of replaying everything two hours later." },
-    { av: "qa3", initials: "JT", name: "Jamie T.", role: "Customer Success", quote: "I used to rewrite every work email three times and still wasn't sure it landed. Beckett handles that for me." },
-  ];
-
-  const scenarios = mode === "personal" ? personalScenarios : professionalScenarios;
-  const professionalHeroTitleLines = copy("home.hero.title").split("\n").filter(Boolean);
-  const personalHeroTitleLines = ["A personal communication coach", "for neurodivergent social life."];
-  const heroTitleLines = mode === "personal" ? personalHeroTitleLines : professionalHeroTitleLines;
-  const heroSubtitle = mode === "personal"
-    ? "Personal coaching is in preview during beta. Beckett can help you practice dating conversations and decode confusing social signals now, with mobile and message integrations coming later."
-    : copy("home.hero.subtitle");
-  const betaTitleLines = copy("home.beta.title").split("\n").filter(Boolean);
-
   return (
-    <div className="lumen-home">
-
-      {/* NAV */}
+    <main className="lumen-home">
       <nav className="hn-nav">
-        <a href="#" className="nav-logo nav-logo-img">
-          <Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={132} height={33} priority />
-        </a>
-        <div className="mode-toggle">
-          <button
-            className={`mt-btn${mode === "personal" ? " mt-on" : ""}`}
-            onClick={() => setMode("personal")}
-          >
-            Personal
-          </button>
-          <button
-            className={`mt-btn${mode === "professional" ? " mt-on" : ""}`}
-            onClick={() => setMode("professional")}
-          >
-            Professional
-          </button>
-        </div>
+        <a href="#" className="nav-logo nav-logo-img"><Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={132} height={33} priority /></a>
         <div className="nav-right">
           <div className="nav-links">
             <a href="#features" className={activeSection === "features" ? "active" : ""}>Features</a>
-            <a href="#skills" className={activeSection === "skills" ? "active" : ""}>Scenarios</a>
-            <a href="/auth/signin" className="nav-signin">Sign in</a>
+            <a href="#skills" className={activeSection === "skills" ? "active" : ""}>Practice</a>
+            <a href="/auth/login" className="nav-signin">Sign in</a>
           </div>
-          <a href="#beta" className="nav-cta">Join the beta →</a>
-          <button
-            className="nav-hamburger"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
-            aria-expanded={mobileMenuOpen}
-            aria-controls="homepage-mobile-navigation"
-          >
-            {mobileMenuOpen ? (
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M4 4L16 16M16 4L4 16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            )}
+          <a href="/auth/signup" className="nav-cta">Join the beta →</a>
+          <button className="nav-hamburger" onClick={() => setMobileMenuOpen((open) => !open)} aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"} aria-expanded={mobileMenuOpen} aria-controls="homepage-mobile-navigation">
+            {mobileMenuOpen ? <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 4L16 16M16 4L4 16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg> : <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>}
           </button>
         </div>
-        {mobileMenuOpen && (
-          <div id="homepage-mobile-navigation" className="nav-mobile-menu">
-            <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
-            <a href="#skills" onClick={() => setMobileMenuOpen(false)}>Scenarios</a>
-            <a href="/auth/signin">Sign in</a>
-            <a href="#beta" className="nav-cta-mobile" onClick={() => setMobileMenuOpen(false)}>Join the beta →</a>
-          </div>
-        )}
+        {mobileMenuOpen && <div id="homepage-mobile-navigation" className="nav-mobile-menu"><a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a><a href="#skills" onClick={() => setMobileMenuOpen(false)}>Practice</a><a href="/auth/login">Sign in</a><a href="/auth/signup" className="nav-cta-mobile">Join the beta →</a></div>}
       </nav>
 
-      {/* HERO */}
       <section className="hero">
-        <div className="beta-badge">
-          <span className="bb-dot" aria-hidden="true" />
-          {copy("home.hero.badge")}
-        </div>
-        <h1>
-          {heroTitleLines[0]}
-          {heroTitleLines.slice(1).map((line) => (
-            <span key={line}>
-              <br />
-              <em>{line}</em>
-            </span>
-          ))}
-        </h1>
-        <p className="hero-sub">
-          {heroSubtitle}
-        </p>
-        <div className="hero-actions">
-          <a href="#beta" className="btn-primary">{copy("home.hero.cta")}</a>
-        </div>
-
-        {/* Hero visual — phone for personal, browser for professional */}
+        <div className="beta-badge"><span className="bb-dot" aria-hidden="true" />Public beta · Everything included · No credit card</div>
+        <h1>Communication coaching for neurodivergent professionals<br /><em>inside the apps where you work.</em></h1>
+        <p className="hero-sub">Beckett helps you decode tone, draft replies, and prepare for difficult conversations in Gmail, Slack, Outlook, and Chrome—without pulling every conversation into another app.</p>
+        <div className="hero-actions"><a href="/auth/signup" className="btn-primary">Create your free beta account</a></div>
         <div className="hero-visual">
-          {mode === "personal" ? (
-
-            /* ── PHONE MOCKUP ── */
-            <div className="phone-frame">
-              <div className="phone-notch" />
-              <div className="phone-screen">
-                <div className="ph-header">
-                  <div className="ph-av-wrap">
-                    <div className="ph-avatar">A</div>
-                    <span className="ph-online" />
-                  </div>
-                  <div className="ph-name">Alex</div>
-                  <div className="ph-meta">Hinge match · online now</div>
-                </div>
-                <div className="ph-thread">
-                  <div className="ph-bubble">haha yeah that&apos;s so funny</div>
-                  <div className="ph-bubble">anyway what are you up to this weekend</div>
-                </div>
-                <div className="ph-beckett">
-                  <div className="ph-b-label">What&apos;s happening</div>
-                  <div className="ph-b-text">They&apos;re being casual but leaving the door open — a soft invitation. They want to see if you&apos;ll make a move.</div>
-                  <div className="ph-replies">
-                    <div className="ph-reply">
-                      <span className="ph-reply-tag">Direct</span>
-                      Actually free Saturday — want to grab coffee?
-                    </div>
-                    <div className="ph-reply">
-                      <span className="ph-reply-tag ph-reply-tag-play">Playful</span>
-                      Not much planned yet, might be up for something 👀
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="phone-home-bar" />
-            </div>
-
-          ) : (
-
-            /* ── BROWSER MOCKUP ── */
-            <div className="browser-frame">
-              <div className="browser-chrome">
-                <div className="b-dots">
-                  <span className="dot-r" />
-                  <span className="dot-y" />
-                  <span className="dot-g" />
-                </div>
-                <div className="b-url">mail.google.com — Inbox</div>
-              </div>
-              <div className="browser-body">
-                <div className="email-pane">
-                  <div className="e-from">Sarah Chen · Director of Product</div>
-                  <div className="e-subject">Re: Q3 roadmap alignment</div>
-                  <div className="e-date">Today at 2:14 PM</div>
-                  <div className="e-body">
-                    <p>Per my last email, I wanted to make sure we&apos;re on the same page before the all-hands.</p>
-                    <div className="e-highlight">&ldquo;Let&apos;s make sure decisions like this go through the right channels going forward.&rdquo;</div>
-                    <p>Looking forward to syncing on this.</p>
-                  </div>
-                </div>
-                <div className="b-sidebar">
-                  <div className="b-header">
-                    <div className="b-logo">
-                      <Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={92} height={23} />
-                    </div>
-                    <div className="b-status">Connected</div>
-                  </div>
-                  <div className="b-controls">
-                    <button type="button" tabIndex={-1} aria-hidden="true" className="b-control-primary">Analyze email</button>
-                    <button type="button" tabIndex={-1} aria-hidden="true" className="b-control-secondary">Auto off</button>
-                  </div>
-                  <div className="i-card">
-                    <div className="i-label">Beckett read</div>
-                    <div className="i-text">Sarah is flagging process frustration, not attacking you. Acknowledge the miss and confirm the next channel.</div>
-                  </div>
-                  <div className="r-section-label">Suggested replies</div>
-                  <div className="r-card">
-                    <div className="r-tag t-direct">Direct but kind</div>
-                    <div className="r-text">Thanks for flagging. I&apos;ll route decisions like this through you first going forward.</div>
-                  </div>
-                  <div className="r-card">
-                    <div className="r-tag t-warm">Warmer</div>
-                    <div className="r-text">Appreciate the note, Sarah. I understand the process piece and will loop you in earlier next time.</div>
-                  </div>
-                  <div className="b-draft-box">
-                    <div className="b-draft-label">Draft from scratch</div>
-                    <div className="b-draft-line">Help me respond clearly without sounding defensive...</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          )}
-        </div>
-      </section>
-
-      {/* FEATURES */}
-      <section id="features">
-        <div className="container">
-          <div className="sec-label">What Beckett does</div>
-          <h2>Support for the parts<br /><em>other tools miss.</em></h2>
-          <div className="feat-grid feat-grid-5">
-            {features.map((f) => (
-              <div key={f.n} className="feat-card">
-                <div className="feat-num">{f.n}</div>
-                <div className="feat-title">{f.title}</div>
-                <div className="feat-text">{mode === "personal" ? f.personal : f.professional}</div>
-                {f.action && <div className="feat-action">{f.action}</div>}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* TRIGGERS */}
-      <section className="triggers-section" id="triggers">
-        <div className="container">
-          <div className="sec-label">Your brain, your rules</div>
-          <h2>Built around the way<br /><em>your brain actually works.</em></h2>
-          <p className="sec-sub">Maybe you overthink replies, miss the tone of text messages, or go silent when you&apos;re overwhelmed. Beckett doesn&apos;t give you a generic script. It learns what you need and meets you there.</p>
-          <div className="trigger-grid">
-            {(mode === "personal" ? triggers : professionalTriggers).map((t) => (
-              <div key={t.label} className="trigger-card">
-                <div className="tc-quote">&ldquo;{t.label}&rdquo;</div>
-                <div className="tc-response">{t.beckett}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* APPS — personal preview | professional work platforms */}
-      {mode === "personal" ? (
-        <div className="apps-wrap">
-          <div className="container">
-            <div className="sec-label">Personal Preview</div>
-            <h2>Personal support for<br /><em>the social gray areas.</em></h2>
-            <p className="sec-sub">For beta, Beckett is workplace-first. Personal mode stays available for practice and the dating course preview while phone, DM, and dating-app integrations come later.</p>
-            <div className="apps-grid">
-              {[
-                { icon: "🎓", name: "Dating course preview" },
-                { icon: "🎭", name: "Personal practice" },
-                { icon: "💬", name: "Phone + DMs coming soon" },
-                { icon: "🌸", name: "Dating app support coming soon" },
-              ].map((a) => (
-                <div key={a.name} className="app-pill">
-                  <span className="app-icon">{a.icon}</span>
-                  <span className="app-name">{a.name}</span>
-                </div>
-              ))}
+          <div className="browser-frame">
+            <div className="browser-chrome"><div className="b-dots"><span className="dot-r" /><span className="dot-y" /><span className="dot-g" /></div><div className="b-url">mail.google.com — Inbox</div></div>
+            <div className="browser-body">
+              <div className="email-pane"><div className="e-from">Sarah Chen · Director of Product</div><div className="e-subject">Re: Q3 roadmap alignment</div><div className="e-date">Today at 2:14 PM</div><div className="e-body"><p>Per my last email, I wanted to make sure we&apos;re on the same page before the all-hands.</p><div className="e-highlight">&ldquo;Let&apos;s make sure decisions like this go through the right channels going forward.&rdquo;</div><p>Looking forward to syncing on this.</p></div></div>
+              <div className="b-sidebar"><div className="b-header"><div className="b-logo"><Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={92} height={23} /></div><div className="b-status">Connected</div></div><div className="b-controls"><button type="button" tabIndex={-1} aria-hidden="true" className="b-control-primary">Analyze email</button><button type="button" tabIndex={-1} aria-hidden="true" className="b-control-secondary">Auto off</button></div><div className="i-card"><div className="i-label">Beckett read</div><div className="i-text">Sarah is flagging process frustration, not attacking you. Acknowledge the miss and confirm the next channel.</div></div><div className="r-section-label">Suggested replies</div><div className="r-card"><div className="r-tag t-direct">Direct but kind</div><div className="r-text">Thanks for flagging. I&apos;ll route decisions like this through you first going forward.</div></div><div className="r-card"><div className="r-tag t-warm">Warmer</div><div className="r-text">Appreciate the note, Sarah. I understand the process piece and will loop you in earlier next time.</div></div></div>
             </div>
           </div>
         </div>
-      ) : (
-        <div className="plat-wrap">
-          <div className="container">
-            <div className="sec-label">Platforms</div>
-            <h2>Coaching where work<br /><em>gets ambiguous.</em></h2>
-            <p className="sec-sub">Beckett connects the parts of the workday that create pressure: planning, messages, meetings, practice, and practical skills.</p>
-            <div className="plat-grid">
-              {[
-                { icon: "pi-gmail", letter: "G", name: "Gmail Decode", desc: "Bring a specific thread to clarify the ask and draft a response in your own voice. Read-only; Beckett cannot send." },
-                { icon: "pi-slack", letter: "S", name: "Slack", desc: "Provides private decoding, response help, rewriting, preparation, and practice inside Slack." },
-                { icon: "pi-meet", letter: "C", name: "Google Calendar", desc: "Choose calendars, view your week, and prepare for meetings with other attendees. Beckett never edits events." },
-                { icon: "pi-zoom", letter: "M", name: "Practice + Skills", desc: "Rehearse high-stakes conversations and build practical strategies you can carry into the day." },
-              ].map((p) => (
-                <div key={p.name} className="plat-card">
-                  <div className={`plat-icon ${p.icon}`}>{p.letter}</div>
-                  <div className="plat-name">{p.name}</div>
-                  <div className="plat-desc">{p.desc}</div>
-                  <div className="plat-live">Live in Beckett</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SKILLS */}
-      <section id="skills">
-        <div className="container">
-          <div className="sec-label">Skill scenarios</div>
-          <h2>Practice before the words<br /><em>have to count.</em></h2>
-          <p className="sec-sub">
-            {mode === "personal"
-              ? "The real ones. Not hypotheticals — situations you actually find yourself in. Beckett plays the other person realistically and debriefs you on what worked."
-              : "The high-stakes ones. The conversations most people wing because they've never actually practiced them. Beckett walks you through each one."}
-          </p>
-          <div className="skills-grid">
-            {scenarios.map((s) => (
-              <div key={s.situation} className="skill-card">
-                <div className={`sk-diff ${s.diff}`}>{s.label}</div>
-                <div className="sk-situation">&ldquo;{s.situation}&rdquo;</div>
-                <div className="sk-action">{s.action}</div>
-              </div>
-            ))}
-          </div>
-        </div>
       </section>
 
-      {/* TESTIMONIALS */}
-      <section>
-        <div className="container">
-          <div className="sec-label">What people say</div>
-          <h2>For people who think differently<br />and still need to <em>be understood.</em></h2>
-          <div className="quote-grid">
-            {(mode === "personal" ? personalTestimonials : professionalTestimonials).map((q) => (
-              <div key={q.name} className="q-card">
-                <div className="q-text">&ldquo;{q.quote}&rdquo;</div>
-                <div className="q-author">
-                  <div className={`q-av ${q.av}`}>{q.initials}</div>
-                  <div>
-                    <div className="q-name">{q.name}</div>
-                    <div className="q-role">{q.role}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <section id="features"><div className="container"><div className="sec-label">What Beckett does</div><h2>Support that meets you<br /><em>inside the workday.</em></h2><div className="feat-grid feat-grid-5">{features.map((feature) => <div key={feature.n} className="feat-card"><div className="feat-num">{feature.n}</div><div className="feat-title">{feature.title}</div><div className="feat-text">{feature.text}</div><div className="feat-action">{feature.action}</div></div>)}</div></div></section>
 
-      {/* BETA */}
-      <div className="beta-wrap" id="beta">
-        <div className="container">
-          <div className="sec-label">{copy("home.beta.label")}</div>
-          <h2>
-            {betaTitleLines[0]}
-            {betaTitleLines.slice(1).map((line) => (
-              <span key={line}>
-                <br />
-                <em>{line}</em>
-              </span>
-            ))}
-          </h2>
-          <p className="sec-sub">{copy("home.beta.subtitle")}</p>
-          {betaStatus === "done" ? (
-            <p className="beta-ok">You&apos;re on the list. We&apos;ll be in touch. ✓</p>
-          ) : (
-            <form className="beta-form" onSubmit={submitBeta}>
-              <label className="sr-only" htmlFor="homepage-beta-email">Email for beta access</label>
-              <input
-                id="homepage-beta-email"
-                className="beta-input"
-                type="email"
-                placeholder="your@email.com"
-                required
-                value={betaEmail}
-                onChange={(e) => setBetaEmail(e.target.value)}
-              />
-              <button className="beta-btn" type="submit" disabled={betaStatus === "loading"}>
-                {betaStatus === "loading" ? "Sending..." : copy("home.beta.button")}
-              </button>
-            </form>
-          )}
-          <p className="beta-note">{copy("home.beta.note")}</p>
-        </div>
-      </div>
+      <section className="triggers-section" id="triggers"><div className="container"><div className="sec-label">Your brain, your rules</div><h2>Built around the way<br /><em>your brain actually works.</em></h2><p className="sec-sub">Beckett gives you a useful next step without pretending uncertain tone is fact or forcing you into a generic script.</p><div className="trigger-grid">{workPatterns.map((pattern) => <div key={pattern.label} className="trigger-card"><div className="tc-quote">&ldquo;{pattern.label}&rdquo;</div><div className="tc-response">{pattern.beckett}</div></div>)}</div></div></section>
 
-      {/* FOOTER */}
-      <footer className="hn-footer">
-        <div className="f-logo f-logo-img">
-          <Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={118} height={30} />
-        </div>
-        <div className="f-copy">© 2026 Beckett. For brains that work differently.</div>
-        <nav aria-label="Footer navigation" className="f-links">
-          <a href="/features">Features</a>
-          <a href="/pricing">Pricing</a>
-          <a href="/beta">Beta</a>
-          <a href="/privacy">Privacy Policy</a>
-          <a href="/terms">Terms of Service</a>
-          <a href="mailto:hello@meetbeckett.co">Contact</a>
-          <a href="https://www.instagram.com/meet.beckett/" target="_blank" rel="noreferrer">Instagram</a>
-          <a href="https://www.linkedin.com/company/beckett-communication-app/" target="_blank" rel="noreferrer">LinkedIn</a>
-          <a href="https://www.facebook.com/profile.php?id=61592588274956" target="_blank" rel="noreferrer">Facebook</a>
-        </nav>
-      </footer>
+      <div className="plat-wrap"><div className="container"><div className="sec-label">One coach across your work apps</div><h2>Stay in the conversation.<br /><em>Bring Beckett with you.</em></h2><p className="sec-sub">Connect only what you want. Google Workspace capabilities can be connected separately, so Gmail coaching does not require Calendar access.</p><div className="plat-grid">{[
+        { icon: "pi-gmail", letter: "G", name: "Google Workspace", desc: "Decode Gmail threads and, separately, use selected calendars for meeting preparation.", status: "Available in beta" },
+        { icon: "pi-slack", letter: "S", name: "Slack", desc: "Get private decoding, response help, rewriting, preparation, and practice inside Slack.", status: "Available in beta" },
+        { icon: "pi-meet", letter: "O", name: "Microsoft 365", desc: "Work with selected Outlook messages and calendars through one Microsoft connection.", status: "Available in beta" },
+        { icon: "pi-zoom", letter: "C", name: "Chrome", desc: "Open Beckett from supported work pages without starting over in a separate tab.", status: "Available in beta" },
+      ].map((platform) => <div key={platform.name} className="plat-card"><div className={`plat-icon ${platform.icon}`}>{platform.letter}</div><div className="plat-name">{platform.name}</div><div className="plat-desc">{platform.desc}</div><div className="plat-live">{platform.status}</div></div>)}</div></div></div>
 
-    </div>
+      <section id="skills"><div className="container"><div className="sec-label">Conversations you can practice</div><h2>Rehearse before the words<br /><em>have to count.</em></h2><p className="sec-sub">Choose a real workplace situation, practice with realistic pushback, and debrief what worked. These are examples—not customer testimonials.</p><div className="skills-grid">{practiceConversations.map((scenario) => <div key={scenario.situation} className="skill-card"><div className="sk-diff d-med">{scenario.label}</div><div className="sk-situation">{scenario.situation}</div><div className="sk-action">Practice this conversation →</div></div>)}</div></div></section>
+
+      <div className="beta-wrap" id="beta"><div className="container"><div className="sec-label">Public beta</div><h2>Try Beckett now.<br /><em>Help shape what comes next.</em></h2><p className="sec-sub">Create an account immediately. Beta includes 60 successful coaching actions per day, 500 per month, full Practice, and every currently available skill course.</p><a href="/auth/signup" className="btn-primary">Create your free beta account</a><p className="beta-note">No approval wait · No credit card · Course activities do not use coaching credits</p></div></div>
+
+      <footer className="hn-footer"><div className="f-logo f-logo-img"><Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={118} height={30} /></div><div className="f-copy">© 2026 Beckett. For brains that work differently.</div><nav aria-label="Footer navigation" className="f-links"><a href="/features">Features</a><a href="/slack">Slack</a><a href="/pricing">Pricing</a><a href="/beta">Public beta</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a><a href="mailto:hello@meetbeckett.co">Contact</a></nav></footer>
+    </main>
   );
 }

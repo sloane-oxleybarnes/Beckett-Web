@@ -61,6 +61,36 @@ test.describe("authenticated preview coverage", () => {
     expect(deleted.ok()).toBeTruthy();
   });
 
+  test("Practice Send stays clear of Credits and Feedback at release viewports", async ({ page }) => {
+    await page.goto("/dashboard/practice");
+    await page.getByLabel("Who are you talking to?").fill("my manager");
+    await page.getByLabel("Your goal").fill("Agree on a realistic next step.");
+    await page.getByLabel("What is the situation?").fill("I need to discuss a changing deadline.");
+    await page.getByRole("button", { name: "Review setup" }).click();
+    await page.getByRole("button", { name: "Approve and begin" }).click();
+    const send = page.getByRole("button", { name: "Send", exact: true });
+    await expect(send).toBeVisible();
+
+    for (const viewport of [
+      { width: 1200, height: 541 },
+      { width: 1280, height: 720 },
+      { width: 1366, height: 768 },
+      { width: 1440, height: 900 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await send.scrollIntoViewIfNeeded();
+      await expect(send).toBeVisible();
+      const point = await send.boundingBox();
+      expect(point).not.toBeNull();
+      const hitTarget = await page.evaluate(({ x, y }) => {
+        const element = document.elementFromPoint(x, y);
+        return element?.textContent?.trim() || element?.getAttribute("aria-label") || "";
+      }, { x: point!.x + point!.width / 2, y: point!.y + point!.height / 2 });
+      expect(hitTarget).toMatch(/Send/);
+    }
+  });
+
   test("privileged record routes reject a foreign contact ID", async ({ page }) => {
     test.skip(!process.env.E2E_FOREIGN_CONTACT_ID, "Set E2E_FOREIGN_CONTACT_ID to run cross-user ownership checks.");
     const response = await page.request.get(`/api/contacts/${process.env.E2E_FOREIGN_CONTACT_ID}`);

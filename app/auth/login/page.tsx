@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import LoginForm from "@/components/auth/LoginForm";
-import { isBetaInviteOnly } from "@/lib/beta-access";
 
 function Loading() {
   return (
@@ -11,5 +10,5 @@ function Loading() {
 }
 
 export default function LoginPage() {
-  return <Suspense fallback={<Loading />}><LoginForm inviteOnly={isBetaInviteOnly()} /></Suspense>;
+  return <Suspense fallback={<Loading />}><LoginForm /></Suspense>;
 }

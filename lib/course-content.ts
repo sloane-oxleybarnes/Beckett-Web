@@ -1,7 +1,7 @@
 import { COURSES, getCourse, type Course } from "@/lib/courses";
 import { platformRepository } from "@/lib/repositories/platform-repository";
 
-export type CourseIllustration = "date" | "colleague" | "clarity" | "no";
+export type CourseIllustration = "date" | "colleague" | "clarity" | "feedback" | "no";
 export type CourseSection = "Professional" | "Personal";
 
 export type CourseContentRow = {
@@ -64,6 +64,11 @@ const STATIC_META: Record<string, {
     illustration: "clarity",
     sortOrder: 20,
   },
+  "giving-constructive-feedback-peer": {
+    section: "Professional",
+    illustration: "feedback",
+    sortOrder: 30,
+  },
   "ask-someone-out": {
     section: "Personal",
     illustration: "date",
@@ -76,7 +81,7 @@ function normalizeSection(value: unknown, fallback: CourseSection = "Professiona
 }
 
 function normalizeIllustration(value: unknown, fallback: CourseIllustration = "clarity"): CourseIllustration {
-  return value === "date" || value === "colleague" || value === "clarity" || value === "no"
+  return value === "date" || value === "colleague" || value === "clarity" || value === "feedback" || value === "no"
     ? value
     : fallback;
 }
@@ -104,11 +109,12 @@ function rowToStudioItem(row: CourseContentRow, fallback?: Course): CourseStudio
   if (!draft) return null;
   const published = isCourse(row.published_json) ? row.published_json : null;
   const meta = STATIC_META[row.course_id];
+  const fixedIllustration = row.course_id === "giving-constructive-feedback-peer" ? "feedback" as const : null;
   return {
     courseId: row.course_id,
     title: row.title || draft.title,
     section: normalizeSection(row.section, meta?.section || "Professional"),
-    illustration: normalizeIllustration(row.illustration, meta?.illustration || "clarity"),
+    illustration: fixedIllustration || normalizeIllustration(row.illustration, meta?.illustration || "clarity"),
     isListed: row.is_listed,
     sortOrder: Number.isFinite(row.sort_order) ? row.sort_order : meta?.sortOrder || 100,
     sourceCourseId: row.source_course_id,
@@ -238,7 +244,7 @@ export async function getPublishedCourseCatalog(): Promise<CourseCatalogItem[]> 
     const published = isCourse(row?.published_json) ? row?.published_json : course;
     return summarizeCourse(published, {
       section: normalizeSection(row?.section, STATIC_META[course.id]?.section || "Professional"),
-      illustration: normalizeIllustration(row?.illustration, STATIC_META[course.id]?.illustration || "clarity"),
+      illustration: course.id === "giving-constructive-feedback-peer" ? "feedback" : normalizeIllustration(row?.illustration, STATIC_META[course.id]?.illustration || "clarity"),
       sortOrder: row?.sort_order ?? STATIC_META[course.id]?.sortOrder ?? 100,
     });
   });

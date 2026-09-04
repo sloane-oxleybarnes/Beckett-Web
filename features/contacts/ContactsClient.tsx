@@ -861,7 +861,7 @@ export default function ContactsClient() {
           )}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {filtered.map((c) => {
             return (
               <div
@@ -904,7 +904,7 @@ export default function ContactsClient() {
                   </button>
                 </div>
 
-                <div className="mt-4 flex gap-3" onClick={(e) => e.stopPropagation()}>
+                <div className="mt-4 flex flex-wrap gap-x-3 gap-y-2" onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={() => { setSelectedId(c.id); setShowForm(false); setMergeSourceId(null); }}
                     className="text-xs text-primary transition-colors hover:underline"

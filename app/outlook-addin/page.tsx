@@ -2,9 +2,13 @@
 
 import Script from "next/script";
 import { BrowserCacheLocation, createNestablePublicClientApplication, InteractionRequiredAuthError, type IPublicClientApplication } from "@azure/msal-browser";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type OfficeResult = { status?: string; value?: unknown };
+type OfficeDialog = {
+  addEventHandler?: (eventType: string, handler: (event: { message?: string; error?: number }) => void) => void;
+  close?: () => void;
+};
 type OfficeItem = {
   itemId?: string;
   subject?: string | { getAsync?: (callback: (result: OfficeResult) => void) => void };
@@ -22,24 +26,40 @@ type OfficeApi = {
       addHandlerAsync?: (eventType: string, handler: () => void) => void;
       convertToRestId?: (itemId: string, restVersion: string) => string;
     };
-    ui?: { openBrowserWindow?: (url: string) => void; messageParent?: (message: string) => void };
+    ui?: {
+      displayDialogAsync?: (
+        url: string,
+        options: { height: number; width: number; displayInIframe: boolean },
+        callback: (result: OfficeResult) => void,
+      ) => void;
+      openBrowserWindow?: (url: string) => void;
+      messageParent?: (message: string) => void;
+    };
     requirements?: { isSetSupported?: (name: string, version?: string) => boolean };
   };
   onReady?: (callback: (info?: { host?: string }) => void) => void;
   CoercionType: { Text: string };
   AsyncResultStatus: { Succeeded: string };
-  EventType?: { DialogMessageReceived?: string; ItemChanged?: string };
+  EventType?: { DialogEventReceived?: string; DialogMessageReceived?: string; ItemChanged?: string };
   MailboxEnums?: { RestVersion?: { v2_0?: string } };
 };
 
 declare global { interface Window { Office?: OfficeApi } }
 
 type AuthState = "checking" | "signed-in" | "signed-out" | "unsupported" | "error";
+type ConnectionAction = "link-account" | "mail-read" | null;
 type SelectedItem = { subject: string; sender: string; body: string; itemId: string | null };
 type Analysis = { intent?: string; tone?: string; want?: string; responses?: Array<{ label?: string; tag?: string; text?: string }> };
 
 function readAsync<T>(run: (callback: (result: OfficeResult) => void) => void, office: OfficeApi) {
   return new Promise<T>((resolve, reject) => run((result) => result.status === office.AsyncResultStatus.Succeeded ? resolve(result.value as T) : reject(new Error("Outlook could not read this item."))));
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error(message)), timeoutMs)),
+  ]);
 }
 
 export default function OutlookAddinPage() {
@@ -50,11 +70,17 @@ export default function OutlookAddinPage() {
   const [canInsert, setCanInsert] = useState(false);
   const [canOpenReply, setCanOpenReply] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("checking");
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [outlookAccessToken, setOutlookAccessToken] = useState<string | null>(null);
-  const [needsMicrosoftConnection, setNeedsMicrosoftConnection] = useState(false);
+  const [beckettAccessToken, setBeckettAccessToken] = useState<string | null>(null);
+  const [connectionAction, setConnectionAction] = useState<ConnectionAction>(null);
   const msalClient = useRef<IPublicClientApplication | null>(null);
   const outlookLinkAttempt = useRef<string | null>(null);
   const outlookLinkPoll = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (outlookLinkPoll.current) window.clearInterval(outlookLinkPoll.current);
+  }, []);
 
   async function getMsalClient() {
     if (msalClient.current) return msalClient.current;
@@ -73,30 +99,106 @@ export default function OutlookAddinPage() {
     const office = window.Office;
     if (!office?.context?.requirements?.isSetSupported?.("NestedAppAuth", "1.1")) {
       setAuthState("unsupported");
-      setStatus("Microsoft SSO requires a Microsoft 365 work or school mailbox. Outlook.com mailboxes do not support this Outlook capability.");
+      setStatus("Microsoft SSO is not available for this mailbox. Sign in to Beckett in a secure Outlook dialog instead.");
       return;
     }
+    if (interactive) {
+      setIsAuthenticating(true);
+      setAuthState("signed-out");
+      setStatus("Opening Microsoft sign-in…");
+    }
     try {
-      const client = await getMsalClient();
+      const client = await withTimeout(getMsalClient(), 10_000, "Microsoft SSO took too long to initialize.");
       const request = { scopes: ["User.Read"] };
       let result;
       try {
-        result = await client.acquireTokenSilent(request);
+        result = await withTimeout(client.acquireTokenSilent(request), 10_000, "Microsoft SSO did not return a silent session.");
       } catch (error) {
-        if (!interactive || !(error instanceof InteractionRequiredAuthError)) {
+        if (!interactive) {
           setAuthState("signed-out");
           setStatus("Connect Beckett with your Microsoft work account to continue.");
           return;
         }
-        result = await client.acquireTokenPopup(request);
+        if (!(error instanceof InteractionRequiredAuthError)) {
+          setStatus("Microsoft needs an interactive sign-in. Opening it now…");
+        }
+        result = await withTimeout(
+          client.acquireTokenPopup(request),
+          45_000,
+          "Microsoft sign-in did not open in this Outlook client.",
+        );
       }
       setOutlookAccessToken(result.accessToken);
       setAuthState("signed-in");
       setStatus("Connected through Microsoft SSO.");
     } catch (error) {
-      setAuthState("error");
-      setStatus(error instanceof Error ? error.message : "Microsoft SSO could not start.");
+      setAuthState("signed-out");
+      const detail = error instanceof Error ? error.message : "Microsoft SSO could not start.";
+      setStatus(`${detail} Choose Sign in to Beckett below to continue securely.`);
+    } finally {
+      if (interactive) setIsAuthenticating(false);
     }
+  }
+
+  function apiAuthorizationHeader(): Record<string, string> {
+    const token = outlookAccessToken || beckettAccessToken;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  function openOutlookDialog(url: string, onMessage: (message: Record<string, unknown>) => void) {
+    const office = window.Office;
+    const ui = office?.context?.ui;
+    if (!office || !ui?.displayDialogAsync) {
+      office?.context?.ui?.openBrowserWindow?.(url);
+      setStatus("Outlook opened the secure sign-in in your browser. If this pane does not update, reopen Beckett after finishing sign-in.");
+      return;
+    }
+    ui.displayDialogAsync(url, { height: 70, width: 45, displayInIframe: false }, (dialogResult) => {
+      if (dialogResult.status !== office.AsyncResultStatus.Succeeded || !dialogResult.value) {
+        setStatus("Outlook could not open the secure sign-in dialog. Try again or open Beckett in Outlook on the web.");
+        return;
+      }
+      const dialog = dialogResult.value as OfficeDialog;
+      const messageEvent = office.EventType?.DialogMessageReceived || "dialogMessageReceived";
+      const errorEvent = office.EventType?.DialogEventReceived || "dialogEventReceived";
+      let completed = false;
+      dialog.addEventHandler?.(messageEvent, (event) => {
+        try {
+          const message = JSON.parse(event.message || "{}") as Record<string, unknown>;
+          completed = true;
+          onMessage(message);
+          dialog.close?.();
+        } catch {
+          setStatus("Beckett could not verify the sign-in response. Close the dialog and try again.");
+        }
+      });
+      dialog.addEventHandler?.(errorEvent, () => {
+        if (!completed) setStatus("The secure sign-in dialog closed before Beckett finished connecting.");
+      });
+    });
+  }
+
+  function signInWithBeckett() {
+    setStatus("Opening secure Beckett sign-in…");
+    const next = "/outlook-addin/auth-complete?mode=beckett";
+    const url = new URL("/auth/login", window.location.origin);
+    url.searchParams.set("next", next);
+    openOutlookDialog(url.toString(), (message) => {
+      if (message.type !== "beckett-outlook-auth" || typeof message.accessToken !== "string") {
+        setStatus("Beckett sign-in did not return a usable session. Try again.");
+        return;
+      }
+      setBeckettAccessToken(message.accessToken);
+      setAuthState("signed-in");
+      setStatus("Signed in to Beckett.");
+    });
+  }
+
+  function chooseAnotherSignInMethod() {
+    setOutlookAccessToken(null);
+    setBeckettAccessToken(null);
+    setAuthState("signed-out");
+    setStatus("Choose Microsoft SSO or the secure Beckett sign-in fallback.");
   }
 
   function clearForNewItem() {
@@ -104,7 +206,7 @@ export default function OutlookAddinPage() {
     setResult(null);
     setCanInsert(false);
     setCanOpenReply(false);
-    setNeedsMicrosoftConnection(false);
+    setConnectionAction(null);
     setStatus("Message changed. Choose Analyze message for this item.");
   }
 
@@ -147,13 +249,13 @@ export default function OutlookAddinPage() {
     setStatus(thread ? `Analyzing ${thread.length}-message conversation…` : "Analyzing this message…");
     const response = await fetch("/api/microsoft/mail/decode", {
       method: "POST",
-      headers: { "content-type": "application/json", ...(outlookAccessToken ? { Authorization: `Bearer ${outlookAccessToken}` } : {}) },
+      headers: { "content-type": "application/json", ...apiAuthorizationHeader() },
       body: JSON.stringify({ content: selectedItem.body, subject: selectedItem.subject, sender: selectedItem.sender, thread }),
     });
     const data = await response.json().catch(() => ({}));
     if (response.status === 401) { setAuthState("signed-out"); setStatus("Sign in to Beckett to analyze this message."); return; }
     if (response.status === 403 && data.needsMicrosoftConnection) {
-      setNeedsMicrosoftConnection(true);
+      setConnectionAction("link-account");
       setStatus(data.error || "Link this Microsoft work account to your Beckett profile to analyze messages.");
       return;
     }
@@ -164,7 +266,7 @@ export default function OutlookAddinPage() {
 
   async function analyzeMessage() {
     try {
-      setNeedsMicrosoftConnection(false);
+      setConnectionAction(null);
       setResult(null);
       const selected = await readCurrentItem();
       if (authState !== "signed-in") return setStatus("Sign in to Beckett to analyze this message.");
@@ -174,7 +276,7 @@ export default function OutlookAddinPage() {
 
   async function analyzeThread() {
     try {
-      setNeedsMicrosoftConnection(false);
+      setConnectionAction(null);
       setResult(null);
       const selected = await readCurrentItem();
       if (authState !== "signed-in") return setStatus("Sign in to Beckett to analyze this conversation.");
@@ -182,12 +284,12 @@ export default function OutlookAddinPage() {
       setStatus("Loading this conversation…");
       const response = await fetch("/api/microsoft/mail/thread", {
         method: "POST",
-        headers: { "content-type": "application/json", ...(outlookAccessToken ? { Authorization: `Bearer ${outlookAccessToken}` } : {}) },
+        headers: { "content-type": "application/json", ...apiAuthorizationHeader() },
         body: JSON.stringify({ itemId: selected.itemId }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setNeedsMicrosoftConnection(Boolean(data.needsMicrosoftConnection));
+        setConnectionAction(data.needsMicrosoftConnection ? "mail-read" : null);
         setStatus(data.error || "Beckett could not load this conversation.");
         return;
       }
@@ -218,30 +320,77 @@ export default function OutlookAddinPage() {
     setStatus("Outlook could not open a reply here. Use Copy response instead.");
   }
 
+  function copyWithSelection(text: string) {
+    const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.setAttribute("aria-hidden", "true");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    textarea.style.pointerEvents = "none";
+    textarea.style.inset = "0 auto auto 0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    let copied = false;
+    try {
+      // Outlook task panes can deny the asynchronous Clipboard API while still
+      // allowing a user-initiated copy command in the embedded webview.
+      copied = document.execCommand("copy");
+    } finally {
+      textarea.remove();
+      activeElement?.focus();
+    }
+    return copied;
+  }
+
   async function copyResponse(text: string) {
+    try {
+      if (copyWithSelection(text)) {
+        setStatus("Response copied. Paste it into any draft when you are ready.");
+        return;
+      }
+    } catch {
+      // Continue to the modern Clipboard API before showing the manual fallback.
+    }
     try {
       await navigator.clipboard.writeText(text);
       setStatus("Response copied. Paste it into any draft when you are ready.");
-    } catch { setStatus("Copy was blocked by Outlook. Select the response text and copy it manually."); }
+    } catch {
+      setStatus("Copy was blocked by Outlook. Select the response text and copy it manually.");
+    }
   }
 
-  async function linkMicrosoftAccount() {
+  async function startMicrosoftBrowserConnection(requestMailPermission: boolean) {
     if (!outlookAccessToken) return setStatus("Connect your Microsoft work account first.");
-    setStatus("Opening Beckett sign-in to link this Outlook account…");
-    const response = await fetch("/api/outlook-link/start", {
+    // Open synchronously in the click gesture so Outlook web and desktop popup
+    // blockers do not discard the window while the start request is running.
+    const pendingWindow = window.open("about:blank", "_blank");
+    if (pendingWindow) pendingWindow.opener = null;
+    setStatus(requestMailPermission
+      ? "Opening Beckett sign-in and Microsoft mail permission…"
+      : "Opening Beckett sign-in to link this Outlook account…");
+    const startPath = requestMailPermission ? "/api/outlook-link/start?permission=mail" : "/api/outlook-link/start";
+    const response = await fetch(startPath, {
       method: "POST",
       headers: { Authorization: `Bearer ${outlookAccessToken}` },
     });
     const data = await response.json().catch(() => ({})) as { attempt?: string; url?: string; error?: string };
-    if (!response.ok || !data.attempt || !data.url) return setStatus(data.error || "Beckett could not start account linking.");
+    if (!response.ok || !data.attempt || !data.url) {
+      pendingWindow?.close();
+      return setStatus(data.error || "Beckett could not start account linking.");
+    }
     outlookLinkAttempt.current = data.attempt;
     const url = data.url;
     // Outlook on the web can silently ignore openBrowserWindow for an add-in
     // pane. A direct popup runs in the user's click gesture and is more
     // reliable there; if the browser blocks it, keep the path recoverable by
     // taking the pane itself through the linking flow.
-    const popup = window.open(url, "_blank", "noopener,noreferrer");
-    if (!popup) window.location.assign(url);
+    if (pendingWindow) pendingWindow.location.assign(url);
+    else if (window.Office?.context?.ui?.openBrowserWindow) window.Office.context.ui.openBrowserWindow(url);
+    else window.location.assign(url);
     if (outlookLinkPoll.current) window.clearInterval(outlookLinkPoll.current);
     const startedAt = Date.now();
     outlookLinkPoll.current = window.setInterval(() => {
@@ -253,12 +402,14 @@ export default function OutlookAddinPage() {
       void fetch(`/api/outlook-link/status?attempt=${encodeURIComponent(outlookLinkAttempt.current)}`, {
         headers: { Authorization: `Bearer ${outlookAccessToken}` },
         cache: "no-store",
-      }).then((result) => result.json() as Promise<{ linked?: boolean; expired?: boolean }>).then((result) => {
-        if (result.linked) {
+      }).then((result) => result.json() as Promise<{ linked?: boolean; mailConnected?: boolean; expired?: boolean }>).then((result) => {
+        if (result.linked && (!requestMailPermission || result.mailConnected)) {
           if (outlookLinkPoll.current) window.clearInterval(outlookLinkPoll.current);
           outlookLinkPoll.current = null;
-          setNeedsMicrosoftConnection(false);
-          setStatus("Microsoft work account linked to Beckett. Choose Analyze message.");
+          setConnectionAction(null);
+          setStatus(requestMailPermission
+            ? "Microsoft mail permission connected. Choose Analyze full thread again."
+            : "Microsoft work account linked to Beckett. Choose Analyze message.");
         } else if (result.expired) {
           if (outlookLinkPoll.current) window.clearInterval(outlookLinkPoll.current);
           outlookLinkPoll.current = null;
@@ -268,15 +419,45 @@ export default function OutlookAddinPage() {
     }, 2000);
   }
 
+  function linkMicrosoftAccount() {
+    return startMicrosoftBrowserConnection(false);
+  }
+
+  function connectMailPermission() {
+    if (outlookAccessToken) {
+      void startMicrosoftBrowserConnection(true);
+      return;
+    }
+    setStatus("Opening Microsoft mail permission…");
+    const completePath = "/outlook-addin/auth-complete?mode=mail";
+    const url = new URL("/api/microsoft/connect", window.location.origin);
+    url.searchParams.set("kind", "mail");
+    url.searchParams.set("next", completePath);
+    openOutlookDialog(url.toString(), (message) => {
+      if (message.type !== "beckett-outlook-mail-connected") {
+        setStatus("Microsoft mail permission was not confirmed. Try again.");
+        return;
+      }
+      if (typeof message.accessToken === "string") setBeckettAccessToken(message.accessToken);
+      setConnectionAction(null);
+      setAuthState("signed-in");
+      setStatus("Microsoft mail permission connected. Choose Analyze full thread again.");
+    });
+  }
+
   return <main className="min-h-screen bg-bg p-5 text-ink">
     <Script src="https://appsforoffice.microsoft.com/lib/1/hosted/Office.js" onLoad={initializeOffice} />
     <p className="text-xs font-medium uppercase tracking-wide text-primary">Beckett for Outlook</p>
+    <h1 className="mt-2 font-serif text-xl text-ink">Understand the message and reply with confidence.</h1>
+    <p className="mt-2 text-sm leading-relaxed text-ink-mid">Beckett explains intent and uncertain tone, then creates editable response options. You review every draft—Beckett never sends email.</p>
     {!officeHost && <div className="mt-4 rounded-sm border border-primary/20 bg-primary-light/30 px-3 py-3 text-xs leading-relaxed text-ink-mid">Open this page from the Beckett task pane inside Outlook.</div>}
     {status && <div className="mt-4 rounded-sm border border-border bg-white px-3 py-3 text-xs leading-relaxed text-ink-mid" role="status">{status}</div>}
-    {authState === "signed-out" && <div className="mt-4 rounded-card border border-border bg-white p-4"><button type="button" onClick={() => void authenticateWithMicrosoft(true)} className="inline-flex rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">Connect Microsoft account</button></div>}
+    {(authState === "signed-out" || authState === "unsupported" || authState === "error") && <div className="mt-4 rounded-card border border-border bg-white p-4"><div className="flex flex-wrap gap-2">{authState !== "unsupported" && <button type="button" onClick={() => void authenticateWithMicrosoft(true)} disabled={isAuthenticating} className="inline-flex rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:cursor-wait disabled:opacity-70">{isAuthenticating ? "Opening Microsoft sign-in…" : "Connect Microsoft account"}</button>}<button type="button" onClick={signInWithBeckett} className="inline-flex rounded-pill border border-primary/30 px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light">Sign in to Beckett</button></div><p className="mt-2 text-xs leading-relaxed text-ink-light">Beckett sign-in is the secure fallback for Outlook clients where Microsoft SSO is unavailable or does not open.</p></div>}
+    {authState === "signed-in" && <button type="button" onClick={chooseAnotherSignInMethod} className="mt-3 text-xs font-medium text-primary hover:underline">Use another sign-in method</button>}
     <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => void analyzeMessage()} disabled={!officeHost || authState !== "signed-in"} className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50">Analyze message</button><button type="button" onClick={() => void analyzeThread()} disabled={!officeHost || authState !== "signed-in"} className="rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50">Analyze full thread</button></div>
     <p className="mt-3 text-xs leading-relaxed text-ink-light">Pin Beckett in Outlook when you want it to stay open and follow the message you select.</p>
-    {needsMicrosoftConnection && <div className="mt-4 rounded-card border border-primary/20 bg-primary-light/30 p-4"><p className="text-sm font-medium text-ink">Link your Microsoft work account</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">Finish a one-time Beckett sign-in in the browser window that opens. This pane will recognize the link automatically—no Outlook refresh needed.</p><button type="button" onClick={() => void linkMicrosoftAccount()} className="mt-3 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-white">Link Beckett account</button></div>}
+    {connectionAction === "link-account" && <div className="mt-4 rounded-card border border-primary/20 bg-primary-light/30 p-4"><p className="text-sm font-medium text-ink">Link your Microsoft work account</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">Finish a one-time Beckett sign-in in the browser window that opens. This pane will recognize the link automatically—no Outlook refresh needed.</p><button type="button" onClick={() => void linkMicrosoftAccount()} className="mt-3 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-white">Link Beckett account</button></div>}
+    {connectionAction === "mail-read" && <div className="mt-4 rounded-card border border-primary/20 bg-primary-light/30 p-4"><p className="text-sm font-medium text-ink">Allow selected-thread access</p><p className="mt-1 text-xs leading-relaxed text-ink-mid">Full-thread analysis needs Microsoft’s read-only Mail.Read permission. Beckett uses it only after you select Analyze full thread.</p><button type="button" onClick={connectMailPermission} className="mt-3 rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-white">Connect full-thread permission</button></div>}
     {item && !result && <div className="mt-5 rounded-card border border-border bg-white p-4"><p className="text-xs uppercase tracking-wide text-ink-light">Selected item</p><h2 className="mt-1 text-base font-medium text-ink">{item.subject}</h2><p className="mt-1 text-xs text-ink-mid">{item.sender || "Unknown sender"}</p></div>}
     {result && <div className="mt-5 space-y-4"><section className="space-y-3 rounded-card border border-border bg-white p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Analysis</p><div><p className="text-xs uppercase tracking-wide text-ink-light">Intent</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.intent}</p></div><div><p className="text-xs uppercase tracking-wide text-ink-light">Tone</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.tone}</p></div><div><p className="text-xs uppercase tracking-wide text-ink-light">What they want</p><p className="mt-1 text-sm leading-relaxed text-ink">{result.want}</p></div></section><section className="space-y-3 rounded-card border border-border bg-white p-4"><p className="text-xs font-medium uppercase tracking-wide text-primary">Response options</p>{result.responses?.map((response) => <div key={response.tag || response.label} className="border-t border-border pt-3"><p className="text-xs font-medium text-primary">{response.label}</p><p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink">{response.text}</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void copyResponse(response.text || "")} disabled={!response.text} className="rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-50">Copy response</button><button type="button" onClick={() => insertDraft(response.text || "")} disabled={(!canInsert && !canOpenReply) || !response.text} className="rounded-pill border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-50">{canInsert ? "Insert into reply" : "Open reply with response"}</button></div></div>)}{!canInsert && !canOpenReply && <p className="text-xs text-ink-light">Outlook does not support replies from this view. Copy is always available.</p>}</section></div>}
   </main>;

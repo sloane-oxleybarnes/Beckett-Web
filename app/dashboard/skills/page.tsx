@@ -14,7 +14,7 @@ type SkillCard = {
   level: 'Foundational'
   estimatedMinutes: number
   courseId?: string
-  illustration: 'date' | 'colleague' | 'clarity' | 'no'
+  illustration: 'date' | 'colleague' | 'clarity' | 'feedback' | 'no'
   section?: 'Professional' | 'Personal'
   sortOrder?: number
 }
@@ -45,23 +45,6 @@ const SECTIONS: { label: string; description: string; cards: SkillCard[] }[] = [
         estimatedMinutes: 35,
         courseId: 'asking-for-clarity',
         illustration: 'clarity',
-      },
-    ],
-  },
-  {
-    label: 'Personal',
-    description: 'A small look at where Beckett will go beyond work later.',
-    cards: [
-      {
-        id: 'ask-someone-out-text',
-        title: 'Asking someone out on a dating app',
-        description: 'Move from chatting to a clear, low-pressure ask with Beckett coaching you through the wording and practice.',
-        href: '/dashboard/courses/ask-someone-out',
-        status: 'live',
-        level: 'Foundational',
-        estimatedMinutes: 45,
-        courseId: 'ask-someone-out',
-        illustration: 'date',
       },
     ],
   },
@@ -96,6 +79,16 @@ function LineIllustration({ type }: { type: SkillCard['illustration'] }) {
           <div className="absolute bottom-2 right-2 h-9 w-9 rounded-full border border-primary" />
           <div className="absolute bottom-4 right-5 h-3 w-3 rounded-full border border-primary" />
           <div className="absolute bottom-2 right-5 h-px w-3 bg-primary" />
+        </div>
+      )}
+      {type === 'feedback' && (
+        <div className="relative h-full">
+          <div className="absolute left-1 top-2 h-10 w-16 rounded-sm border border-primary/70" />
+          <div className="absolute left-4 top-5 h-px w-9 bg-primary/70" />
+          <div className="absolute left-4 top-8 h-px w-6 bg-ink-light/50" />
+          <div className="absolute right-1 bottom-2 h-9 w-9 rounded-full border border-primary" />
+          <div className="absolute right-4 bottom-5 h-px w-4 rotate-[-25deg] bg-primary" />
+          <div className="absolute right-5 bottom-3 h-2 w-2 rounded-full bg-primary/70" />
         </div>
       )}
       {type === 'no' && (
@@ -139,7 +132,7 @@ function SkillModuleCard({
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <h2 className="text-base font-medium text-ink">{card.title}</h2>
           {!isLive && (
-            <span className="rounded-pill bg-bg px-2 py-0.5 text-xs text-ink-light">Coming soon</span>
+            <span className="rounded-pill bg-bg px-2 py-0.5 text-xs text-ink-light">Coming during beta</span>
           )}
           {isCompleted && (
             <span className="rounded-pill border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700">Course completed</span>
@@ -183,11 +176,6 @@ export default function SkillsPage() {
                 description: 'Foundational workplace courses we are building for beta.',
                 cards: catalogData.courses.filter((course) => course.section === 'Professional'),
               },
-              {
-                label: 'Personal',
-                description: 'A small look at where Beckett will go beyond work later.',
-                cards: catalogData.courses.filter((course) => course.section === 'Personal'),
-              },
             ].filter((section) => section.cards.length > 0))
           } else {
             setSections(SECTIONS)
@@ -222,13 +210,6 @@ export default function SkillsPage() {
       <p className="mb-10 text-sm text-ink-mid">
         Beckett coaches you through real situations, then gives you space to practice before you try it live.
       </p>
-
-      <div className="mb-10 rounded-card border border-border bg-white p-5 sm:p-6">
-        <p className="text-xs font-medium uppercase tracking-wide text-primary">From learning to real life</p>
-        <h2 className="mt-1 text-2xl text-ink" style={{ fontFamily: 'var(--font-dm-serif), Georgia, serif' }}>Learn it, then try it in your own words.</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-mid">Courses offer a practical strategy. Practice lets you rehearse it before a conversation feels urgent.</p>
-        <Link href="/dashboard/practice?mode=professional" className="mt-4 inline-flex rounded-pill border border-primary/30 px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light">Open Practice</Link>
-      </div>
 
       <SavedLearningRecommendations />
 

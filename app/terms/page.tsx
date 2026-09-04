@@ -5,7 +5,7 @@ const sections = [
   {
     title: "Who may use Beckett",
     body: [
-      "Beckett is currently offered as an invite-only beta to people who are at least 18 years old and located in the United States. You must provide accurate account information and keep your login credentials secure.",
+      "Beckett is currently offered as a public beta to people who are at least 18 years old and located in the United States. You must provide accurate account information and keep your login credentials secure.",
       "Beckett Labs Inc may approve, limit, suspend, or end beta access at any time, including to protect users, the service, or connected platforms.",
     ],
   },
@@ -74,7 +74,7 @@ const sections = [
 
 export const metadata = {
   title: "Terms of Use - Beckett",
-  description: "Terms for using the Beckett invite-only communication coaching beta.",
+  description: "Terms for using the Beckett public communication coaching beta.",
   alternates: { canonical: "/terms" },
 };
 
@@ -86,8 +86,8 @@ export default function TermsPage() {
           <Link href="/">
             <Image src="/brand/beckett-horizontal-logo.png" alt="Beckett" width={126} height={32} priority />
           </Link>
-          <Link href="/beta" className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">
-            Request beta access
+          <Link href="/auth/signup" className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark">
+            Create a beta account
           </Link>
         </div>
       </header>

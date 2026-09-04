@@ -126,14 +126,18 @@ export async function sendBetaSignupConfirmation(params: {
 }) {
   return sendBrandedEmail({
     to: params.email,
-    subject: "We received your Beckett beta request",
-    preview: "Thanks for asking to try Beckett. We will review your request and follow up soon.",
-    heading: "Thanks for asking to try Beckett.",
+    subject: "Your Beckett beta access is ready",
+    preview: "Create your free Beckett account now—there is no approval wait.",
+    heading: "Your Beckett beta access is ready.",
     body: [
-      `Hi${params.name ? ` ${params.name.split(" ")[0]}` : ""} - we received your beta request.`,
-      "Beckett is currently a small workplace-focused beta for people who want communication coaching in Gmail, Slack, Chrome, practice sessions, and skills.",
-      "We are reviewing requests manually so the first group stays small and useful. If approved, you will get a setup email with a secure link to create your password.",
+      `Hi${params.name ? ` ${params.name.split(" ")[0]}` : ""} - welcome to the Beckett public beta.`,
+      "Create your account now to use workplace communication coaching in Google Workspace, Slack, Microsoft 365, Chrome, Practice, and Skills.",
+      "There is no approval wait and no credit card is required.",
     ],
+    button: {
+      label: "Create your Beckett account",
+      href: `${process.env.NEXT_PUBLIC_SITE_URL || "https://meetbeckett.co"}/auth/signup`,
+    },
   });
 }
 
@@ -144,15 +148,15 @@ export async function sendBetaSignupNotification(params: {
 }) {
   return sendBrandedEmail({
     to: REPLY_TO_EMAIL,
-    subject: "New Beckett beta request",
-    preview: "A new person requested Beckett beta access.",
+    subject: "New Beckett public beta signup",
+    preview: "A new person joined the Beckett public beta.",
     eyebrow: "Beta operations",
-    heading: "New beta request",
+    heading: "New public beta signup",
     body: [
       `Name: ${params.name?.trim() || "Not provided"}`,
       `Email: ${params.email}`,
       `Source: ${params.source?.trim() || "landing_page"}`,
-      "Review this request in Beckett Admin before sending an invitation.",
+      "This person can create an account immediately; no manual approval is required.",
     ],
     button: {
       label: "Review beta requests",

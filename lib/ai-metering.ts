@@ -5,6 +5,7 @@ type AiMeteringInput = {
   userId: string;
   source: string;
   action: string;
+  requestId?: string;
   metadata?: Record<string, unknown>;
   metered?: boolean;
 };
@@ -31,7 +32,7 @@ export async function withAiMetering<T>(
 
   const reservation = await metering.web.reserve({
     userId: input.userId,
-    requestId: crypto.randomUUID(),
+    requestId: input.requestId || crypto.randomUUID(),
     source: input.source,
     action: input.action,
     metadata: input.metadata,

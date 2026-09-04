@@ -32,9 +32,9 @@ export default function BetaSignupForm({
   if (status === "success") {
     return (
       <div className="bg-primary-light border border-primary/20 rounded-card px-6 py-5 text-center" role="status" aria-live="polite">
-        <p className="text-primary font-medium mb-1">You&apos;re in.</p>
+        <p className="text-primary font-medium mb-1">Thanks — now create your account.</p>
         <p className="text-ink-mid text-sm">
-          We&apos;ll be in touch shortly with your beta access.
+          <Link href="/auth/signup" className="font-medium text-primary hover:underline">Continue to account creation</Link>. No approval wait is required.
         </p>
       </div>
     );
@@ -80,7 +80,7 @@ export default function BetaSignupForm({
         </p>
       )}
       <p className="text-xs leading-relaxed text-ink-light">
-        By requesting access, you confirm that you are at least 18, are located in the United
+        By joining the beta, you confirm that you are at least 18, are located in the United
         States, and agree to Beckett&apos;s{" "}
         <Link href="/terms" className="text-primary hover:underline">Terms</Link> and{" "}
         <Link href="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.

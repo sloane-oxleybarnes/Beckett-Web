@@ -18,7 +18,7 @@ export const SITE_CONTENT_FIELDS = [
     label: "Homepage headline",
     group: "Homepage",
     defaultValue:
-      "Neurodivergent communication coaching\nfor the conversations that matter most at work.",
+      "Communication coaching for neurodivergent professionals\ninside the apps where you work.",
     inputType: "textarea",
   },
   {
@@ -26,7 +26,7 @@ export const SITE_CONTENT_FIELDS = [
     label: "Homepage subheadline",
     group: "Homepage",
     defaultValue:
-      "Beckett helps you decode tone, draft clearer replies, and practice the conversations that get harder when work runs on subtext.",
+      "Beckett helps you decode tone, draft replies, and prepare for difficult conversations in Gmail, Slack, Outlook, and Chrome—without pulling every conversation into another app.",
     inputType: "textarea",
   },
   {
@@ -53,14 +53,14 @@ export const SITE_CONTENT_FIELDS = [
     label: "Homepage beta subheadline",
     group: "Homepage beta",
     defaultValue:
-      "Free, invite-only access with 60 successful coaching actions per day, full Practice, and all current skill courses.",
+      "Free public beta access with 60 successful coaching actions per day, full Practice, and all currently available skill courses.",
     inputType: "textarea",
   },
   {
     key: "home.beta.button",
     label: "Homepage beta button",
     group: "Homepage beta",
-    defaultValue: "Request access",
+    defaultValue: "Create a beta account",
   },
   {
     key: "home.beta.note",
@@ -92,7 +92,7 @@ export const SITE_CONTENT_FIELDS = [
     key: "beta.form.button",
     label: "Beta page button",
     group: "Beta page",
-    defaultValue: "Request beta access",
+    defaultValue: "Create a beta account",
   },
   {
     key: "features.hero.title",

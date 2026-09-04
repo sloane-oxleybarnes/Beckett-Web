@@ -37,7 +37,7 @@ export default function DashboardShell({
         onDesktopCollapseChange={setDesktopSidebarCollapsed}
       />
       <main
-        className={`min-w-0 flex-1 px-4 py-6 pt-16 transition-[margin] duration-200 md:px-8 md:py-8 md:pt-8 ${
+        className={`min-w-0 flex-1 scroll-pb-32 px-4 pb-32 pt-16 transition-[margin] duration-200 md:px-8 md:pb-32 md:pt-8 ${
           sidebarCollapsed ? "md:ml-16" : "md:ml-64"
         }`}
       >

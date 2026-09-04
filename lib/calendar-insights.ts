@@ -33,7 +33,7 @@ export function attendeeNames(event: Pick<CalendarEvent, "attendees">) {
 export type DaySuggestion = {
   title: string;
   detail: string;
-  kind: "break" | "prep" | "prep_available" | "focus" | "open";
+  kind: "break" | "prep" | "prep_available" | "next" | "open";
   event?: CalendarEvent;
   suggestedHold?: {
     title: string;
@@ -42,30 +42,78 @@ export type DaySuggestion = {
   };
 };
 
-function durationInMinutes(event: CalendarEvent) {
-  if (!event.end) return 0;
-  return Math.max(0, (new Date(event.end).getTime() - new Date(event.start).getTime()) / 60_000);
-}
-
-function findLunchOpening(events: CalendarEvent[], day: Date, now: Date) {
-  const lunchStart = new Date(day);
-  lunchStart.setHours(11, 30, 0, 0);
-  const lunchEnd = new Date(day);
-  lunchEnd.setHours(14, 30, 0, 0);
+export function hasLunchOpening(events: CalendarEvent[], day: Date) {
   const timedEvents = events
     .filter((event) => event.end)
     .map((event) => ({ start: new Date(event.start), end: new Date(event.end as string) }))
     .sort((left, right) => left.start.getTime() - right.start.getTime());
-  let openingStart = now > lunchStart ? now : lunchStart;
+  const referenceEvent = events.find((event) => event.end);
+  const referenceMatch = referenceEvent?.start.match(/^(\d{4}-\d{2}-\d{2})T.*(Z|[+-]\d{2}:\d{2})$/);
+  const lunchDate = referenceMatch?.[1] || `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+  const lunchOffset = referenceMatch?.[2] || "";
+  const lunchStart = referenceMatch
+    ? new Date(`${lunchDate}T11:30:00${lunchOffset}`)
+    : new Date(day);
+  const lunchEnd = referenceMatch
+    ? new Date(`${lunchDate}T14:30:00${lunchOffset}`)
+    : new Date(day);
+  if (!referenceMatch) {
+    lunchStart.setHours(11, 30, 0, 0);
+    lunchEnd.setHours(14, 30, 0, 0);
+  }
+  let openingStart = lunchStart;
 
   for (const event of timedEvents) {
     if (event.end <= lunchStart || event.start >= lunchEnd) continue;
     const openingEnd = event.start < lunchEnd ? event.start : lunchEnd;
-    if (openingEnd.getTime() - openingStart.getTime() >= 30 * 60_000) return openingStart;
+    if (openingEnd.getTime() - openingStart.getTime() >= 30 * 60_000) return true;
     if (event.end > openingStart) openingStart = event.end;
   }
 
-  return lunchEnd.getTime() - openingStart.getTime() >= 30 * 60_000 ? openingStart : null;
+  return lunchEnd.getTime() - openingStart.getTime() >= 30 * 60_000;
+}
+
+export type ConsecutiveMeetingStretch = {
+  events: CalendarEvent[];
+  start: Date;
+  end: Date;
+};
+
+export function findConsecutiveMeetingStretch(events: CalendarEvent[], now?: Date): ConsecutiveMeetingStretch | null {
+  const meetings = events
+    .filter((event) => hasOtherAttendees(event) && event.end)
+    .filter((event) => !now || new Date(event.end as string).getTime() > now.getTime())
+    .sort((left, right) => new Date(left.start).getTime() - new Date(right.start).getTime());
+  let stretch: CalendarEvent[] = [];
+
+  for (const meeting of meetings) {
+    const previous = stretch.at(-1);
+    const gap = previous?.end
+      ? new Date(meeting.start).getTime() - new Date(previous.end).getTime()
+      : Number.POSITIVE_INFINITY;
+    if (previous && gap <= 15 * 60_000) {
+      stretch = [...stretch, meeting];
+      continue;
+    }
+    if (stretch.length >= 3) {
+      return {
+        events: stretch,
+        start: new Date(stretch[0].start),
+        end: new Date(stretch.at(-1)?.end as string),
+      };
+    }
+    stretch = [meeting];
+  }
+
+  if (stretch.length >= 3) {
+    return {
+      events: stretch,
+      start: new Date(stretch[0].start),
+      end: new Date(stretch.at(-1)?.end as string),
+    };
+  }
+
+  return null;
 }
 
 export function getDaySuggestion(events: CalendarEvent[], now = new Date(), options?: { recommendPrep?: boolean }): DaySuggestion {
@@ -73,12 +121,7 @@ export function getDaySuggestion(events: CalendarEvent[], now = new Date(), opti
   const upcoming = today.filter((event) => new Date(event.start).getTime() >= now.getTime());
   const nextMeeting = upcoming.find(hasOtherAttendees);
   const soonMeeting = upcoming.find((event) => hasOtherAttendees(event) && new Date(event.start).getTime() - now.getTime() <= 2 * 60 * 60_000);
-  const hasLunch = today.some((event) => /lunch|meal|break/i.test(event.title));
-  const backToBack = upcoming.some((event, index) => {
-    const previous = upcoming[index - 1];
-    return Boolean(previous?.end && new Date(event.start).getTime() - new Date(previous.end).getTime() <= 15 * 60_000);
-  });
-  const longMeeting = upcoming.find((event) => durationInMinutes(event) >= 75);
+  const meetingStretch = findConsecutiveMeetingStretch(today, now);
 
   if (!today.length) {
     return {
@@ -88,10 +131,10 @@ export function getDaySuggestion(events: CalendarEvent[], now = new Date(), opti
     };
   }
 
-  if (backToBack) {
+  if (meetingStretch) {
     return {
-      title: "Your upcoming meetings are close together.",
-      detail: "A five-minute reset between them could make the next conversation easier to enter.",
+      title: `You have ${meetingStretch.events.length} meetings in a row.`,
+      detail: `The stretch ends around ${formatEventTime(meetingStretch.end.toISOString())}. If it would help, plan one brief reset after it rather than between meetings.`,
       kind: "break",
     };
   }
@@ -113,39 +156,6 @@ export function getDaySuggestion(events: CalendarEvent[], now = new Date(), opti
     };
   }
 
-  const lunchWindowEnd = new Date(now);
-  lunchWindowEnd.setHours(14, 30, 0, 0);
-  if (!hasLunch && upcoming.length && now < lunchWindowEnd) {
-    const opening = findLunchOpening(today, now, now);
-    if (opening) {
-      const holdEnd = new Date(opening.getTime() + 30 * 60_000);
-      return {
-        title: "You have room for a lunch break.",
-        detail: `There is a 30-minute opening around ${formatEventTime(opening.toISOString())}. Beckett will not change your calendar without your approval.`,
-        kind: "break",
-        suggestedHold: {
-          title: "Lunch break",
-          start: opening.toISOString(),
-          end: holdEnd.toISOString(),
-        },
-      };
-    }
-    return {
-      title: "Your schedule has no clear lunch break.",
-      detail: "Your meetings are packed through the middle of the day. A short reset before or after the busiest stretch may help.",
-      kind: "break",
-    };
-  }
-
-  if (longMeeting) {
-    return {
-      title: `Make space after ${longMeeting.title}.`,
-      detail: "This is a longer scheduled meeting. A brief reset afterward may help you transition to what is next.",
-      kind: "break",
-      event: longMeeting,
-    };
-  }
-
   if (nextMeeting) {
     if (options?.recommendPrep === false) {
       return {
@@ -163,9 +173,19 @@ export function getDaySuggestion(events: CalendarEvent[], now = new Date(), opti
     };
   }
 
+  const nextEvent = upcoming[0];
+  if (nextEvent) {
+    return {
+      title: `You have open time before ${nextEvent.title}.`,
+      detail: `Your next scheduled item starts at ${formatEventTime(nextEvent.start)}. The time before it is open on your calendar.`,
+      kind: "next",
+      event: nextEvent,
+    };
+  }
+
   return {
-    title: "Your scheduled time has some breathing room.",
-    detail: "Use the open space for one focused task or a small reset before your next commitment.",
-    kind: "focus",
+    title: "The rest of your calendar is open today.",
+    detail: "There are no more scheduled items on the calendars you selected.",
+    kind: "open",
   };
 }

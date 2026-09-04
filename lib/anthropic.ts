@@ -2,8 +2,12 @@ import { createHash, createHmac } from 'crypto'
 
 export type AnthropicMessage = {
   role: 'user' | 'assistant'
-  content: string
+  content: string | Array<AnthropicContentBlock>
 }
+
+export type AnthropicContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: 'image/png' | 'image/jpeg' | 'image/webp'; data: string } }
 
 type ClaudeResponse = {
   content?: { text?: string }[]

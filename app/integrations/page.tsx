@@ -1,157 +1,18 @@
 import Nav from "@/components/marketing/Nav";
 import Footer from "@/components/marketing/Footer";
 import Link from "next/link";
-import { contentValue } from "@/lib/site-content";
-import { getSiteContent } from "@/lib/site-content-server";
 import { CHROME_WEB_STORE_URL } from "@/lib/app-links";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = {
-  title: "Integrations",
-  description:
-    "Beckett beta works in Gmail, Slack, and Chrome so neurodivergent professionals can get workplace communication coaching where work happens.",
-  alternates: {
-    canonical: "/integrations",
-  },
-};
+export const metadata: Metadata = { title: "Integrations", description: "Use Beckett across Google Workspace, Slack, Microsoft 365, and Chrome during public beta.", alternates: { canonical: "/integrations" } };
 
-const live = [
-  { name: "Gmail", icon: "📧", description: "Decode and draft in any Gmail thread." },
-  { name: "Slack", icon: "💬", description: "Inline support in channels, DMs, and threads." },
-  { name: "Google Calendar", icon: "📅", description: "Read selected calendars, show a week view, and offer attendee-aware meeting prep." },
-  { name: "Chrome extension", icon: "🧩", description: "Brings Beckett into the browser tools beta users are testing now." },
+const integrations = [
+  { name: "Google Workspace", icon: "G", description: "Analyze selected Gmail conversations and draft replies. Connect Google Calendar separately when you want read-only meeting preparation.", details: ["Gmail: optional", "Calendar: optional"] },
+  { name: "Slack", icon: "S", description: "Get private, zero-copy decoding, response help, rewriting, preparation, and practice. Install as a guest and link an account later.", details: ["Guest installation", "Six bot permissions"] },
+  { name: "Microsoft 365", icon: "M", description: "Analyze selected Outlook messages and use selected Microsoft calendars through one Microsoft authorization.", details: ["Outlook", "Microsoft Calendar"] },
+  { name: "Beckett for Chrome", icon: "C", description: "Bring Beckett into supported browser tools and connect securely to your Beckett account.", details: ["Chrome Web Store"] },
 ];
 
-const slackCommands = ["respond", "rewrite", "decode", "prep", "practice"];
-
-const comingSoon = [
-  { name: "Google Meet", icon: "🎥" },
-  { name: "Zoom", icon: "📹" },
-  { name: "Microsoft Teams", icon: "🏢" },
-  { name: "Outlook", icon: "📨" },
-  { name: "LinkedIn Messaging", icon: "💼" },
-  { name: "Notion", icon: "📝" },
-  { name: "Loom", icon: "🎬" },
-  { name: "Performance reviews", icon: "📋" },
-  { name: "Discord", icon: "🎮" },
-];
-
-export default async function IntegrationsPage() {
-  const content = await getSiteContent([
-    "integrations.hero.title",
-    "integrations.hero.subtitle",
-    "integrations.cta.copy",
-    "integrations.cta.button",
-    "extension.chrome_store_url",
-  ]);
-  const chromeStoreUrl = contentValue(content, "extension.chrome_store_url") || CHROME_WEB_STORE_URL;
-
-  return (
-    <div className="min-h-screen bg-bg">
-      <Nav />
-
-      <div className="pt-32 pb-20 px-4 sm:px-6 max-w-6xl mx-auto">
-        <div className="text-center mb-16">
-          <h1
-            className="text-4xl sm:text-5xl text-ink mb-4"
-            style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-          >
-            {contentValue(content, "integrations.hero.title")}
-          </h1>
-          <p className="text-ink-mid max-w-xl mx-auto text-lg">
-            {contentValue(content, "integrations.hero.subtitle")}
-          </p>
-        </div>
-
-        <h2
-          className="text-xl text-ink mb-6"
-          style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-        >
-          Live integrations
-        </h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-16">
-          {live.map((item) => (
-            <div
-              key={item.name}
-              className="bg-white rounded-card border border-border p-6"
-            >
-              <div className="text-3xl mb-3" aria-hidden="true">{item.icon}</div>
-              <h3
-                className="text-base text-ink mb-1"
-                style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-              >
-                {item.name}
-              </h3>
-              <p className="text-sm text-ink-mid">{item.description}</p>
-              {item.name === "Slack" && (
-                <div className="mt-4 rounded-sm border border-primary/15 bg-primary-light/40 p-3">
-                  <p className="text-xs font-medium text-primary">In Slack Desktop</p>
-                  <p className="mt-1 text-xs leading-relaxed text-ink-mid">
-                    Type <code className="font-mono text-ink">/beckett</code> for private help with:
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {slackCommands.map((command) => (
-                      <code
-                        key={command}
-                        className="rounded-pill border border-primary/15 bg-white px-2 py-1 text-[11px] text-ink"
-                      >
-                        {command}
-                      </code>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="mt-4">
-                <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-pill px-2.5 py-0.5">
-                  Live
-                </span>
-              </div>
-              {item.name === "Chrome extension" && (
-                <Link
-                  href={chromeStoreUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-4 inline-block text-xs font-medium text-primary hover:underline"
-                >
-                  Install from Chrome Web Store →
-                </Link>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <h2
-          className="text-xl text-ink mb-6"
-          style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}
-        >
-          Coming soon
-        </h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {comingSoon.map((item) => (
-            <div
-              key={item.name}
-              className="bg-white rounded-card border border-border p-5 flex items-center gap-3 opacity-70"
-            >
-              <span className="text-2xl" aria-hidden="true">{item.icon}</span>
-              <span className="text-sm text-ink-mid font-medium">{item.name}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-16 text-center">
-          <p className="text-ink-mid mb-6">
-            {contentValue(content, "integrations.cta.copy")}
-          </p>
-          <Link
-            href="/beta"
-            className="bg-primary text-white rounded-pill px-8 py-3 text-sm font-medium hover:bg-primary-dark transition-colors inline-block"
-          >
-            {contentValue(content, "integrations.cta.button")}
-          </Link>
-        </div>
-      </div>
-
-      <Footer />
-    </div>
-  );
+export default function IntegrationsPage() {
+  return <main className="min-h-screen bg-bg"><Nav /><div className="mx-auto max-w-6xl px-4 pb-20 pt-32 sm:px-6"><div className="mb-14 text-center"><p className="mb-3 text-xs font-medium uppercase tracking-wide text-primary">Connected work apps</p><h1 className="mb-4 text-4xl text-ink sm:text-5xl" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>One Beckett, wherever the work happens</h1><p className="mx-auto max-w-2xl text-lg leading-relaxed text-ink-mid">Stay in the app where the conversation is happening. Connect only the capabilities you want and manage them from one Apps page.</p></div><section><div className="mb-5 flex items-center gap-3"><h2 className="text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>Available during beta</h2><span className="rounded-pill bg-green-50 px-3 py-1 text-xs font-medium text-green-700">Live</span></div><div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{integrations.map((item) => <article key={item.name} className="flex flex-col rounded-card border border-border bg-white p-6"><div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary-light font-semibold text-primary" aria-hidden="true">{item.icon}</div><h3 className="mt-4 text-lg text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>{item.name}</h3><p className="mt-2 flex-1 text-sm leading-relaxed text-ink-mid">{item.description}</p><div className="mt-4 flex flex-wrap gap-2">{item.details.map((detail) => <span key={detail} className="rounded-pill border border-border bg-bg px-2.5 py-1 text-xs text-ink-light">{detail}</span>)}</div>{item.name === "Slack" && <Link href="/slack" className="mt-4 text-xs font-medium text-primary hover:underline">Install Beckett for Slack →</Link>}{item.name === "Beckett for Chrome" && <Link href={CHROME_WEB_STORE_URL} target="_blank" rel="noreferrer" className="mt-4 text-xs font-medium text-primary hover:underline">Install from Chrome Web Store →</Link>}</article>)}</div></section><section className="mt-14 rounded-card border border-dashed border-border bg-white/70 p-7"><p className="text-xs font-medium uppercase tracking-wide text-primary">Coming during beta</p><h2 className="mt-1 text-2xl text-ink" style={{ fontFamily: "var(--font-dm-serif), Georgia, serif" }}>More connected workflows</h2><p className="mt-2 text-sm text-ink-mid">Additional integrations and deeper calendar capabilities will appear here only when they are ready for beta testing.</p></section><div className="mt-14 text-center"><Link href="/auth/signup" className="inline-block rounded-pill bg-primary px-8 py-3 text-sm font-medium text-white hover:bg-primary-dark">Create your free beta account</Link></div></div><Footer /></main>;
 }
