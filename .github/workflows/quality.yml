@@ -19,7 +19,7 @@ jobs:
   conventional-commits:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Validate pull request title
@@ -37,7 +37,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -84,7 +84,7 @@ jobs:
     env:
       SUPABASE_DISPOSABLE_DB_URL: ${{ secrets.SUPABASE_DISPOSABLE_DB_URL }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
         with:
           node-version: 22
