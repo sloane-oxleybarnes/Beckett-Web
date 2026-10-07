@@ -1,0 +1,5 @@
+BECKETT_API_BASE_URL = https:/$()/meetbeckett.co
+PRODUCT_BUNDLE_IDENTIFIER = co.meetbeckett.ios
+SHARE_BUNDLE_IDENTIFIER = co.meetbeckett.ios.share
+APP_GROUP_IDENTIFIER = group.co.meetbeckett
+KEYCHAIN_GROUP_IDENTIFIER = $(AppIdentifierPrefix)co.meetbeckett.shared
