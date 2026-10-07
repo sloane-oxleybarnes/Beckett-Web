@@ -2,13 +2,13 @@ import Foundation
 
 enum APIError: LocalizedError {
     case invalidResponse
-    case server(status: Int, message: String, code: String?)
+    case server(status: Int, message: String, code: String?, safety: SafetyResponse?, usage: UsageSummary?)
     case decoding(Error)
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse: "Beckett received an invalid response."
-        case let .server(_, message, _): message
+        case let .server(_, message, _, _, _): message
         case .decoding: "Beckett could not read the server response."
         }
     }
@@ -17,6 +17,8 @@ enum APIError: LocalizedError {
 struct APIErrorBody: Decodable {
     let error: String?
     let code: String?
+    let safety: SafetyResponse?
+    let usage: UsageSummary?
 }
 
 struct APIClient {
@@ -62,7 +64,9 @@ struct APIClient {
             throw APIError.server(
                 status: http.statusCode,
                 message: body?.error ?? "Beckett could not complete that request.",
-                code: body?.code
+                code: body?.code,
+                safety: body?.safety,
+                usage: body?.usage
             )
         }
         do {

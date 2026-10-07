@@ -72,6 +72,20 @@ test("mobile coaching requires current consent before the AI call", async () => 
   assert.ok(consentCheck > -1);
   assert.ok(modelCall > consentCheck);
   assert.match(route, /contentSaved:\s*false/);
+  assert.match(route, /mobile_safety_redirect/);
+  assert.match(route, /usage/);
+});
+
+test("mobile v1 offers transient retention only", async () => {
+  const consent = await readFile(new URL("../lib/mobile-consent.ts", import.meta.url), "utf8");
+  assert.match(consent, /mobileRetentionModes = \["transient"\]/);
+  assert.doesNotMatch(consent, /mobileRetentionModes = \[[^\]]*save_on_request/);
+});
+
+test("mobile session reports current credit usage", async () => {
+  const route = await readFile(new URL("../app/api/mobile/v1/session/route.ts", import.meta.url), "utf8");
+  assert.match(route, /metering\.ai\.report/);
+  assert.match(route, /usage/);
 });
 
 test("mobile bearer auth validates access tokens with Supabase", async () => {
@@ -88,4 +102,24 @@ test("mobile privacy migration defaults to transient content", async () => {
   assert.match(migration, /retention_mode text not null default 'transient'/);
   assert.match(migration, /ai_processing_allowed boolean not null default false/);
   assert.match(migration, /enable row level security/);
+});
+
+test("share extension supports text, images, local OCR, selection, and opaque handoff", async () => {
+  const [controller, plist, models, app] = await Promise.all([
+    readFile(new URL("../ios/BeckettShare/ShareViewController.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettShare/Info.plist", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettCore/Models/MobileModels.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/App/BeckettApp.swift", import.meta.url), "utf8"),
+  ]);
+  assert.match(plist, /NSExtensionActivationSupportsText/);
+  assert.match(plist, /NSExtensionActivationSupportsImageWithMaxCount<\/key><integer>5<\/integer>/);
+  assert.match(controller, /VNRecognizeTextRequest/);
+  assert.match(controller, /automaticallyDetectsLanguage = true/);
+  assert.match(controller, /Use selection/);
+  assert.match(controller, /extensionContext\?\.open/);
+  assert.match(models, /pending-coach-handoff\.json/);
+  assert.match(models, /completeFileProtection/);
+  assert.match(models, /beckett:\/\/coach\/handoff\?id=/);
+  assert.doesNotMatch(models, /beckett:\/\/coach\/handoff\?[^\n]*text=/);
+  assert.match(app, /MobileCoachHandoffStore\.consume/);
 });

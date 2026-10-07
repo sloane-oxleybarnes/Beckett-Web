@@ -10,8 +10,16 @@ Native SwiftUI client for Beckett's versioned mobile API.
 
 The app intentionally keeps AI prompts, provider credentials, safety logic, and
 metering on the Beckett server. It stores only the short-lived Beckett session
-in a shared Keychain access group. Raw coaching content is transient unless the
-user explicitly saves an individual result in a future release.
+in a shared Keychain access group. Raw coaching content and generated results
+are transient in mobile v1 and are not added to Beckett history.
+
+The Share Extension accepts selected text or up to five images/screenshots. It
+uses Apple's Vision framework for on-device OCR, lets the user narrow the text
+before sending it, and can show a compact coaching result without leaving the
+source app. “Continue in app” writes a file-protected handoff into the shared
+App Group and opens Beckett with only an opaque handoff ID in the URL. The app
+deletes the handoff as soon as it consumes it, and unconsumed handoffs expire
+after 15 minutes.
 
 ## Local setup
 

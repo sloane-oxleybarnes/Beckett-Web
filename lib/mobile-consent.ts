@@ -3,7 +3,9 @@ import "server-only";
 import { platformRepository } from "@/lib/repositories/platform-repository";
 
 export const MOBILE_AI_CONSENT_VERSION = "2026-10-07" as const;
-export const mobileRetentionModes = ["transient", "save_on_request"] as const;
+// Mobile v1 deliberately supports transient processing only. Keep the type and
+// API narrow until there is an explicit, tested per-result save workflow.
+export const mobileRetentionModes = ["transient"] as const;
 export type MobileRetentionMode = (typeof mobileRetentionModes)[number];
 
 export type MobilePrivacyPreferences = {
@@ -33,7 +35,7 @@ export async function getMobilePrivacyPreferences(userId: string): Promise<Mobil
     aiProcessingAllowed: data?.ai_processing_allowed === true,
     aiConsentVersion: typeof data?.ai_consent_version === "string" ? data.ai_consent_version : null,
     aiConsentedAt: typeof data?.ai_consented_at === "string" ? data.ai_consented_at : null,
-    retentionMode: data?.retention_mode === "save_on_request" ? "save_on_request" : "transient",
+    retentionMode: "transient",
     updatedAt: typeof data?.updated_at === "string" ? data.updated_at : null,
   };
 }
@@ -69,9 +71,7 @@ export function mobilePrivacyDto(preferences: MobilePrivacyPreferences) {
     },
     retention: {
       mode: preferences.retentionMode,
-      disclosure: preferences.retentionMode === "transient"
-        ? "Message content is processed for this request and is not saved to your Beckett history."
-        : "Message content is still transient unless you explicitly choose Save on an individual result.",
+      disclosure: "Message content is processed for this request and is not saved to your Beckett history.",
     },
     updatedAt: preferences.updatedAt,
   };

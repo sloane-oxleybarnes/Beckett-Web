@@ -28,4 +28,37 @@ final class MobileResultDecodingTests: XCTestCase {
         }
         XCTAssertEqual(value.likelyLanding, "Clear and firm.")
     }
+
+    func testDecodesCoachResponseWithCredits() throws {
+        let data = Data(#"{"contractVersion":"2026-10-07","requestId":"request-1","result":{"type":"draft_options","contextSummary":"Replying","preservedIntent":[],"options":[],"uncertaintyNote":null},"retention":{"mode":"transient","contentSaved":false},"usage":{"limit":30,"used":4,"remaining":26,"unlimited":false}}"#.utf8)
+        let response = try JSONDecoder().decode(CoachResponse.self, from: data)
+        XCTAssertEqual(response.usage?.remaining, 26)
+        XCTAssertFalse(response.retention.contentSaved)
+    }
+
+    func testDecodesSafetyRedirect() throws {
+        let data = Data(#"{"topic":"crisis","title":"Immediate support matters here","message":"Contact immediate support.","resources":[{"label":"Support","href":"https://example.com/support","kind":"crisis"}],"regionLabel":"United States","emergencyNumber":"911"}"#.utf8)
+        let safety = try JSONDecoder().decode(SafetyResponse.self, from: data)
+        XCTAssertEqual(safety.resources.first?.label, "Support")
+        XCTAssertEqual(safety.emergencyNumber, "911")
+    }
+
+    func testCoachHandoffDeepLinkContainsOnlyOpaqueIdentifier() throws {
+        let id = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+        let handoff = MobileCoachHandoff(
+            id: id,
+            action: .respond,
+            text: "Sensitive shared message",
+            createdAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let url = try XCTUnwrap(handoff.deepLink)
+        XCTAssertEqual(url.absoluteString, "beckett://coach/handoff?id=00000000-0000-0000-0000-000000000123")
+        XCTAssertFalse(url.absoluteString.contains("Sensitive"))
+
+        let decoded = try JSONDecoder().decode(
+            MobileCoachHandoff.self,
+            from: JSONEncoder().encode(handoff)
+        )
+        XCTAssertEqual(decoded, handoff)
+    }
 }

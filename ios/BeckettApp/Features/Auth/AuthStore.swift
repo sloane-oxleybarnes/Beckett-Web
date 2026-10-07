@@ -67,6 +67,11 @@ final class AuthStore: ObservableObject {
         }
     }
 
+    func changeEmail() {
+        errorMessage = nil
+        state = .signedOut
+    }
+
     func configureAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
         let nonce = Self.randomNonce()
         appleNonce = nonce
@@ -105,7 +110,11 @@ final class AuthStore: ObservableObject {
                 accessToken: session.accessToken
             )
             if let profile {
-                self.profile = SessionProfile(user: profile.user, privacy: envelope.privacy)
+                self.profile = SessionProfile(
+                    user: profile.user,
+                    privacy: envelope.privacy,
+                    usage: profile.usage
+                )
             }
         }
     }
@@ -114,6 +123,18 @@ final class AuthStore: ObservableObject {
         guard let session else { return }
         await work {
             profile = try await api.get("api/mobile/v1/session", accessToken: session.accessToken)
+        }
+    }
+
+    func refreshedAccessToken() async -> String? {
+        guard let current = session else { return nil }
+        do {
+            let updated = try await refresh(current)
+            session = updated
+            return updated.accessToken
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
         }
     }
 

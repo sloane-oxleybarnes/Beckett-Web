@@ -108,6 +108,23 @@ struct CoachResponse: Decodable {
     let requestId: String
     let result: MobileCoachResult
     let retention: Retention
+    let usage: UsageSummary?
+}
+
+struct SafetyResponse: Decodable, Equatable {
+    struct Resource: Decodable, Equatable, Identifiable {
+        let label: String
+        let href: URL
+        let kind: String
+        var id: String { href.absoluteString }
+    }
+
+    let topic: String
+    let title: String
+    let message: String
+    let resources: [Resource]
+    let regionLabel: String
+    let emergencyNumber: String
 }
 
 struct CoachRequest: Encodable {
@@ -125,4 +142,58 @@ struct CoachRequest: Encodable {
     let goal: String
     let settings = Settings()
     let source: String
+}
+
+struct MobileCoachHandoff: Codable, Equatable, Identifiable {
+    let id: UUID
+    let action: MobileCoachAction
+    let text: String
+    let createdAt: Date
+
+    init(id: UUID = UUID(), action: MobileCoachAction, text: String, createdAt: Date = Date()) {
+        self.id = id
+        self.action = action
+        self.text = text
+        self.createdAt = createdAt
+    }
+
+    var deepLink: URL? {
+        URL(string: "beckett://coach/handoff?id=\(id.uuidString)")
+    }
+}
+
+enum MobileCoachHandoffStore {
+    private static let filename = "pending-coach-handoff.json"
+    private static let lifetime: TimeInterval = 15 * 60
+
+    static func save(_ handoff: MobileCoachHandoff) throws {
+        let url = try fileURL()
+        let data = try JSONEncoder().encode(handoff)
+        try data.write(to: url, options: [.atomic, .completeFileProtection])
+    }
+
+    static func consume(id: UUID, now: Date = Date()) -> MobileCoachHandoff? {
+        guard let url = try? fileURL() else { return nil }
+        defer { try? FileManager.default.removeItem(at: url) }
+        guard let data = try? Data(contentsOf: url),
+              let handoff = try? JSONDecoder().decode(MobileCoachHandoff.self, from: data),
+              handoff.id == id,
+              now.timeIntervalSince(handoff.createdAt) >= 0,
+              now.timeIntervalSince(handoff.createdAt) <= lifetime else { return nil }
+        return handoff
+    }
+
+    private static func fileURL() throws -> URL {
+        guard let identifier = AppConfiguration.appGroupIdentifier,
+              let container = FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: identifier
+              ) else {
+            throw HandoffError.appGroupUnavailable
+        }
+        return container.appending(path: filename)
+    }
+
+    private enum HandoffError: Error {
+        case appGroupUnavailable
+    }
 }

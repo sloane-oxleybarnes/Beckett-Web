@@ -3,6 +3,7 @@ import { getMobileUser } from "@/lib/mobile-auth";
 import { getMobilePrivacyPreferences, mobilePrivacyDto } from "@/lib/mobile-consent";
 import { platformRepository } from "@/lib/repositories/platform-repository";
 import { hasCurrentBetaConsent } from "@/lib/beta-consent";
+import { metering } from "@/lib/metering";
 
 export const dynamic = "force-dynamic";
 
@@ -10,13 +11,14 @@ export async function GET(request: NextRequest) {
   const user = await getMobileUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const [{ data: profile }, preferences] = await Promise.all([
+  const [{ data: profile }, preferences, usage] = await Promise.all([
     platformRepository
       .from("profiles")
       .select("display_name, first_name, full_name, plan, first_login_complete, adult_us_eligibility_confirmed_at, adult_us_eligibility_version, terms_accepted_at, terms_version, privacy_acknowledged_at, privacy_version, coaching_disclaimer_acknowledged_at, coaching_disclaimer_version")
       .eq("id", user.id)
       .maybeSingle(),
     getMobilePrivacyPreferences(user.id),
+    metering.ai.report({ userId: user.id }).catch(() => null),
   ]);
 
   return NextResponse.json({
@@ -28,5 +30,6 @@ export async function GET(request: NextRequest) {
       onboardingComplete: profile?.first_login_complete === true && hasCurrentBetaConsent(profile || {}),
     },
     privacy: mobilePrivacyDto(preferences),
+    usage,
   }, { headers: { "Cache-Control": "no-store" } });
 }

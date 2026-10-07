@@ -3,7 +3,6 @@ import SwiftUI
 struct ConsentView: View {
     @EnvironmentObject private var auth: AuthStore
     @State private var aiProcessingAllowed = false
-    @State private var retentionMode = "transient"
 
     var body: some View {
         ScrollView {
@@ -31,14 +30,9 @@ struct ConsentView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Content retention", systemImage: "lock.shield")
                             .font(.headline)
-                        Picker("Retention", selection: $retentionMode) {
-                            Text("Do not save message content").tag("transient")
-                            Text("Let me save individual results").tag("save_on_request")
-                        }
-                        .pickerStyle(.inline)
-                        Text(retentionMode == "transient"
-                             ? "Beckett processes each request and does not add its message content to your history."
-                             : "Nothing is saved automatically. A result is retained only when you explicitly choose Save.")
+                        Label("Do not save message content", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(BeckettColor.primaryDark)
+                        Text("Beckett processes each request and does not add its message content or result to your history.")
                             .font(.footnote)
                             .foregroundStyle(BeckettColor.inkMid)
                     }
@@ -48,7 +42,7 @@ struct ConsentView: View {
                     Task {
                         await auth.updatePrivacy(
                             aiProcessingAllowed: aiProcessingAllowed,
-                            retentionMode: retentionMode
+                            retentionMode: "transient"
                         )
                     }
                 }
@@ -65,5 +59,6 @@ struct ConsentView: View {
             .padding(24)
         }
         .beckettPage()
+        .interactiveDismissDisabled(auth.isWorking)
     }
 }

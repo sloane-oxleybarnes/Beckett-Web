@@ -32,6 +32,16 @@ struct SignInView: View {
                             Button("Continue") { Task { await auth.verifyCode(code) } }
                                 .buttonStyle(BeckettPrimaryButtonStyle())
                                 .disabled(code.count < 6 || auth.isWorking)
+                            HStack {
+                                Button("Send another code") { Task { await auth.requestCode(email: sentEmail) } }
+                                Spacer()
+                                Button("Change email") {
+                                    code = ""
+                                    auth.changeEmail()
+                                }
+                            }
+                            .font(.subheadline)
+                            .disabled(auth.isWorking)
                         default:
                             Text("Sign in")
                                 .font(.title2.bold())
@@ -66,6 +76,14 @@ struct SignInView: View {
                                 .font(.footnote)
                                 .foregroundStyle(.red)
                                 .accessibilityLabel("Sign-in error: \(message)")
+                        }
+
+                        if auth.isWorking {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                Text("Working…").font(.footnote)
+                            }
+                            .accessibilityElement(children: .combine)
                         }
                     }
                 }

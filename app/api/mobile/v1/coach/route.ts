@@ -96,7 +96,14 @@ export async function POST(request: NextRequest) {
     [text, conversationContext, goal].filter(Boolean).join("\n"),
     profile?.safety_resource_region,
   );
-  if (safety) return NextResponse.json({ safety, result: null }, { status: 422 });
+  if (safety) {
+    return NextResponse.json({
+      error: safety.message,
+      code: "mobile_safety_redirect",
+      safety,
+      result: null,
+    }, { status: 422 });
+  }
 
   const settings = {
     warmth: clean(body.settings?.warmth, 30) || "warm",
@@ -148,7 +155,11 @@ export async function POST(request: NextRequest) {
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof AiUsageLimitError) {
-      return NextResponse.json({ error: error.message, code: "mobile_usage_limit_reached" }, { status: 429 });
+      return NextResponse.json({
+        error: error.message,
+        code: "mobile_usage_limit_reached",
+        usage: { limit: error.limit, used: error.limit, remaining: 0, unlimited: false },
+      }, { status: 429 });
     }
     return NextResponse.json({ error: "Beckett could not prepare coaching right now." }, { status: 502 });
   }

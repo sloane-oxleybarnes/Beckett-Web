@@ -6,9 +6,13 @@ final class CoachStore: ObservableObject {
     @Published var text = ""
     @Published var person = ""
     @Published var goal = ""
+    @Published var conversationContext = ""
     @Published private(set) var response: CoachResponse?
+    @Published private(set) var safetyResponse: SafetyResponse?
+    @Published private(set) var usage: UsageSummary?
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
+    @Published private(set) var errorCode: String?
 
     private let api: APIClient
 
@@ -16,11 +20,14 @@ final class CoachStore: ObservableObject {
         self.api = api
     }
 
-    func submit(accessToken: String, source: String = "app") async {
+    @discardableResult
+    func submit(accessToken: String, source: String = "app") async -> Bool {
         let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty else { return }
+        guard !content.isEmpty else { return false }
         isLoading = true
         errorMessage = nil
+        errorCode = nil
+        safetyResponse = nil
         defer { isLoading = false }
         do {
             response = try await api.send(
@@ -28,20 +35,46 @@ final class CoachStore: ObservableObject {
                 body: CoachRequest(
                     action: selectedAction,
                     text: content,
-                    conversationContext: "",
+                    conversationContext: conversationContext,
                     person: person,
                     goal: goal,
                     source: source
                 ),
                 accessToken: accessToken
             )
+            usage = response?.usage
+            return false
+        } catch let APIError.server(status, message, code, safety, responseUsage) {
+            usage = responseUsage ?? usage
+            errorCode = code
+            safetyResponse = safety
+            if safety == nil { errorMessage = message }
+            return status == 401
+        } catch let error as URLError {
+            errorCode = "network_unavailable"
+            errorMessage = error.code == .notConnectedToInternet
+                ? "You appear to be offline. Your text has not been sent."
+                : "Beckett could not connect. Check your connection and try again."
+            return false
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
     func startOver() {
         response = nil
+        safetyResponse = nil
         errorMessage = nil
+        errorCode = nil
+    }
+
+    func apply(_ handoff: MobileCoachHandoff) {
+        selectedAction = handoff.action
+        text = handoff.text
+        response = nil
+        safetyResponse = nil
+        errorMessage = nil
+        errorCode = nil
     }
 }

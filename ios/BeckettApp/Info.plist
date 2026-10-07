@@ -4,6 +4,8 @@
 <dict>
 	<key>BECKETT_API_BASE_URL</key>
 	<string>$(BECKETT_API_BASE_URL)</string>
+	<key>APP_GROUP_IDENTIFIER</key>
+	<string>$(APP_GROUP_IDENTIFIER)</string>
 	<key>KEYCHAIN_GROUP_IDENTIFIER</key>
 	<string>$(KEYCHAIN_GROUP_IDENTIFIER)</string>
 	<key>CFBundleDisplayName</key>

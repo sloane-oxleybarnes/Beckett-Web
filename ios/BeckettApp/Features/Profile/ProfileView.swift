@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject private var auth: AuthStore
+    @State private var showingPrivacy = false
 
     var body: some View {
         NavigationStack {
@@ -17,8 +18,9 @@ struct ProfileView: View {
                     )
                     LabeledContent(
                         "Message retention",
-                        value: auth.profile?.privacy.retention.mode == "transient" ? "Do not save" : "Save only when asked"
+                        value: "Do not save"
                     )
+                    Button("Review privacy choices") { showingPrivacy = true }
                 }
                 Section {
                     Button("Sign out", role: .destructive) { auth.signOut() }
@@ -27,6 +29,65 @@ struct ProfileView: View {
             .scrollContentBackground(.hidden)
             .navigationTitle("You")
             .beckettPage()
+            .sheet(isPresented: $showingPrivacy) {
+                NavigationStack {
+                    PrivacySettingsView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done") { showingPrivacy = false }
+                            }
+                        }
+                }
+            }
+        }
+    }
+}
+
+private struct PrivacySettingsView: View {
+    @EnvironmentObject private var auth: AuthStore
+    @State private var aiProcessingAllowed = true
+
+    var body: some View {
+        Form {
+            Section("AI processing") {
+                Toggle("Allow AI processing", isOn: $aiProcessingAllowed)
+                    .tint(BeckettColor.primary)
+                Text("When enabled, only content you submit is sent to Beckett and its approved AI processor. It is not used for advertising or model training.")
+                    .font(.footnote)
+                    .foregroundStyle(BeckettColor.inkMid)
+            }
+
+            Section("Content retention") {
+                Label("Messages and results are not saved", systemImage: "lock.shield")
+                Text("Coaching content is processed for the current request and is not added to your Beckett history.")
+                    .font(.footnote)
+                    .foregroundStyle(BeckettColor.inkMid)
+            }
+
+            Section {
+                Button(aiProcessingAllowed ? "Save privacy choices" : "Revoke consent") {
+                    Task {
+                        await auth.updatePrivacy(
+                            aiProcessingAllowed: aiProcessingAllowed,
+                            retentionMode: "transient"
+                        )
+                    }
+                }
+                .disabled(auth.isWorking)
+            } footer: {
+                if !aiProcessingAllowed {
+                    Text("Revoking consent disables coaching until you consent again. Your account remains available.")
+                }
+            }
+
+            if let message = auth.errorMessage {
+                Section { Text(message).foregroundStyle(.red) }
+            }
+        }
+        .navigationTitle("Privacy")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            aiProcessingAllowed = auth.profile?.privacy.aiProcessing.allowed == true
         }
     }
 }

@@ -33,6 +33,14 @@ struct SessionProfile: Decodable {
 
     let user: User
     let privacy: PrivacyPreferences
+    let usage: UsageSummary?
+}
+
+struct UsageSummary: Codable, Equatable {
+    let limit: Int
+    let used: Int
+    let remaining: Int
+    let unlimited: Bool
 }
 
 struct PrivacyPreferences: Codable, Equatable {

@@ -14,4 +14,8 @@ enum AppConfiguration {
     static var keychainAccessGroup: String? {
         Bundle.main.object(forInfoDictionaryKey: "KEYCHAIN_GROUP_IDENTIFIER") as? String
     }
+
+    static var appGroupIdentifier: String? {
+        Bundle.main.object(forInfoDictionaryKey: "APP_GROUP_IDENTIFIER") as? String
+    }
 }

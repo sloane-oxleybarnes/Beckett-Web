@@ -4,6 +4,8 @@
 <dict>
 	<key>BECKETT_API_BASE_URL</key>
 	<string>$(BECKETT_API_BASE_URL)</string>
+	<key>APP_GROUP_IDENTIFIER</key>
+	<string>$(APP_GROUP_IDENTIFIER)</string>
 	<key>KEYCHAIN_GROUP_IDENTIFIER</key>
 	<string>$(KEYCHAIN_GROUP_IDENTIFIER)</string>
 	<key>CFBundleDisplayName</key>
@@ -21,7 +23,7 @@
 		<dict>
 			<key>NSExtensionActivationRule</key>
 			<dict>
-				<key>NSExtensionActivationSupportsImageWithMaxCount</key><integer>1</integer>
+				<key>NSExtensionActivationSupportsImageWithMaxCount</key><integer>5</integer>
 				<key>NSExtensionActivationSupportsText</key><true/>
 				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key><integer>1</integer>
 			</dict>
