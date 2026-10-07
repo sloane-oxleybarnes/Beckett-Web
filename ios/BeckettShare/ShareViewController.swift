@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
-import Vision
+@preconcurrency import Vision
 
 final class ShareViewController: UIViewController {
     private let model = ShareCoachModel()

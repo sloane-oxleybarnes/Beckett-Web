@@ -3,3 +3,5 @@ PRODUCT_BUNDLE_IDENTIFIER = co.meetbeckett.ios.debug
 SHARE_BUNDLE_IDENTIFIER = co.meetbeckett.ios.debug.share
 APP_GROUP_IDENTIFIER = group.co.meetbeckett.debug
 KEYCHAIN_GROUP_IDENTIFIER = $(AppIdentifierPrefix)co.meetbeckett.shared.debug
+ENABLE_TESTABILITY = YES
+SWIFT_OPTIMIZATION_LEVEL = -Onone
