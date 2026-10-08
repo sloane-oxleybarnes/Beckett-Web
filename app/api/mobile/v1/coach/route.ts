@@ -10,6 +10,7 @@ import {
   MOBILE_RESULT_CONTRACT_VERSION,
   isMobileCoachAction,
   mobileResultJsonInstruction,
+  mobileUserVoiceInstruction,
   normalizeMobileCoachResult,
   type MobileCoachAction,
 } from "@/lib/mobile-result-contracts";
@@ -117,6 +118,7 @@ export async function POST(request: NextRequest) {
     actionInstruction(action),
     beckettBoundaryPrompt(),
     sharedContext.promptContext,
+    mobileUserVoiceInstruction,
     mobileResultJsonInstruction(action),
   ].filter(Boolean).join("\n\n");
   const prompt = [

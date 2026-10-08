@@ -46,6 +46,8 @@ export type MobileCoachResult =
   | MobileDraftOptionsResult
   | MobileToneFeedbackResult;
 
+export const mobileUserVoiceInstruction = `Write every coaching explanation directly to the user using "you" and "your." Never refer to the user by their preferred name or describe the user with third-person pronouns. Suggested messages must be written from the user's perspective in first person ("I" and "my"), unless the user explicitly asks for another voice.`;
+
 export function isMobileCoachAction(value: unknown): value is MobileCoachAction {
   return typeof value === "string" && mobileCoachActions.includes(value as MobileCoachAction);
 }
@@ -163,5 +165,5 @@ Preserve the user's meaning and boundaries. If no revision is needed, return nul
   }
   return `Return only valid JSON with this exact shape:
 {"type":"draft_options","contextSummary":"string","preservedIntent":["string"],"options":[{"style":"direct","label":"Direct","text":"string","rationale":"string"},{"style":"warm","label":"Warm","text":"string","rationale":"string"},{"style":"balanced","label":"Balanced","text":"string","rationale":"string"}],"uncertaintyNote":"string or null"}
-Return exactly three editable options. Preserve the user's intent, facts, boundaries, and voice. Do not claim to send anything.`;
+Return exactly three editable options. Preserve the user's intent, facts, boundaries, and voice. Write each rationale directly to the user using "you" and "your," never the user's name or third-person pronouns. Do not claim to send anything.`;
 }

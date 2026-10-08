@@ -74,6 +74,14 @@ test("mobile coaching requires current consent before the AI call", async () => 
   assert.match(route, /contentSaved:\s*false/);
   assert.match(route, /mobile_safety_redirect/);
   assert.match(route, /usage/);
+  assert.match(route, /mobileUserVoiceInstruction/);
+});
+
+test("mobile coaching addresses the user directly instead of by profile name", async () => {
+  const contracts = await readFile(new URL("../lib/mobile-result-contracts.ts", import.meta.url), "utf8");
+  assert.match(contracts, /directly to the user using "you" and "your\."/);
+  assert.match(contracts, /Never refer to the user by their preferred name/);
+  assert.match(contracts, /Suggested messages must be written from the user's perspective in first person/);
 });
 
 test("mobile v1 offers transient retention only", async () => {
