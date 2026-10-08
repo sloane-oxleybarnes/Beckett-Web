@@ -8,29 +8,48 @@ struct CoachView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    creditsView
-                    if let response = coach.response {
-                        CoachResultView(response: response, onStartOver: coach.startOver)
-                    } else {
-                        composeView
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Color.clear
+                            .frame(height: 0)
+                            .id("coach-top")
+                        creditsView
+                        if let response = coach.response {
+                            CoachResultView(response: response, onStartOver: coach.startOver)
+                        } else {
+                            composeView
+                        }
                     }
+                    .padding(20)
                 }
-                .padding(20)
+                .scrollDismissesKeyboard(.interactively)
+                .navigationTitle("Coach")
+                .beckettPage()
+                .onChange(of: coach.response?.requestId) { _, _ in
+                    scrollToTop(proxy)
+                }
+                .onChange(of: coach.safetyResponse) { _, _ in
+                    scrollToTop(proxy)
+                }
+                .onChange(of: handoff.pending) { _, pending in
+                    guard let pending else { return }
+                    coach.apply(pending)
+                    handoff.finish(pending.id)
+                }
+                .onAppear {
+                    guard let pending = handoff.pending else { return }
+                    coach.apply(pending)
+                    handoff.finish(pending.id)
+                }
             }
-            .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Coach")
-            .beckettPage()
-            .onChange(of: handoff.pending) { _, pending in
-                guard let pending else { return }
-                coach.apply(pending)
-                handoff.finish(pending.id)
-            }
-            .onAppear {
-                guard let pending = handoff.pending else { return }
-                coach.apply(pending)
-                handoff.finish(pending.id)
+        }
+    }
+
+    private func scrollToTop(_ proxy: ScrollViewProxy) {
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.25)) {
+                proxy.scrollTo("coach-top", anchor: .top)
             }
         }
     }

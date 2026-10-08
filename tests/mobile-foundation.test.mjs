@@ -149,3 +149,10 @@ test("share extension supports text, images, local OCR, selection, and opaque ha
   assert.doesNotMatch(models, /beckett:\/\/coach\/handoff\?[^\n]*text=/);
   assert.match(app, /MobileCoachHandoffStore\.consume/);
 });
+
+test("coach scrolls to the top when a result is displayed or cleared", async () => {
+  const view = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
+  assert.match(view, /ScrollViewReader/);
+  assert.match(view, /onChange\(of: coach\.response\?\.requestId\)/);
+  assert.match(view, /proxy\.scrollTo\("coach-top", anchor: \.top\)/);
+});
