@@ -1,4 +1,4 @@
-export const MOBILE_RESULT_CONTRACT_VERSION = "2026-10-07" as const;
+export const MOBILE_RESULT_CONTRACT_VERSION = "2026-10-08" as const;
 
 export const mobileCoachActions = ["decode", "respond", "rewrite", "clarify", "tone_check"] as const;
 export type MobileCoachAction = (typeof mobileCoachActions)[number];
@@ -85,16 +85,16 @@ export function normalizeMobileCoachResult(
 
   if (expectedType === "interpretation") {
     const possibleReadings = Array.isArray(record.possibleReadings)
-      ? record.possibleReadings.slice(0, 4).map((item) => {
+      ? record.possibleReadings.slice(0, 2).map((item) => {
           const reading = asRecord(item);
           const rawConfidence = cleanText(reading.confidence).toLowerCase();
           const confidence: "low" | "medium" | "high" = rawConfidence === "high" || rawConfidence === "medium"
             ? rawConfidence
             : "low";
           return {
-            label: cleanText(reading.label, "Possible reading", 120),
-            explanation: cleanText(reading.explanation, "This interpretation is uncertain.", 700),
-            evidence: cleanText(reading.evidence, "No specific wording identified.", 500),
+            label: cleanText(reading.label, "Possible reading", 50),
+            explanation: cleanText(reading.explanation, "This interpretation is uncertain.", 160),
+            evidence: cleanText(reading.evidence, "No specific wording identified.", 120),
             confidence,
           };
         })
@@ -102,11 +102,11 @@ export function normalizeMobileCoachResult(
 
     return {
       type: "interpretation",
-      summary: cleanText(record.summary, "Beckett could not summarize this message.", 700),
-      clearSignals: cleanList(record.clearSignals),
+      summary: cleanText(record.summary, "Beckett could not summarize this message.", 220),
+      clearSignals: cleanList(record.clearSignals, 3, 120),
       possibleReadings,
-      uncertainties: cleanList(record.uncertainties),
-      usefulQuestions: cleanList(record.usefulQuestions, 4),
+      uncertainties: cleanList(record.uncertainties, 2, 120),
+      usefulQuestions: [],
     };
   }
 
@@ -136,18 +136,18 @@ export function normalizeMobileCoachResult(
         return {
           style,
           label: cleanText(option.label, `${style[0].toUpperCase()}${style.slice(1)}`, 80),
-          text: cleanText(option.text, "", 2_000),
-          rationale: cleanText(option.rationale, "Preserves the user's intent.", 400),
+          text: cleanText(option.text, "", 360),
+          rationale: cleanText(option.rationale, "Preserves the user's intent.", 120),
         };
       }).filter((option) => option.text)
     : [];
 
   return {
     type: "draft_options",
-    contextSummary: cleanText(record.contextSummary, "Draft options based on the context provided.", 500),
-    preservedIntent: cleanList(record.preservedIntent),
+    contextSummary: cleanText(record.contextSummary, "Draft options based on the context provided.", 180),
+    preservedIntent: cleanList(record.preservedIntent, 2, 120),
     options,
-    uncertaintyNote: cleanText(record.uncertaintyNote, "", 500) || null,
+    uncertaintyNote: cleanText(record.uncertaintyNote, "", 180) || null,
   };
 }
 
@@ -156,14 +156,19 @@ export function mobileResultJsonInstruction(action: MobileCoachAction) {
   if (type === "interpretation") {
     return `Return only valid JSON with this exact shape:
 {"type":"interpretation","summary":"string","clearSignals":["string"],"possibleReadings":[{"label":"string","explanation":"string","evidence":"specific words or pattern from the message","confidence":"low|medium|high"}],"uncertainties":["string"],"usefulQuestions":["string"]}
-Separate observable wording from interpretation. Include no more than four possible readings. Confidence describes evidentiary support, not certainty about another person's intent.`;
+Keep the summary to one or two short sentences. Include no more than three clear signals, two possible readings, and two uncertainties. Return an empty usefulQuestions array because Decode must not add unsolicited next steps. Keep every list item to one short sentence. Separate observable wording from interpretation. Confidence describes evidentiary support, not certainty about another person's intent.`;
   }
   if (type === "tone_feedback") {
     return `Return only valid JSON with this exact shape:
 {"type":"tone_feedback","likelyLanding":"string","strengths":["string"],"watchFor":["string"],"revision":{"text":"string","changes":["string"]}|null}
 Preserve the user's meaning and boundaries. If no revision is needed, return null for revision.`;
   }
+  if (action === "rewrite") {
+    return `Return only valid JSON with this exact shape:
+{"type":"draft_options","contextSummary":"one short sentence","preservedIntent":[],"options":[{"style":"direct","label":"Clear","text":"string","rationale":"string"},{"style":"warm","label":"Warmer","text":"string","rationale":"string"},{"style":"balanced","label":"More concise","text":"string","rationale":"string"}],"uncertaintyNote":null}
+Return exactly three editable rewrites and no additional coaching. Keep each rewrite under 45 words. Preserve the user's intent, facts, boundaries, promises, and voice. Do not claim to send anything.`;
+  }
   return `Return only valid JSON with this exact shape:
 {"type":"draft_options","contextSummary":"string","preservedIntent":["string"],"options":[{"style":"direct","label":"Direct","text":"string","rationale":"string"},{"style":"warm","label":"Warm","text":"string","rationale":"string"},{"style":"balanced","label":"Balanced","text":"string","rationale":"string"}],"uncertaintyNote":"string or null"}
-Return exactly three editable options. Preserve the user's intent, facts, boundaries, and voice. Write each rationale directly to the user using "you" and "your," never the user's name or third-person pronouns. Do not claim to send anything.`;
+Return exactly three ready-to-send replies and no additional coaching. Keep each reply under 45 words. Each reply must move the conversation forward rather than repeat or paraphrase the incoming message. Preserve the user's intent, facts, boundaries, and voice. Write each rationale directly to the user using "you" and "your," never the user's name or third-person pronouns. Do not claim to send anything.`;
 }

@@ -305,11 +305,12 @@ private struct InterpretationResultView: View {
     var body: some View {
         BeckettCard {
             VStack(alignment: .leading, spacing: 16) {
-                Text(result.summary).font(.title3)
+                Text(result.summary)
+                    .font(.body.weight(.medium))
                 ResultActions(text: shareText)
                 ResultList(title: "What is clear", values: result.clearSignals)
                 if !result.possibleReadings.isEmpty {
-                    Text("Possible readings").font(.headline)
+                    ResultSectionLabel("Possible readings")
                     ForEach(result.possibleReadings) { reading in
                         VStack(alignment: .leading, spacing: 5) {
                             HStack {
@@ -328,13 +329,12 @@ private struct InterpretationResultView: View {
                     }
                 }
                 ResultList(title: "What remains uncertain", values: result.uncertainties)
-                ResultList(title: "Questions you could ask", values: result.usefulQuestions)
             }
         }
     }
 
     private var shareText: String {
-        ([result.summary] + result.clearSignals + result.usefulQuestions).joined(separator: "\n\n")
+        ([result.summary] + result.clearSignals + result.uncertainties).joined(separator: "\n\n")
     }
 }
 
@@ -343,15 +343,8 @@ private struct DraftOptionsResultView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(result.contextSummary).foregroundStyle(BeckettColor.inkMid)
-            ResultList(title: "Intent kept", values: result.preservedIntent)
             ForEach(result.options) { option in
                 DraftOptionCard(option: option)
-            }
-            if let uncertainty = result.uncertaintyNote {
-                Label(uncertainty, systemImage: "questionmark.circle")
-                    .font(.footnote)
-                    .foregroundStyle(BeckettColor.inkMid)
             }
         }
     }
@@ -369,14 +362,17 @@ private struct DraftOptionCard: View {
     var body: some View {
         BeckettCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text(option.label).font(.headline)
+                Text(option.label.uppercased())
+                    .font(.caption.weight(.bold))
+                    .tracking(0.7)
+                    .foregroundStyle(BeckettColor.primaryDark)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(BeckettColor.primaryLight, in: Capsule())
                 TextEditor(text: $text)
                     .frame(minHeight: 90)
                     .scrollContentBackground(.hidden)
                     .accessibilityLabel("\(option.label) draft")
-                Text(option.rationale)
-                    .font(.footnote)
-                    .foregroundStyle(BeckettColor.inkMid)
                 ResultActions(text: text)
             }
         }
@@ -439,7 +435,7 @@ private struct ResultList: View {
     var body: some View {
         if !values.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.headline)
+                ResultSectionLabel(title)
                 ForEach(values, id: \.self) { value in
                     HStack(alignment: .top, spacing: 8) {
                         Circle().fill(BeckettColor.primary).frame(width: 5, height: 5).padding(.top, 7)
@@ -448,5 +444,20 @@ private struct ResultList: View {
                 }
             }
         }
+    }
+}
+
+private struct ResultSectionLabel: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.caption.weight(.bold))
+            .tracking(0.7)
+            .foregroundStyle(BeckettColor.primaryDark)
     }
 }

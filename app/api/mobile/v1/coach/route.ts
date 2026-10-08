@@ -15,6 +15,7 @@ import {
   type MobileCoachAction,
 } from "@/lib/mobile-result-contracts";
 import { metering } from "@/lib/metering";
+import { messageHelpTask } from "@/lib/message-help";
 import { platformRepository } from "@/lib/repositories/platform-repository";
 import { getSafetyResponse } from "@/lib/safety-resources";
 import { fetchSharedWebContext } from "@/lib/shared-web-context";
@@ -40,14 +41,8 @@ function clean(value: unknown, maxLength: number) {
 }
 
 function actionInstruction(action: MobileCoachAction) {
-  if (action === "decode") {
-    return "Explain the message without presenting guesses about hidden intent as facts. Distinguish explicit requests, observable tone signals, plausible interpretations, and genuine unknowns.";
-  }
-  if (action === "respond") {
-    return "Treat the supplied text as a message another person sent to the user. Draft genuine replies from the user that move the conversation forward rather than repeating the incoming message.";
-  }
-  if (action === "rewrite") {
-    return "Treat the supplied text as the user's own draft. Rewrite it without changing its facts, goal, boundaries, or promises.";
+  if (action === "decode" || action === "respond" || action === "rewrite") {
+    return messageHelpTask(action);
   }
   if (action === "clarify") {
     return "Draft three ways the user can ask for the missing information or expectation directly, without unnecessary apology or invented context.";
@@ -123,6 +118,7 @@ export async function POST(request: NextRequest) {
     beckettBoundaryPrompt(),
     sharedContext.promptContext,
     mobileUserVoiceInstruction,
+    "Match Beckett's web Message Help output: concise, practical, and easy to scan. Stay under 250 words total. Do not add an introduction, conclusion, unsolicited next steps, or an offer to help further.",
     mobileResultJsonInstruction(action),
   ].filter(Boolean).join("\n\n");
   const prompt = [
@@ -146,7 +142,7 @@ export async function POST(request: NextRequest) {
         contextMode,
       },
     });
-    const response = await callAnthropic(system, [{ role: "user", content: prompt }], 1_300);
+    const response = await callAnthropic(system, [{ role: "user", content: prompt }], 800);
     const parsed = parseJsonObject<unknown>(response);
     const result = normalizeMobileCoachResult(action, parsed);
 

@@ -10,7 +10,7 @@ import {
 } from "../lib/mobile-result-contracts.ts";
 
 test("mobile actions map to three stable result formats", () => {
-  assert.equal(MOBILE_RESULT_CONTRACT_VERSION, "2026-10-07");
+  assert.equal(MOBILE_RESULT_CONTRACT_VERSION, "2026-10-08");
   assert.deepEqual(new Set(mobileCoachActions.map(resultTypeForMobileAction)), new Set([
     "interpretation",
     "draft_options",
@@ -53,6 +53,26 @@ test("draft options discard empty model output and cap options at three", () => 
   assert.deepEqual(result.options.map((option) => option.style), ["direct", "warm", "balanced"]);
 });
 
+test("mobile results enforce concise web-aligned output limits", () => {
+  const result = normalizeMobileCoachResult("decode", {
+    summary: "A".repeat(500),
+    clearSignals: ["One", "Two", "Three", "Four"],
+    possibleReadings: [
+      { label: "One", explanation: "First", evidence: "A", confidence: "medium" },
+      { label: "Two", explanation: "Second", evidence: "B", confidence: "low" },
+      { label: "Three", explanation: "Third", evidence: "C", confidence: "low" },
+    ],
+    uncertainties: ["One", "Two", "Three"],
+    usefulQuestions: ["Should I reply?"],
+  });
+  assert.equal(result.type, "interpretation");
+  assert.equal(result.summary.length, 220);
+  assert.equal(result.clearSignals.length, 3);
+  assert.equal(result.possibleReadings.length, 2);
+  assert.equal(result.uncertainties.length, 2);
+  assert.deepEqual(result.usefulQuestions, []);
+});
+
 test("tone feedback permits no rewrite when the draft already works", () => {
   const result = normalizeMobileCoachResult("tone_check", {
     likelyLanding: "Clear and respectful.",
@@ -75,6 +95,9 @@ test("mobile coaching requires current consent before the AI call", async () => 
   assert.match(route, /mobile_safety_redirect/);
   assert.match(route, /usage/);
   assert.match(route, /mobileUserVoiceInstruction/);
+  assert.match(route, /messageHelpTask\(action\)/);
+  assert.match(route, /Stay under 250 words total/);
+  assert.match(route, /\], 800\)/);
 });
 
 test("mobile coaching addresses the user directly instead of by profile name", async () => {
@@ -167,6 +190,10 @@ test("message-help results hide the context toggle and use the branded result la
   assert.match(view, /Text\("BECKETT’S READ"\)[\s\S]*\.font\(\.caption\.weight\(\.bold\)\)[\s\S]*\.foregroundStyle\(BeckettColor\.primaryDark\)/);
   assert.match(view, /CoachResultView\([\s\S]*originalMessage: coach\.text/);
   assert.match(view, /Text\("ORIGINAL MESSAGE"\)[\s\S]*Text\(originalMessage\)/);
+  assert.match(view, /ResultSectionLabel\("Possible readings"\)/);
+  assert.doesNotMatch(view, /ResultList\(title: "Questions you could ask"/);
+  assert.doesNotMatch(view, /ResultList\(title: "Intent kept"/);
+  assert.doesNotMatch(view, /Text\(option\.rationale\)/);
   assert.doesNotMatch(view, /Text\("Beckett’s read"\)[\s\S]*design: \.serif/);
 });
 
