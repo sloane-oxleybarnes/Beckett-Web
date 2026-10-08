@@ -51,6 +51,24 @@ test("draft options discard empty model output and cap options at three", () => 
   assert.equal(result.type, "draft_options");
   assert.equal(result.options.length, 3);
   assert.deepEqual(result.options.map((option) => option.style), ["direct", "warm", "balanced"]);
+  assert.equal(result.originalFeedback, null);
+});
+
+test("rewrite results include concise feedback on the original draft", () => {
+  const result = normalizeMobileCoachResult("rewrite", {
+    originalFeedback: {
+      tone: "Warm but slightly tentative.",
+      clarity: "The request is clear.",
+      strengths: ["Respectful", "Specific", "Extra"],
+      watchFor: ["The apology may soften the request too much.", "Long opening", "Extra"],
+    },
+    options: [],
+  });
+  assert.equal(result.type, "draft_options");
+  assert.equal(result.originalFeedback?.tone, "Warm but slightly tentative.");
+  assert.equal(result.originalFeedback?.clarity, "The request is clear.");
+  assert.equal(result.originalFeedback?.strengths.length, 2);
+  assert.equal(result.originalFeedback?.watchFor.length, 2);
 });
 
 test("mobile results enforce concise web-aligned output limits", () => {
@@ -193,6 +211,10 @@ test("message-help results hide the context toggle and use the branded result la
   assert.match(view, /ResultSectionLabel\("Possible readings"\)/);
   assert.match(view, /Label\("Draft response"/);
   assert.match(view, /Label\("Practice conversation"/);
+  assert.match(view, /action == \.respond \|\| action == \.rewrite/);
+  assert.match(view, /ResultSectionLabel\("Feedback on your original"\)/);
+  assert.match(view, /feedbackRow\(title: "Tone"/);
+  assert.match(view, /feedbackRow\(title: "Clarity"/);
   assert.doesNotMatch(view, /ResultList\(title: "Questions you could ask"/);
   assert.doesNotMatch(view, /ResultList\(title: "Intent kept"/);
   assert.doesNotMatch(view, /Text\(option\.rationale\)/);

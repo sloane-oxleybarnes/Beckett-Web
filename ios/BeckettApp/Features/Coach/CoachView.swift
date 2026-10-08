@@ -19,6 +19,7 @@ struct CoachView: View {
                         if let response = coach.response {
                             CoachResultView(
                                 response: response,
+                                action: coach.selectedAction,
                                 originalMessage: coach.text,
                                 onStartOver: coach.startOver,
                                 onDraftResponse: draftResponse,
@@ -276,6 +277,7 @@ private struct SafetyResultView: View {
 
 private struct CoachResultView: View {
     let response: CoachResponse
+    let action: MobileCoachAction
     let originalMessage: String
     let onStartOver: () -> Void
     let onDraftResponse: () -> Void
@@ -312,7 +314,14 @@ private struct CoachResultView: View {
                     onDraftResponse: onDraftResponse,
                     onPractice: onPractice
                 )
-            case let .draftOptions(result): DraftOptionsResultView(result: result)
+            case let .draftOptions(result):
+                if action == .rewrite, let feedback = result.originalFeedback {
+                    RewriteFeedbackView(feedback: feedback)
+                }
+                DraftOptionsResultView(result: result)
+                if action == .respond || action == .rewrite {
+                    PracticeResultButton(onPractice: onPractice)
+                }
             case let .toneFeedback(result): ToneFeedbackResultView(result: result)
             }
 
@@ -320,6 +329,17 @@ private struct CoachResultView: View {
                 .font(.footnote)
                 .foregroundStyle(BeckettColor.inkLight)
         }
+    }
+}
+
+private struct PracticeResultButton: View {
+    let onPractice: () -> Void
+
+    var body: some View {
+        Button(action: onPractice) {
+            Label("Practice conversation", systemImage: "person.2.wave.2")
+        }
+        .buttonStyle(BeckettPrimaryButtonStyle())
     }
 }
 
@@ -395,6 +415,32 @@ private struct DraftOptionsResultView: View {
             ForEach(result.options) { option in
                 DraftOptionCard(option: option)
             }
+        }
+    }
+}
+
+private struct RewriteFeedbackView: View {
+    let feedback: DraftOptionsResult.OriginalFeedback
+
+    var body: some View {
+        BeckettCard {
+            VStack(alignment: .leading, spacing: 14) {
+                ResultSectionLabel("Feedback on your original")
+                feedbackRow(title: "Tone", value: feedback.tone)
+                Divider()
+                feedbackRow(title: "Clarity", value: feedback.clarity)
+                ResultList(title: "What works", values: feedback.strengths)
+                ResultList(title: "Worth noticing", values: feedback.watchFor)
+            }
+        }
+    }
+
+    private func feedbackRow(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Text(value)
+                .foregroundStyle(BeckettColor.inkMid)
         }
     }
 }

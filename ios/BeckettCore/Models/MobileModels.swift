@@ -67,6 +67,13 @@ struct InterpretationResult: Codable, Equatable {
 }
 
 struct DraftOptionsResult: Codable, Equatable {
+    struct OriginalFeedback: Codable, Equatable {
+        let tone: String
+        let clarity: String
+        let strengths: [String]
+        let watchFor: [String]
+    }
+
     struct Option: Codable, Equatable, Identifiable {
         let style: String
         let label: String
@@ -77,6 +84,7 @@ struct DraftOptionsResult: Codable, Equatable {
 
     let contextSummary: String
     let preservedIntent: [String]
+    let originalFeedback: OriginalFeedback?
     let options: [Option]
     let uncertaintyNote: String?
 }
