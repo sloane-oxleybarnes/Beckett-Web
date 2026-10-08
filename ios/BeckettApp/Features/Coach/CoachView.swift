@@ -26,6 +26,11 @@ struct CoachView: View {
                 .navigationTitle("Beckett")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar(.visible, for: .tabBar)
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        BeckettBrandHeader()
+                    }
+                }
                 .beckettPage()
                 .onChange(of: coach.response?.requestId) { _, _ in
                     scrollToTop(proxy)

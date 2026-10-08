@@ -158,9 +158,15 @@ test("coach scrolls to the top when a result is displayed or cleared", async () 
 });
 
 test("coach screen uses a compact Beckett header and places usage below the editor", async () => {
-  const view = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
+  const [view, theme] = await Promise.all([
+    readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettCore/Design/BeckettTheme.swift", import.meta.url), "utf8"),
+  ]);
   assert.match(view, /navigationTitle\("Beckett"\)/);
   assert.match(view, /navigationBarTitleDisplayMode\(\.inline\)/);
+  assert.match(view, /ToolbarItem\(placement: \.principal\)[\s\S]*BeckettBrandHeader\(\)/);
+  assert.match(theme, /struct BeckettBrandHeader: View/);
+  assert.match(theme, /BeckettLogoMark\(\)/);
   assert.match(view, /BeckettCard[\s\S]*creditsView[\s\S]*Button\(action: submit\)/);
   assert.doesNotMatch(view, /navigationTitle\("Coach"\)/);
 });
