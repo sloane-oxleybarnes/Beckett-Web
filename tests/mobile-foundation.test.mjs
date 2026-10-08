@@ -173,3 +173,11 @@ test("mobile coaching presents the same three actions as web", async () => {
   assert.match(coach, /ForEach\(MobileCoachAction\.visibleCases\)/);
   assert.match(share, /ForEach\(MobileCoachAction\.visibleCases\)/);
 });
+
+test("coach uses an in-field message prompt instead of an input heading", async () => {
+  const view = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
+  assert.match(view, /if coach\.text\.isEmpty/);
+  assert.match(view, /Text\(coach\.selectedAction\.inputPlaceholder\)/);
+  assert.match(view, /case \.decode, \.respond, \.clarify: "Paste message here"/);
+  assert.doesNotMatch(view, /Text\(coach\.selectedAction\.inputTitle\)/);
+});

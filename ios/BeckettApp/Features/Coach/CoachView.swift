@@ -110,11 +110,19 @@ struct CoachView: View {
 
             BeckettCard {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(coach.selectedAction.inputTitle).font(.headline)
-                    TextEditor(text: $coach.text)
-                        .frame(minHeight: 150)
-                        .scrollContentBackground(.hidden)
-                        .accessibilityLabel(coach.selectedAction.inputTitle)
+                    ZStack(alignment: .topLeading) {
+                        if coach.text.isEmpty {
+                            Text(coach.selectedAction.inputPlaceholder)
+                                .foregroundStyle(BeckettColor.inkLight)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 8)
+                                .allowsHitTesting(false)
+                        }
+                        TextEditor(text: $coach.text)
+                            .frame(minHeight: 150)
+                            .scrollContentBackground(.hidden)
+                            .accessibilityLabel(coach.selectedAction.inputPlaceholder)
+                    }
                     Divider()
                     TextField("Person or relationship (optional)", text: $coach.person)
                         .textContentType(.name)
@@ -169,10 +177,10 @@ struct CoachView: View {
 }
 
 private extension MobileCoachAction {
-    var inputTitle: String {
+    var inputPlaceholder: String {
         switch self {
-        case .decode, .respond, .clarify: "Paste the message"
-        case .rewrite, .toneCheck: "Paste your draft"
+        case .decode, .respond, .clarify: "Paste message here"
+        case .rewrite, .toneCheck: "Paste draft here"
         }
     }
 }
