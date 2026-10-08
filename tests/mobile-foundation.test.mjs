@@ -156,3 +156,10 @@ test("coach scrolls to the top when a result is displayed or cleared", async () 
   assert.match(view, /onChange\(of: coach\.response\?\.requestId\)/);
   assert.match(view, /proxy\.scrollTo\("coach-top", anchor: \.top\)/);
 });
+
+test("coach screen uses Beckett branding and places usage below its prompt", async () => {
+  const view = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
+  assert.match(view, /navigationTitle\("Beckett"\)/);
+  assert.match(view, /Text\("How Can I Help\?"\)[\s\S]*creditsView/);
+  assert.doesNotMatch(view, /navigationTitle\("Coach"\)/);
+});

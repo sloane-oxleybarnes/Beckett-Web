@@ -14,7 +14,6 @@ struct CoachView: View {
                         Color.clear
                             .frame(height: 0)
                             .id("coach-top")
-                        creditsView
                         if let response = coach.response {
                             CoachResultView(response: response, onStartOver: coach.startOver)
                         } else {
@@ -24,7 +23,7 @@ struct CoachView: View {
                     .padding(20)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .navigationTitle("Coach")
+                .navigationTitle("Beckett")
                 .beckettPage()
                 .onChange(of: coach.response?.requestId) { _, _ in
                     scrollToTop(proxy)
@@ -69,8 +68,10 @@ struct CoachView: View {
 
     private var composeView: some View {
         Group {
-            Text("What would help right now?")
+            Text("How Can I Help?")
                 .font(.system(size: 28, weight: .regular, design: .serif))
+
+            creditsView
 
             LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 10) {
                 ForEach(MobileCoachAction.allCases) { action in
