@@ -15,7 +15,6 @@ struct CoachView: View {
                         Color.clear
                             .frame(height: 0)
                             .id("coach-top")
-                        ContextModePicker(selection: $contextMode)
                         if let response = coach.response {
                             CoachResultView(response: response, onStartOver: coach.startOver)
                         } else {
@@ -71,6 +70,8 @@ struct CoachView: View {
 
     private var composeView: some View {
         Group {
+            ContextModePicker(selection: $contextMode)
+
             HStack(alignment: .top, spacing: 12) {
                 ForEach(MobileCoachAction.visibleCases) { action in
                     Button {
@@ -259,8 +260,10 @@ private struct CoachResultView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Beckett’s read")
-                    .font(.system(size: 28, weight: .regular, design: .serif))
+                Text("BECKETT’S READ")
+                    .font(.caption.weight(.bold))
+                    .tracking(0.8)
+                    .foregroundStyle(BeckettColor.primaryDark)
                 Spacer()
                 Button("Start over", action: onStartOver).font(.subheadline)
             }

@@ -157,6 +157,17 @@ test("coach scrolls to the top when a result is displayed or cleared", async () 
   assert.match(view, /proxy\.scrollTo\("coach-top", anchor: \.top\)/);
 });
 
+test("message-help results hide the context toggle and use the branded result label", async () => {
+  const view = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
+  const resultBranch = view.indexOf("if let response = coach.response");
+  const composeView = view.indexOf("private var composeView");
+  const picker = view.indexOf("ContextModePicker(selection: $contextMode)");
+  assert.ok(resultBranch > -1);
+  assert.ok(picker > composeView);
+  assert.match(view, /Text\("BECKETT’S READ"\)[\s\S]*\.font\(\.caption\.weight\(\.bold\)\)[\s\S]*\.foregroundStyle\(BeckettColor\.primaryDark\)/);
+  assert.doesNotMatch(view, /Text\("Beckett’s read"\)[\s\S]*design: \.serif/);
+});
+
 test("message help uses the real Beckett brand asset and places usage below the editor", async () => {
   const [view, theme, root] = await Promise.all([
     readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
