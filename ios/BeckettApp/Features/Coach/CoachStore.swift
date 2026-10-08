@@ -21,7 +21,7 @@ final class CoachStore: ObservableObject {
     }
 
     @discardableResult
-    func submit(accessToken: String, source: String = "app") async -> Bool {
+    func submit(accessToken: String, contextMode: MobileContextMode, source: String = "app") async -> Bool {
         let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return false }
         isLoading = true
@@ -38,6 +38,7 @@ final class CoachStore: ObservableObject {
                     conversationContext: conversationContext,
                     person: person,
                     goal: goal,
+                    contextMode: contextMode,
                     source: source
                 ),
                 accessToken: accessToken

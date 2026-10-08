@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 struct CoachView: View {
+    @Binding var contextMode: MobileContextMode
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var handoff: CoachHandoffCoordinator
     @StateObject private var coach = CoachStore()
@@ -14,6 +15,7 @@ struct CoachView: View {
                         Color.clear
                             .frame(height: 0)
                             .id("coach-top")
+                        ContextModePicker(selection: $contextMode)
                         if let response = coach.response {
                             CoachResultView(response: response, onStartOver: coach.startOver)
                         } else {
@@ -175,9 +177,9 @@ struct CoachView: View {
     private func submit() {
         guard let token = auth.session?.accessToken else { return }
         Task {
-            let unauthorized = await coach.submit(accessToken: token)
+            let unauthorized = await coach.submit(accessToken: token, contextMode: contextMode)
             if unauthorized, let refreshed = await auth.refreshedAccessToken() {
-                await coach.submit(accessToken: refreshed)
+                await coach.submit(accessToken: refreshed, contextMode: contextMode)
             }
         }
     }

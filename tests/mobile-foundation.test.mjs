@@ -200,3 +200,35 @@ test("coach uses an in-field message prompt instead of an input heading", async 
   assert.match(view, /case \.decode, \.respond, \.clarify: "Paste message here"/);
   assert.doesNotMatch(view, /Text\(coach\.selectedAction\.inputTitle\)/);
 });
+
+test("mobile context mode is shared across Coach, Practice, and Courses", async () => {
+  const [root, coachRoute, models] = await Promise.all([
+    readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/mobile/v1/coach/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettCore/Models/MobileModels.swift", import.meta.url), "utf8"),
+  ]);
+  assert.match(models, /enum MobileContextMode/);
+  assert.match(root, /@AppStorage\("beckett\.mobile\.context-mode"\)/);
+  assert.match(root, /CoachView\(contextMode: contextMode\)/);
+  assert.match(root, /PracticeView\(contextMode: contextMode\)/);
+  assert.match(root, /CoursesView\(contextMode: contextMode\)/);
+  assert.match(coachRoute, /body\.contextMode === "personal"/);
+});
+
+test("mobile Practice uses bearer auth, consent, and the shared adaptive simulator", async () => {
+  const route = await readFile(new URL("../app/api/mobile/v1/practice/route.ts", import.meta.url), "utf8");
+  assert.match(route, /getMobileUser\(request\)/);
+  assert.match(route, /hasCurrentMobileAiConsent/);
+  assert.match(route, /adaptive_conversation_sessions/);
+  assert.match(route, /turnInstructions/);
+  assert.match(route, /assessmentInstructions/);
+});
+
+test("mobile Courses uses the published catalog and shared progress tables", async () => {
+  const route = await readFile(new URL("../app/api/mobile/v1/courses/route.ts", import.meta.url), "utf8");
+  assert.match(route, /getMobileUser\(request\)/);
+  assert.match(route, /getPublishedCourseCatalog/);
+  assert.match(route, /getPublishedCourse/);
+  assert.match(route, /course_progress/);
+  assert.match(route, /course_completions/);
+});

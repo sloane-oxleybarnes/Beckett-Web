@@ -1,5 +1,13 @@
 import Foundation
 
+enum MobileContextMode: String, CaseIterable, Codable, Identifiable {
+    case professional
+    case personal
+
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+}
+
 enum MobileCoachAction: String, CaseIterable, Codable, Identifiable {
     case decode
     case respond
@@ -152,6 +160,7 @@ struct CoachRequest: Encodable {
     let conversationContext: String
     let person: String
     let goal: String
+    let contextMode: MobileContextMode
     let settings = Settings()
     let source: String
 }

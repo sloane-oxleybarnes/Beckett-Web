@@ -183,6 +183,7 @@ final class ShareCoachModel: ObservableObject {
                 conversationContext: "",
                 person: "",
                 goal: "",
+                contextMode: .professional,
                 source: "share_extension"
             ),
             accessToken: accessToken

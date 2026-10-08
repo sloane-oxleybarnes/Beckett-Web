@@ -25,6 +25,7 @@ type MobileCoachBody = {
   conversationContext?: unknown;
   person?: unknown;
   goal?: unknown;
+  contextMode?: unknown;
   settings?: {
     warmth?: unknown;
     directness?: unknown;
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
   const conversationContext = clean(body.conversationContext, 12_000);
   const person = clean(body.person, 160);
   const goal = clean(body.goal, 600);
+  const contextMode = body.contextMode === "personal" ? "personal" : "professional";
   const source = body.source === "share_extension" ? "share_extension" : "app";
 
   const [{ data: profile }, sharedContext] = await Promise.all([
@@ -114,7 +116,9 @@ export async function POST(request: NextRequest) {
   };
 
   const system = [
-    "You are Beckett, a personalized workplace communication coach for neurodivergent adults.",
+    contextMode === "personal"
+      ? "You are Beckett, a personalized communication coach for neurodivergent adults. This request concerns the user's personal life, not their workplace. Use natural everyday language and do not force workplace framing into the response."
+      : "You are Beckett, a personalized workplace communication coach for neurodivergent adults.",
     actionInstruction(action),
     beckettBoundaryPrompt(),
     sharedContext.promptContext,
@@ -139,6 +143,7 @@ export async function POST(request: NextRequest) {
         surface: source,
         resultContract: MOBILE_RESULT_CONTRACT_VERSION,
         retentionMode: privacy.retentionMode,
+        contextMode,
       },
     });
     const response = await callAnthropic(system, [{ role: "user", content: prompt }], 1_300);
