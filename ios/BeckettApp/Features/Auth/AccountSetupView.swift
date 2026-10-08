@@ -20,47 +20,55 @@ struct AccountSetupView: View {
     private let stepTitles = ["Agreements", "Name", "Strengths", "Effort", "Coaching", "Context"]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header
-                stepContent
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    header
+                        .id("setup-top")
+                    stepContent
 
-                if let message = auth.errorMessage {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .accessibilityLabel("Setup error: \(message)")
-                }
-
-                HStack(spacing: 12) {
-                    if step > 0 {
-                        Button("Back") { step -= 1 }
-                            .buttonStyle(.bordered)
-                            .disabled(auth.isWorking)
+                    if let message = auth.errorMessage {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .accessibilityLabel("Setup error: \(message)")
                     }
-                    Button(step == stepTitles.count - 1 ? "Finish setup" : "Continue") {
-                        if step == stepTitles.count - 1 {
-                            Task { await finish() }
-                        } else {
-                            step += 1
+
+                    HStack(spacing: 12) {
+                        if step > 0 {
+                            Button("Back") { step -= 1 }
+                                .buttonStyle(.bordered)
+                                .disabled(auth.isWorking)
+                        }
+                        Button(step == stepTitles.count - 1 ? "Finish setup" : "Continue") {
+                            if step == stepTitles.count - 1 {
+                                Task { await finish() }
+                            } else {
+                                step += 1
+                            }
+                        }
+                        .buttonStyle(BeckettPrimaryButtonStyle())
+                        .disabled(!canContinue || auth.isWorking)
+                    }
+
+                    if auth.isWorking {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("Saving your setup…").font(.footnote)
                         }
                     }
-                    .buttonStyle(BeckettPrimaryButtonStyle())
-                    .disabled(!canContinue || auth.isWorking)
-                }
 
-                if auth.isWorking {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text("Saving your setup…").font(.footnote)
-                    }
+                    Button("Sign out", role: .cancel) { auth.signOut() }
+                        .frame(maxWidth: .infinity)
+                        .disabled(auth.isWorking)
                 }
-
-                Button("Sign out", role: .cancel) { auth.signOut() }
-                    .frame(maxWidth: .infinity)
-                    .disabled(auth.isWorking)
+                .padding(24)
             }
-            .padding(24)
+            .onChange(of: step) { _, _ in
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo("setup-top", anchor: .top)
+                }
+            }
         }
         .beckettPage()
         .interactiveDismissDisabled(auth.isWorking)
