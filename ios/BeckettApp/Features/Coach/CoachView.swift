@@ -380,7 +380,7 @@ private struct InterpretationResultView: View {
                             HStack {
                                 Text(reading.label).bold()
                                 Spacer()
-                                Text(reading.confidence.capitalized)
+                                Text(reading.evidenceStrengthLabel)
                                     .font(.caption)
                                     .foregroundStyle(BeckettColor.inkLight)
                             }

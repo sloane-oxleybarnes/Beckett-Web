@@ -57,6 +57,14 @@ struct InterpretationResult: Codable, Equatable {
         let evidence: String
         let confidence: String
         var id: String { "\(label)-\(explanation)" }
+
+        var evidenceStrengthLabel: String {
+            switch confidence.lowercased() {
+            case "high": "Strong evidence"
+            case "medium": "Some evidence"
+            default: "Limited evidence"
+            }
+        }
     }
 
     let summary: String

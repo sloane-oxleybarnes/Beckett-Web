@@ -310,6 +310,18 @@ test("decode caps readings at three and drafts responses in place", async () => 
   assert.match(store, /selectedAction = requestedAction/);
 });
 
+test("decode describes evidence strength instead of ambiguous confidence", async () => {
+  const [view, models] = await Promise.all([
+    readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettCore/Models/MobileModels.swift", import.meta.url), "utf8"),
+  ]);
+  assert.match(view, /Text\(reading\.evidenceStrengthLabel\)/);
+  assert.match(models, /case "high": "Strong evidence"/);
+  assert.match(models, /case "medium": "Some evidence"/);
+  assert.match(models, /default: "Limited evidence"/);
+  assert.doesNotMatch(view, /confidence\.capitalized/);
+});
+
 test("mobile context mode is shared across Coach, Practice, and Courses", async () => {
   const [root, coachRoute, models] = await Promise.all([
     readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
