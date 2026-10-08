@@ -282,8 +282,8 @@ private struct ShareCoachView: View {
         NavigationStack {
             VStack(spacing: 12) {
                 Picker("Coaching action", selection: $model.action) {
-                    ForEach(MobileCoachAction.allCases) { action in
-                        Text(action.title).tag(action)
+                    ForEach(MobileCoachAction.visibleCases) { action in
+                        Text(action.shortTitle).tag(action)
                     }
                 }
                 .pickerStyle(.menu)

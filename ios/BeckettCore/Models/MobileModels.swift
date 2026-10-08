@@ -9,6 +9,18 @@ enum MobileCoachAction: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
 
+    static let visibleCases: [MobileCoachAction] = [.decode, .respond, .rewrite]
+
+    var shortTitle: String {
+        switch self {
+        case .decode: "Decode"
+        case .respond: "Respond"
+        case .rewrite: "Rewrite"
+        case .clarify: "Clarify"
+        case .toneCheck: "Tone check"
+        }
+    }
+
     var title: String {
         switch self {
         case .decode: "Decode a message"

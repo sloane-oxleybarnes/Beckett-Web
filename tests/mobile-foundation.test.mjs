@@ -163,3 +163,13 @@ test("coach screen uses Beckett branding and places usage below its prompt", asy
   assert.match(view, /Text\("How Can I Help\?"\)[\s\S]*creditsView/);
   assert.doesNotMatch(view, /navigationTitle\("Coach"\)/);
 });
+
+test("mobile coaching presents the same three actions as web", async () => {
+  const models = await readFile(new URL("../ios/BeckettCore/Models/MobileModels.swift", import.meta.url), "utf8");
+  const coach = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
+  const share = await readFile(new URL("../ios/BeckettShare/ShareViewController.swift", import.meta.url), "utf8");
+  assert.match(models, /visibleCases: \[MobileCoachAction\] = \[\.decode, \.respond, \.rewrite\]/);
+  assert.match(coach, /count: 3/);
+  assert.match(coach, /ForEach\(MobileCoachAction\.visibleCases\)/);
+  assert.match(share, /ForEach\(MobileCoachAction\.visibleCases\)/);
+});

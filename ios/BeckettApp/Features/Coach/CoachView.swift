@@ -73,16 +73,21 @@ struct CoachView: View {
 
             creditsView
 
-            LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 10) {
-                ForEach(MobileCoachAction.allCases) { action in
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
+                spacing: 8
+            ) {
+                ForEach(MobileCoachAction.visibleCases) { action in
                     Button {
                         coach.selectedAction = action
                     } label: {
                         VStack(alignment: .leading, spacing: 10) {
                             Image(systemName: action.systemImage)
                                 .font(.title2)
-                            Text(action.title)
+                            Text(action.shortTitle)
                                 .font(.subheadline.bold())
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                                 .multilineTextAlignment(.leading)
                         }
                         .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
@@ -98,7 +103,7 @@ struct CoachView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(coach.isLoading)
-                    .accessibilityLabel(action.title)
+                    .accessibilityLabel(action.shortTitle)
                     .accessibilityAddTraits(coach.selectedAction == action ? .isSelected : [])
                 }
             }
