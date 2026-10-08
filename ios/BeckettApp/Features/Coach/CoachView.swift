@@ -157,10 +157,6 @@ struct CoachView: View {
             .buttonStyle(BeckettPrimaryButtonStyle())
             .disabled(coach.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || coach.isLoading)
 
-            if coach.isLoading {
-                CoachLoadingView(action: coach.selectedAction)
-            }
-
             if let safety = coach.safetyResponse {
                 SafetyResultView(safety: safety, onStartOver: coach.startOver)
             } else if let message = coach.errorMessage {
@@ -205,26 +201,6 @@ struct CoachView: View {
 private extension MobileCoachAction {
     var inputPlaceholder: String {
         "Paste message here"
-    }
-}
-
-private struct CoachLoadingView: View {
-    let action: MobileCoachAction
-
-    var body: some View {
-        BeckettCard {
-            HStack(spacing: 14) {
-                ProgressView().tint(BeckettColor.primary)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Looking at the words and context").font(.headline)
-                    Text("Your \(action.title.lowercased()) result usually takes a few seconds.")
-                        .font(.footnote)
-                        .foregroundStyle(BeckettColor.inkMid)
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Preparing coaching")
     }
 }
 

@@ -277,6 +277,13 @@ test("coach uses an in-field message prompt instead of an input heading", async 
   assert.doesNotMatch(view, /Text\(coach\.selectedAction\.inputTitle\)/);
 });
 
+test("message help uses only the inline button loading state", async () => {
+  const view = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
+  assert.match(view, /coach\.isLoading \? "Preparing coaching…" : "Ask Beckett"/);
+  assert.doesNotMatch(view, /CoachLoadingView/);
+  assert.doesNotMatch(view, /Looking at the words and context/);
+});
+
 test("mobile context mode is shared across Coach, Practice, and Courses", async () => {
   const [root, coachRoute, models] = await Promise.all([
     readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
