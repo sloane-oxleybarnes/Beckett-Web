@@ -187,10 +187,7 @@ struct CoachView: View {
 
 private extension MobileCoachAction {
     var inputPlaceholder: String {
-        switch self {
-        case .decode, .respond, .clarify: "Paste message here"
-        case .rewrite, .toneCheck: "Paste draft here"
-        }
+        "Paste message here"
     }
 }
 
