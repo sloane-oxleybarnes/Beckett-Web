@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject private var auth: AuthStore
-    @State private var showingPrivacy = false
 
     var body: some View {
         NavigationStack {
@@ -20,7 +19,9 @@ struct ProfileView: View {
                         "Message retention",
                         value: "Do not save"
                     )
-                    Button("Review privacy choices") { showingPrivacy = true }
+                    NavigationLink("Review privacy choices") {
+                        PrivacySettingsView()
+                    }
                 }
                 Section {
                     Button("Sign out", role: .destructive) { auth.signOut() }
@@ -28,17 +29,8 @@ struct ProfileView: View {
             }
             .scrollContentBackground(.hidden)
             .navigationTitle("You")
+            .toolbar(.visible, for: .tabBar)
             .beckettPage()
-            .sheet(isPresented: $showingPrivacy) {
-                NavigationStack {
-                    PrivacySettingsView()
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button("Done") { showingPrivacy = false }
-                            }
-                        }
-                }
-            }
         }
     }
 }

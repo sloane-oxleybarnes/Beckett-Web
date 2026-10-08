@@ -157,10 +157,11 @@ test("coach scrolls to the top when a result is displayed or cleared", async () 
   assert.match(view, /proxy\.scrollTo\("coach-top", anchor: \.top\)/);
 });
 
-test("coach screen uses Beckett branding and places usage below its prompt", async () => {
+test("coach screen uses a compact Beckett header and places usage below the editor", async () => {
   const view = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
   assert.match(view, /navigationTitle\("Beckett"\)/);
-  assert.match(view, /Text\("How Can I Help\?"\)[\s\S]*creditsView/);
+  assert.match(view, /navigationBarTitleDisplayMode\(\.inline\)/);
+  assert.match(view, /BeckettCard[\s\S]*creditsView[\s\S]*Button\(action: submit\)/);
   assert.doesNotMatch(view, /navigationTitle\("Coach"\)/);
 });
 
@@ -169,9 +170,21 @@ test("mobile coaching presents the same three actions as web", async () => {
   const coach = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
   const share = await readFile(new URL("../ios/BeckettShare/ShareViewController.swift", import.meta.url), "utf8");
   assert.match(models, /visibleCases: \[MobileCoachAction\] = \[\.decode, \.respond, \.rewrite\]/);
-  assert.match(coach, /count: 3/);
+  assert.match(coach, /ForEach\(MobileCoachAction\.visibleCases\)[\s\S]*in: Circle\(\)/);
   assert.match(coach, /ForEach\(MobileCoachAction\.visibleCases\)/);
   assert.match(share, /ForEach\(MobileCoachAction\.visibleCases\)/);
+});
+
+test("signed-in navigation remains visible on coach and profile detail screens", async () => {
+  const [root, coach, profile] = await Promise.all([
+    readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/Profile/ProfileView.swift", import.meta.url), "utf8"),
+  ]);
+  assert.match(root, /toolbar\(\.visible, for: \.tabBar\)/);
+  assert.match(coach, /toolbar\(\.visible, for: \.tabBar\)/);
+  assert.match(profile, /NavigationLink\("Review privacy choices"\)/);
+  assert.doesNotMatch(profile, /\.sheet\(isPresented:/);
 });
 
 test("coach uses an in-field message prompt instead of an input heading", async () => {

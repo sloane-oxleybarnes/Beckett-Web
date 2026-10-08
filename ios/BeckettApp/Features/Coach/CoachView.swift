@@ -24,6 +24,8 @@ struct CoachView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .navigationTitle("Beckett")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar(.visible, for: .tabBar)
                 .beckettPage()
                 .onChange(of: coach.response?.requestId) { _, _ in
                     scrollToTop(proxy)
@@ -68,38 +70,36 @@ struct CoachView: View {
 
     private var composeView: some View {
         Group {
-            Text("How Can I Help?")
-                .font(.system(size: 28, weight: .regular, design: .serif))
-
-            creditsView
-
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
-                spacing: 8
-            ) {
+            HStack(alignment: .top, spacing: 12) {
                 ForEach(MobileCoachAction.visibleCases) { action in
                     Button {
                         coach.selectedAction = action
                     } label: {
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(spacing: 8) {
                             Image(systemName: action.systemImage)
                                 .font(.title2)
+                                .frame(width: 64, height: 64)
+                                .foregroundStyle(
+                                    coach.selectedAction == action ? Color.white : BeckettColor.primaryDark
+                                )
+                                .background(
+                                    coach.selectedAction == action ? BeckettColor.primary : BeckettColor.card,
+                                    in: Circle()
+                                )
+                                .overlay {
+                                    Circle()
+                                        .stroke(
+                                            coach.selectedAction == action ? BeckettColor.primaryDark : BeckettColor.ink.opacity(0.12),
+                                            lineWidth: coach.selectedAction == action ? 2 : 1
+                                        )
+                                }
                             Text(action.shortTitle)
                                 .font(.subheadline.bold())
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
-                                .multilineTextAlignment(.leading)
+                                .foregroundStyle(BeckettColor.ink)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
-                        .padding(14)
-                        .background(
-                            coach.selectedAction == action ? BeckettColor.primaryLight : BeckettColor.card,
-                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(coach.selectedAction == action ? BeckettColor.primary : BeckettColor.ink.opacity(0.08))
-                        }
+                        .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.plain)
                     .disabled(coach.isLoading)
@@ -135,6 +135,8 @@ struct CoachView: View {
                 }
             }
             .disabled(coach.isLoading)
+
+            creditsView
 
             Button(action: submit) {
                 HStack {

@@ -26,6 +26,9 @@ struct RootView: View {
                         .tabItem { Label("You", systemImage: "person.crop.circle") }
                 }
                 .tint(BeckettColor.primary)
+                .toolbar(.visible, for: .tabBar)
+                .toolbarBackground(.visible, for: .tabBar)
+                .toolbarBackground(BeckettColor.card, for: .tabBar)
                 .onChange(of: handoff.pending?.id) { _, newValue in
                     if newValue != nil { selectedTab = 0 }
                 }
