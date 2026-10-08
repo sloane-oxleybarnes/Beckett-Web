@@ -284,6 +284,19 @@ test("message help uses only the inline button loading state", async () => {
   assert.doesNotMatch(view, /Looking at the words and context/);
 });
 
+test("iOS uses the same warm brand palette and button states as the website", async () => {
+  const [theme, root] = await Promise.all([
+    readFile(new URL("../ios/BeckettCore/Design/BeckettTheme.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
+  ]);
+  assert.match(theme, /static let primary = Color\(red: 186 \/ 255, green: 117 \/ 255, blue: 23 \/ 255\)/);
+  assert.match(theme, /static let background = Color\(red: 251 \/ 255, green: 248 \/ 255, blue: 243 \/ 255\)/);
+  assert.match(theme, /static let card = Color\.white/);
+  assert.match(theme, /configuration\.isPressed \? BeckettColor\.primaryDark : BeckettColor\.primary/);
+  assert.match(root, /toolbarBackground\(BeckettColor\.background, for: \.tabBar\)/);
+  assert.doesNotMatch(theme, /systemGroupedBackground|secondarySystemGroupedBackground/);
+});
+
 test("decode caps readings at three and drafts responses in place", async () => {
   const [view, store] = await Promise.all([
     readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
