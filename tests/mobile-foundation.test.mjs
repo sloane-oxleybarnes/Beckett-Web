@@ -284,6 +284,19 @@ test("message help uses only the inline button loading state", async () => {
   assert.doesNotMatch(view, /Looking at the words and context/);
 });
 
+test("decode caps readings at three and drafts responses in place", async () => {
+  const [view, store] = await Promise.all([
+    readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/Coach/CoachStore.swift", import.meta.url), "utf8"),
+  ]);
+  assert.match(view, /possibleReadings\.prefix\(3\)/);
+  assert.match(view, /requestCoaching\(action: \.respond\)/);
+  assert.match(view, /if isLoading \{ ProgressView\(\)\.tint\(\.white\) \}/);
+  assert.doesNotMatch(view, /private func draftResponse\(\) \{\s*coach\.selectedAction = \.respond\s*coach\.startOver\(\)/);
+  assert.match(store, /let requestedAction = action \?\? selectedAction/);
+  assert.match(store, /selectedAction = requestedAction/);
+});
+
 test("mobile context mode is shared across Coach, Practice, and Courses", async () => {
   const [root, coachRoute, models] = await Promise.all([
     readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),

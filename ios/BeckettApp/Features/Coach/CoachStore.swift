@@ -21,9 +21,15 @@ final class CoachStore: ObservableObject {
     }
 
     @discardableResult
-    func submit(accessToken: String, contextMode: MobileContextMode, source: String = "app") async -> Bool {
+    func submit(
+        accessToken: String,
+        contextMode: MobileContextMode,
+        action: MobileCoachAction? = nil,
+        source: String = "app"
+    ) async -> Bool {
         let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return false }
+        let requestedAction = action ?? selectedAction
         isLoading = true
         errorMessage = nil
         errorCode = nil
@@ -33,7 +39,7 @@ final class CoachStore: ObservableObject {
             response = try await api.send(
                 "api/mobile/v1/coach",
                 body: CoachRequest(
-                    action: selectedAction,
+                    action: requestedAction,
                     text: content,
                     conversationContext: conversationContext,
                     person: person,
@@ -43,6 +49,7 @@ final class CoachStore: ObservableObject {
                 ),
                 accessToken: accessToken
             )
+            selectedAction = requestedAction
             usage = response?.usage
             return false
         } catch let APIError.server(status, message, code, safety, responseUsage) {

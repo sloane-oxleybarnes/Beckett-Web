@@ -21,6 +21,7 @@ struct CoachView: View {
                                 response: response,
                                 action: coach.selectedAction,
                                 originalMessage: coach.text,
+                                isLoading: coach.isLoading,
                                 onStartOver: coach.startOver,
                                 onDraftResponse: draftResponse,
                                 onPractice: practiceConversation
@@ -174,18 +175,29 @@ struct CoachView: View {
     }
 
     private func submit() {
+        requestCoaching()
+    }
+
+    private func requestCoaching(action: MobileCoachAction? = nil) {
         guard let token = auth.session?.accessToken else { return }
         Task {
-            let unauthorized = await coach.submit(accessToken: token, contextMode: contextMode)
+            let unauthorized = await coach.submit(
+                accessToken: token,
+                contextMode: contextMode,
+                action: action
+            )
             if unauthorized, let refreshed = await auth.refreshedAccessToken() {
-                await coach.submit(accessToken: refreshed, contextMode: contextMode)
+                await coach.submit(
+                    accessToken: refreshed,
+                    contextMode: contextMode,
+                    action: action
+                )
             }
         }
     }
 
     private func draftResponse() {
-        coach.selectedAction = .respond
-        coach.startOver()
+        requestCoaching(action: .respond)
     }
 
     private func practiceConversation() {
@@ -255,6 +267,7 @@ private struct CoachResultView: View {
     let response: CoachResponse
     let action: MobileCoachAction
     let originalMessage: String
+    let isLoading: Bool
     let onStartOver: () -> Void
     let onDraftResponse: () -> Void
     let onPractice: () -> Void
@@ -287,6 +300,7 @@ private struct CoachResultView: View {
             case let .interpretation(result):
                 InterpretationResultView(result: result)
                 DecodeNextActions(
+                    isLoading: isLoading,
                     onDraftResponse: onDraftResponse,
                     onPractice: onPractice
                 )
@@ -320,15 +334,20 @@ private struct PracticeResultButton: View {
 }
 
 private struct DecodeNextActions: View {
+    let isLoading: Bool
     let onDraftResponse: () -> Void
     let onPractice: () -> Void
 
     var body: some View {
         VStack(spacing: 10) {
             Button(action: onDraftResponse) {
-                Label("Draft response", systemImage: "arrowshape.turn.up.left")
+                HStack {
+                    if isLoading { ProgressView().tint(.white) }
+                    Label("Draft response", systemImage: "arrowshape.turn.up.left")
+                }
             }
             .buttonStyle(BeckettPrimaryButtonStyle())
+            .disabled(isLoading)
 
             Button(action: onPractice) {
                 Label("Practice conversation", systemImage: "person.2.wave.2")
@@ -356,7 +375,7 @@ private struct InterpretationResultView: View {
                 ResultList(title: "What is clear", values: result.clearSignals)
                 if !result.possibleReadings.isEmpty {
                     ResultSectionLabel("Possible readings")
-                    ForEach(result.possibleReadings) { reading in
+                    ForEach(Array(result.possibleReadings.prefix(3))) { reading in
                         VStack(alignment: .leading, spacing: 5) {
                             HStack {
                                 Text(reading.label).bold()
