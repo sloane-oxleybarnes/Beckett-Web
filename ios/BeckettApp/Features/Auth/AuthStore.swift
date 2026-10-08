@@ -72,6 +72,18 @@ final class AuthStore: ObservableObject {
         state = .signedOut
     }
 
+    func completeOnboarding(_ submission: MobileOnboardingSubmission) async {
+        guard let session else { return }
+        await work {
+            let _: OkayResponse = try await api.send(
+                "api/mobile/v1/onboarding",
+                body: submission,
+                accessToken: session.accessToken
+            )
+            profile = try await api.get("api/mobile/v1/session", accessToken: session.accessToken)
+        }
+    }
+
     func configureAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
         let nonce = Self.randomNonce()
         appleNonce = nonce
@@ -198,6 +210,38 @@ private struct EmailVerification: Encodable { let email: String; let code: Strin
 private struct AppleRequest: Encodable { let identityToken: String; let nonce: String }
 private struct RefreshRequest: Encodable { let refreshToken: String }
 private struct PrivacyUpdate: Encodable { let aiProcessingAllowed: Bool; let retentionMode: String }
+
+struct MobileOnboardingSubmission: Encodable {
+    let firstName: String
+    let lastName: String
+    let displayName: String
+    let communicationStrengthRatings: [String: String]
+    let workplaceEffortRatings: [String: String]
+    let coachingPriorityRatings: [String: String]
+    let coachingStyleRatings: [String: String]
+    let neurodivergentContext: [String]
+    let neurodivergentContextOther: String?
+    let adultUsEligibilityConfirmed: Bool
+    let termsAccepted: Bool
+    let privacyAcknowledged: Bool
+    let coachingDisclaimerAcknowledged: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case firstName = "first_name"
+        case lastName = "last_name"
+        case displayName = "display_name"
+        case communicationStrengthRatings = "communication_strength_ratings"
+        case workplaceEffortRatings = "workplace_effort_ratings"
+        case coachingPriorityRatings = "coaching_priority_ratings"
+        case coachingStyleRatings = "coaching_style_ratings"
+        case neurodivergentContext = "neurodivergent_context"
+        case neurodivergentContextOther = "neurodivergent_context_other"
+        case adultUsEligibilityConfirmed = "adult_us_eligibility_confirmed"
+        case termsAccepted = "terms_accepted"
+        case privacyAcknowledged = "privacy_acknowledged"
+        case coachingDisclaimerAcknowledged = "coaching_disclaimer_acknowledged"
+    }
+}
 
 private enum SignInError: LocalizedError {
     case invalidAppleCredential

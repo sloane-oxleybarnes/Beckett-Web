@@ -25,13 +25,13 @@ struct SignInView: View {
                                 .font(.title2.bold())
                             Text("Enter the code sent to \(sentEmail).")
                                 .foregroundStyle(BeckettColor.inkMid)
-                            TextField("Six-digit code", text: $code)
+                            TextField("Verification code", text: $code)
                                 .textContentType(.oneTimeCode)
                                 .keyboardType(.numberPad)
                                 .textFieldStyle(.roundedBorder)
                             Button("Continue") { Task { await auth.verifyCode(code) } }
                                 .buttonStyle(BeckettPrimaryButtonStyle())
-                                .disabled(code.count < 6 || auth.isWorking)
+                                .disabled(code.isEmpty || auth.isWorking)
                             HStack {
                                 Button("Send another code") { Task { await auth.requestCode(email: sentEmail) } }
                                 Spacer()

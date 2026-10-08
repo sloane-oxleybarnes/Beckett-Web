@@ -88,6 +88,24 @@ test("mobile session reports current credit usage", async () => {
   assert.match(route, /usage/);
 });
 
+test("mobile onboarding stays native and requires bearer auth plus current agreements", async () => {
+  const [route, setupView, authStore, signInView] = await Promise.all([
+    readFile(new URL("../app/api/mobile/v1/onboarding/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/Auth/AccountSetupView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/Auth/AuthStore.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/Auth/SignInView.swift", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(route, /getMobileUser\(request\)/);
+  assert.match(route, /hasRequiredBetaConsentSubmission/);
+  assert.match(route, /first_login_complete:\s*true/);
+  assert.match(route, /BETA_CONSENT_VERSIONS/);
+  assert.match(authStore, /api\/mobile\/v1\/onboarding/);
+  assert.doesNotMatch(setupView, /Continue setup on meetbeckett\.co/);
+  assert.match(setupView, /Finish setup/);
+  assert.match(signInView, /Verification code/);
+});
+
 test("mobile bearer auth validates access tokens with Supabase", async () => {
   const auth = await readFile(new URL("../lib/mobile-auth.ts", import.meta.url), "utf8");
   assert.match(auth, /auth\.getUser\(token\)/);
