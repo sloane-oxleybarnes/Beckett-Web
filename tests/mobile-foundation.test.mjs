@@ -165,6 +165,8 @@ test("message-help results hide the context toggle and use the branded result la
   assert.ok(resultBranch > -1);
   assert.ok(picker > composeView);
   assert.match(view, /Text\("BECKETT’S READ"\)[\s\S]*\.font\(\.caption\.weight\(\.bold\)\)[\s\S]*\.foregroundStyle\(BeckettColor\.primaryDark\)/);
+  assert.match(view, /CoachResultView\([\s\S]*originalMessage: coach\.text/);
+  assert.match(view, /Text\("ORIGINAL MESSAGE"\)[\s\S]*Text\(originalMessage\)/);
   assert.doesNotMatch(view, /Text\("Beckett’s read"\)[\s\S]*design: \.serif/);
 });
 

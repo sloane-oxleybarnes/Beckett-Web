@@ -16,7 +16,11 @@ struct CoachView: View {
                             .frame(height: 0)
                             .id("coach-top")
                         if let response = coach.response {
-                            CoachResultView(response: response, onStartOver: coach.startOver)
+                            CoachResultView(
+                                response: response,
+                                originalMessage: coach.text,
+                                onStartOver: coach.startOver
+                            )
                         } else {
                             composeView
                         }
@@ -255,6 +259,7 @@ private struct SafetyResultView: View {
 
 private struct CoachResultView: View {
     let response: CoachResponse
+    let originalMessage: String
     let onStartOver: () -> Void
 
     var body: some View {
@@ -266,6 +271,19 @@ private struct CoachResultView: View {
                     .foregroundStyle(BeckettColor.primaryDark)
                 Spacer()
                 Button("Start over", action: onStartOver).font(.subheadline)
+            }
+
+            BeckettCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("ORIGINAL MESSAGE")
+                        .font(.caption.weight(.bold))
+                        .tracking(0.8)
+                        .foregroundStyle(BeckettColor.primaryDark)
+                    Text(originalMessage)
+                        .font(.body)
+                        .foregroundStyle(BeckettColor.inkMid)
+                        .textSelection(.enabled)
+                }
             }
 
             switch response.result {
