@@ -157,18 +157,30 @@ test("coach scrolls to the top when a result is displayed or cleared", async () 
   assert.match(view, /proxy\.scrollTo\("coach-top", anchor: \.top\)/);
 });
 
-test("coach screen uses a compact Beckett header and places usage below the editor", async () => {
-  const [view, theme] = await Promise.all([
+test("message help uses the real Beckett brand asset and places usage below the editor", async () => {
+  const [view, theme, root] = await Promise.all([
     readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
     readFile(new URL("../ios/BeckettCore/Design/BeckettTheme.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
   ]);
-  assert.match(view, /navigationTitle\("Beckett"\)/);
-  assert.match(view, /navigationBarTitleDisplayMode\(\.inline\)/);
-  assert.match(view, /ToolbarItem\(placement: \.principal\)[\s\S]*BeckettBrandHeader\(\)/);
+  assert.match(view, /beckettBrandNavigation\(\)/);
+  assert.match(root, /Label\("Message Help"/);
   assert.match(theme, /struct BeckettBrandHeader: View/);
-  assert.match(theme, /BeckettLogoMark\(\)/);
+  assert.match(theme, /Image\("BeckettWordmark"\)/);
+  assert.match(theme, /ToolbarItem\(placement: \.principal\)[\s\S]*BeckettBrandHeader\(\)/);
   assert.match(view, /BeckettCard[\s\S]*creditsView[\s\S]*Button\(action: submit\)/);
   assert.doesNotMatch(view, /navigationTitle\("Coach"\)/);
+});
+
+test("the Beckett brand header appears on every signed-in top-level section", async () => {
+  const [coach, learning, profile] = await Promise.all([
+    readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/LearningViews.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/Profile/ProfileView.swift", import.meta.url), "utf8"),
+  ]);
+  assert.equal((coach.match(/\.beckettBrandNavigation\(\)/g) ?? []).length, 1);
+  assert.equal((learning.match(/\.beckettBrandNavigation\(\)/g) ?? []).length, 2);
+  assert.equal((profile.match(/\.beckettBrandNavigation\(\)/g) ?? []).length, 1);
 });
 
 test("mobile coaching presents the same three actions as web", async () => {

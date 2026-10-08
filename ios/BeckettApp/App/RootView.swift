@@ -28,7 +28,7 @@ struct RootView: View {
                 TabView(selection: $selectedTab) {
                     CoachView(contextMode: contextMode)
                         .tag(0)
-                        .tabItem { Label("Coach", systemImage: "bubble.left.and.text.bubble.right") }
+                        .tabItem { Label("Message Help", systemImage: "bubble.left.and.text.bubble.right") }
                     PracticeView(contextMode: contextMode)
                         .tag(1)
                         .tabItem { Label("Practice", systemImage: "person.2.wave.2") }

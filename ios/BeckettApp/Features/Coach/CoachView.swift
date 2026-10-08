@@ -25,14 +25,8 @@ struct CoachView: View {
                     .padding(20)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .navigationTitle("Beckett")
-                .navigationBarTitleDisplayMode(.inline)
+                .beckettBrandNavigation()
                 .toolbar(.visible, for: .tabBar)
-                .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        BeckettBrandHeader()
-                    }
-                }
                 .beckettPage()
                 .onChange(of: coach.response?.requestId) { _, _ in
                     scrollToTop(proxy)

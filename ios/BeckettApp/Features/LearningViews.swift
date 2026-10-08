@@ -235,8 +235,7 @@ struct PracticeView: View {
                 .padding(20)
             }
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Practice")
-            .navigationBarTitleDisplayMode(.inline)
+            .beckettBrandNavigation()
             .toolbar(.visible, for: .tabBar)
             .beckettPage()
         }
@@ -536,8 +535,7 @@ struct CoursesView: View {
                 }
                 .padding(20)
             }
-            .navigationTitle("Courses")
-            .navigationBarTitleDisplayMode(.inline)
+            .beckettBrandNavigation()
             .toolbar(.visible, for: .tabBar)
             .beckettPage()
             .task { await load() }

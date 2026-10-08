@@ -28,7 +28,7 @@ struct ProfileView: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            .navigationTitle("You")
+            .beckettBrandNavigation()
             .toolbar(.visible, for: .tabBar)
             .beckettPage()
         }
