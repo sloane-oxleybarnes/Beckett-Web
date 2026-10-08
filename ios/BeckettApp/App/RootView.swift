@@ -4,6 +4,7 @@ struct RootView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var handoff: CoachHandoffCoordinator
     @State private var selectedTab = 0
+    @State private var practicePrefill: PracticePrefill?
     @AppStorage("beckett.mobile.context-mode") private var contextModeRaw = MobileContextMode.professional.rawValue
 
     private var contextMode: Binding<MobileContextMode> {
@@ -26,10 +27,13 @@ struct RootView: View {
                 AccountSetupView()
             } else if auth.profile?.privacy.aiProcessing.current == true {
                 TabView(selection: $selectedTab) {
-                    CoachView(contextMode: contextMode)
+                    CoachView(contextMode: contextMode) { prefill in
+                        practicePrefill = prefill
+                        selectedTab = 1
+                    }
                         .tag(0)
                         .tabItem { Label("Message Help", systemImage: "bubble.left.and.text.bubble.right") }
-                    PracticeView(contextMode: contextMode)
+                    PracticeView(contextMode: contextMode, prefill: $practicePrefill)
                         .tag(1)
                         .tabItem { Label("Practice", systemImage: "person.2.wave.2") }
                     CoursesView(contextMode: contextMode)

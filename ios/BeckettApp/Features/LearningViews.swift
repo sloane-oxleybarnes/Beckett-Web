@@ -13,6 +13,14 @@ struct ContextModePicker: View {
         .accessibilityLabel("Personal or professional context")
     }
 }
+
+struct PracticePrefill: Equatable {
+    let originalMessage: String
+    let person: String
+    let goal: String
+    let conversationContext: String
+}
+
 private enum PracticeDifficulty: String, CaseIterable, Identifiable, Encodable {
     case realistic
     case supportive
@@ -188,6 +196,18 @@ private final class PracticeStore: ObservableObject {
         errorMessage = nil
     }
 
+    func apply(_ prefill: PracticePrefill) {
+        startOver()
+        person = prefill.person.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "The sender"
+            : prefill.person
+        situation = "I received this message: \"\(prefill.originalMessage)\""
+        goal = prefill.goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Practice a clear response that moves the conversation forward."
+            : prefill.goal
+        relationshipContext = prefill.conversationContext
+    }
+
     private func request(
         _ body: PracticeRequest,
         accessToken: String,
@@ -216,6 +236,7 @@ private final class PracticeStore: ObservableObject {
 
 struct PracticeView: View {
     @Binding var contextMode: MobileContextMode
+    @Binding var prefill: PracticePrefill?
     @EnvironmentObject private var auth: AuthStore
     @StateObject private var store = PracticeStore()
 
@@ -238,7 +259,19 @@ struct PracticeView: View {
             .beckettBrandNavigation()
             .toolbar(.visible, for: .tabBar)
             .beckettPage()
+            .onChange(of: prefill) { _, value in
+                applyPrefill(value)
+            }
+            .onAppear {
+                applyPrefill(prefill)
+            }
         }
+    }
+
+    private func applyPrefill(_ value: PracticePrefill?) {
+        guard let value else { return }
+        store.apply(value)
+        prefill = nil
     }
 
     private var setupView: some View {

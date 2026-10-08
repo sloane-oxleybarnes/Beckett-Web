@@ -3,6 +3,7 @@ import UIKit
 
 struct CoachView: View {
     @Binding var contextMode: MobileContextMode
+    let onPractice: (PracticePrefill) -> Void
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var handoff: CoachHandoffCoordinator
     @StateObject private var coach = CoachStore()
@@ -19,7 +20,9 @@ struct CoachView: View {
                             CoachResultView(
                                 response: response,
                                 originalMessage: coach.text,
-                                onStartOver: coach.startOver
+                                onStartOver: coach.startOver,
+                                onDraftResponse: draftResponse,
+                                onPractice: practiceConversation
                             )
                         } else {
                             composeView
@@ -182,6 +185,20 @@ struct CoachView: View {
             }
         }
     }
+
+    private func draftResponse() {
+        coach.selectedAction = .respond
+        coach.startOver()
+    }
+
+    private func practiceConversation() {
+        onPractice(PracticePrefill(
+            originalMessage: coach.text,
+            person: coach.person,
+            goal: coach.goal,
+            conversationContext: coach.conversationContext
+        ))
+    }
 }
 
 private extension MobileCoachAction {
@@ -261,6 +278,8 @@ private struct CoachResultView: View {
     let response: CoachResponse
     let originalMessage: String
     let onStartOver: () -> Void
+    let onDraftResponse: () -> Void
+    let onPractice: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -287,7 +306,12 @@ private struct CoachResultView: View {
             }
 
             switch response.result {
-            case let .interpretation(result): InterpretationResultView(result: result)
+            case let .interpretation(result):
+                InterpretationResultView(result: result)
+                DecodeNextActions(
+                    onDraftResponse: onDraftResponse,
+                    onPractice: onPractice
+                )
             case let .draftOptions(result): DraftOptionsResultView(result: result)
             case let .toneFeedback(result): ToneFeedbackResultView(result: result)
             }
@@ -296,6 +320,31 @@ private struct CoachResultView: View {
                 .font(.footnote)
                 .foregroundStyle(BeckettColor.inkLight)
         }
+    }
+}
+
+private struct DecodeNextActions: View {
+    let onDraftResponse: () -> Void
+    let onPractice: () -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Button(action: onDraftResponse) {
+                Label("Draft response", systemImage: "arrowshape.turn.up.left")
+            }
+            .buttonStyle(BeckettPrimaryButtonStyle())
+
+            Button(action: onPractice) {
+                Label("Practice conversation", systemImage: "person.2.wave.2")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .tint(BeckettColor.primaryDark)
+        }
+        .accessibilityElement(children: .contain)
     }
 }
 

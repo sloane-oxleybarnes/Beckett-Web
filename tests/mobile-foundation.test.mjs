@@ -68,7 +68,7 @@ test("mobile results enforce concise web-aligned output limits", () => {
   assert.equal(result.type, "interpretation");
   assert.equal(result.summary.length, 220);
   assert.equal(result.clearSignals.length, 3);
-  assert.equal(result.possibleReadings.length, 2);
+  assert.equal(result.possibleReadings.length, 3);
   assert.equal(result.uncertainties.length, 2);
   assert.deepEqual(result.usefulQuestions, []);
 });
@@ -191,6 +191,8 @@ test("message-help results hide the context toggle and use the branded result la
   assert.match(view, /CoachResultView\([\s\S]*originalMessage: coach\.text/);
   assert.match(view, /Text\("ORIGINAL MESSAGE"\)[\s\S]*Text\(originalMessage\)/);
   assert.match(view, /ResultSectionLabel\("Possible readings"\)/);
+  assert.match(view, /Label\("Draft response"/);
+  assert.match(view, /Label\("Practice conversation"/);
   assert.doesNotMatch(view, /ResultList\(title: "Questions you could ask"/);
   assert.doesNotMatch(view, /ResultList\(title: "Intent kept"/);
   assert.doesNotMatch(view, /Text\(option\.rationale\)/);
@@ -262,7 +264,8 @@ test("mobile context mode is shared across Coach, Practice, and Courses", async 
   assert.match(models, /enum MobileContextMode/);
   assert.match(root, /@AppStorage\("beckett\.mobile\.context-mode"\)/);
   assert.match(root, /CoachView\(contextMode: contextMode\)/);
-  assert.match(root, /PracticeView\(contextMode: contextMode\)/);
+  assert.match(root, /practicePrefill = prefill[\s\S]*selectedTab = 1/);
+  assert.match(root, /PracticeView\(contextMode: contextMode, prefill: \$practicePrefill\)/);
   assert.match(root, /CoursesView\(contextMode: contextMode\)/);
   assert.match(coachRoute, /body\.contextMode === "personal"/);
 });

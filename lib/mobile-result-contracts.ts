@@ -85,7 +85,7 @@ export function normalizeMobileCoachResult(
 
   if (expectedType === "interpretation") {
     const possibleReadings = Array.isArray(record.possibleReadings)
-      ? record.possibleReadings.slice(0, 2).map((item) => {
+      ? record.possibleReadings.slice(0, 3).map((item) => {
           const reading = asRecord(item);
           const rawConfidence = cleanText(reading.confidence).toLowerCase();
           const confidence: "low" | "medium" | "high" = rawConfidence === "high" || rawConfidence === "medium"
@@ -156,7 +156,7 @@ export function mobileResultJsonInstruction(action: MobileCoachAction) {
   if (type === "interpretation") {
     return `Return only valid JSON with this exact shape:
 {"type":"interpretation","summary":"string","clearSignals":["string"],"possibleReadings":[{"label":"string","explanation":"string","evidence":"specific words or pattern from the message","confidence":"low|medium|high"}],"uncertainties":["string"],"usefulQuestions":["string"]}
-Keep the summary to one or two short sentences. Include no more than three clear signals, two possible readings, and two uncertainties. Return an empty usefulQuestions array because Decode must not add unsolicited next steps. Keep every list item to one short sentence. Separate observable wording from interpretation. Confidence describes evidentiary support, not certainty about another person's intent.`;
+Keep the summary to one or two short sentences. Include no more than three clear signals, three possible readings, and two uncertainties. Return an empty usefulQuestions array because Decode must not add unsolicited next steps. Keep every list item to one short sentence. Separate observable wording from interpretation. Confidence describes evidentiary support, not certainty about another person's intent.`;
   }
   if (type === "tone_feedback") {
     return `Return only valid JSON with this exact shape:
