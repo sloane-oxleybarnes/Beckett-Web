@@ -305,7 +305,7 @@ private struct CoachResultView: View {
                     onPractice: onPractice
                 )
             case let .draftOptions(result):
-                if action == .rewrite, let feedback = result.originalFeedback {
+                if let feedback = result.originalFeedback {
                     RewriteFeedbackView(feedback: feedback)
                 }
                 DraftOptionsResultView(result: result)
@@ -420,7 +420,8 @@ private struct RewriteFeedbackView: View {
     var body: some View {
         BeckettCard {
             VStack(alignment: .leading, spacing: 14) {
-                ResultSectionLabel("Feedback on your original")
+                Text("Feedback on your original message")
+                    .font(.system(size: 22, weight: .regular, design: .serif))
                 feedbackRow(title: "Tone", value: feedback.tone)
                 Divider()
                 feedbackRow(title: "Clarity", value: feedback.clarity)
@@ -442,12 +443,6 @@ private struct RewriteFeedbackView: View {
 
 private struct DraftOptionCard: View {
     let option: DraftOptionsResult.Option
-    @State private var text: String
-
-    init(option: DraftOptionsResult.Option) {
-        self.option = option
-        _text = State(initialValue: option.text)
-    }
 
     var body: some View {
         BeckettCard {
@@ -459,11 +454,11 @@ private struct DraftOptionCard: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(BeckettColor.primaryLight, in: Capsule())
-                TextEditor(text: $text)
-                    .frame(minHeight: 90)
-                    .scrollContentBackground(.hidden)
+                Text(option.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
                     .accessibilityLabel("\(option.label) draft")
-                ResultActions(text: text)
+                ResultActions(text: option.text)
             }
         }
     }

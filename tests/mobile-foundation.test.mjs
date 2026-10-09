@@ -212,7 +212,7 @@ test("message-help results hide the context toggle and use the branded result la
   assert.match(view, /Label\("Draft response"/);
   assert.match(view, /Label\("Practice conversation"/);
   assert.match(view, /action == \.respond \|\| action == \.rewrite/);
-  assert.match(view, /ResultSectionLabel\("Feedback on your original"\)/);
+  assert.match(view, /Text\("Feedback on your original message"\)/);
   assert.match(view, /feedbackRow\(title: "Tone"/);
   assert.match(view, /feedbackRow\(title: "Clarity"/);
   assert.doesNotMatch(view, /ResultList\(title: "Questions you could ask"/);
@@ -320,6 +320,15 @@ test("decode describes evidence strength instead of ambiguous confidence", async
   assert.match(models, /case "medium": "Some evidence"/);
   assert.match(models, /default: "Limited evidence"/);
   assert.doesNotMatch(view, /confidence\.capitalized/);
+});
+
+test("rewrite always shows returned feedback and full response text", async () => {
+  const view = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
+  assert.match(view, /if let feedback = result\.originalFeedback/);
+  assert.match(view, /Text\("Feedback on your original message"\)/);
+  assert.match(view, /Text\(option\.text\)\s*\.fixedSize\(horizontal: false, vertical: true\)/);
+  assert.doesNotMatch(view, /TextEditor\(text: \$text\)/);
+  assert.doesNotMatch(view, /action == \.rewrite, let feedback/);
 });
 
 test("mobile context mode is shared across Coach, Practice, and Courses", async () => {
