@@ -45,15 +45,11 @@ struct CoachView: View {
                 }
                 .onChange(of: handoff.pending) { _, pending in
                     guard let pending else { return }
-                    if let mode = pending.contextMode { contextMode = mode }
-                    coach.apply(pending)
-                    handoff.finish(pending.id)
+                    apply(pending)
                 }
                 .onAppear {
                     guard let pending = handoff.pending else { return }
-                    if let mode = pending.contextMode { contextMode = mode }
-                    coach.apply(pending)
-                    handoff.finish(pending.id)
+                    apply(pending)
                 }
             }
         }
@@ -181,19 +177,21 @@ struct CoachView: View {
         requestCoaching()
     }
 
-    private func requestCoaching(action: MobileCoachAction? = nil) {
+    private func requestCoaching(action: MobileCoachAction? = nil, source: String = "app") {
         guard let token = auth.session?.accessToken else { return }
         Task {
             let unauthorized = await coach.submit(
                 accessToken: token,
                 contextMode: contextMode,
-                action: action
+                action: action,
+                source: source
             )
             if unauthorized, let refreshed = await auth.refreshedAccessToken() {
                 await coach.submit(
                     accessToken: refreshed,
                     contextMode: contextMode,
-                    action: action
+                    action: action,
+                    source: source
                 )
             }
         }
@@ -201,6 +199,15 @@ struct CoachView: View {
 
     private func draftResponse() {
         requestCoaching(action: .respond)
+    }
+
+    private func apply(_ pending: MobileCoachHandoff) {
+        if let mode = pending.contextMode { contextMode = mode }
+        coach.apply(pending)
+        handoff.finish(pending.id)
+        if pending.submitImmediately == true {
+            requestCoaching(action: pending.action, source: pending.source ?? "app_intent")
+        }
     }
 
     private func practiceConversation() {

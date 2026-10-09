@@ -186,6 +186,8 @@ struct MobileCoachHandoff: Codable, Equatable, Identifiable {
     let action: MobileCoachAction
     let text: String
     let contextMode: MobileContextMode?
+    let submitImmediately: Bool?
+    let source: String?
     let createdAt: Date
 
     init(
@@ -193,12 +195,16 @@ struct MobileCoachHandoff: Codable, Equatable, Identifiable {
         action: MobileCoachAction,
         text: String,
         contextMode: MobileContextMode? = nil,
+        submitImmediately: Bool = false,
+        source: String? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
         self.action = action
         self.text = text
         self.contextMode = contextMode
+        self.submitImmediately = submitImmediately
+        self.source = source
         self.createdAt = createdAt
     }
 
@@ -218,11 +224,19 @@ enum MobileCoachHandoffStore {
     }
 
     static func consume(id: UUID, now: Date = Date()) -> MobileCoachHandoff? {
+        consume(expectedID: id, now: now)
+    }
+
+    static func consumePending(now: Date = Date()) -> MobileCoachHandoff? {
+        consume(expectedID: nil, now: now)
+    }
+
+    private static func consume(expectedID: UUID?, now: Date) -> MobileCoachHandoff? {
         guard let url = try? fileURL() else { return nil }
         defer { try? FileManager.default.removeItem(at: url) }
         guard let data = try? Data(contentsOf: url),
               let handoff = try? JSONDecoder().decode(MobileCoachHandoff.self, from: data),
-              handoff.id == id,
+              expectedID.map({ handoff.id == $0 }) ?? true,
               now.timeIntervalSince(handoff.createdAt) >= 0,
               now.timeIntervalSince(handoff.createdAt) <= lifetime else { return nil }
         return handoff

@@ -198,6 +198,30 @@ test("share extension supports text, images, local OCR, selection, and opaque ha
   assert.match(app, /MobileCoachHandoffStore\.consume/);
 });
 
+test("iOS publishes secure App Intents for Siri, Spotlight, and the Action button", async () => {
+  const [intents, app, coach, models, project] = await Promise.all([
+    readFile(new URL("../ios/BeckettApp/App/BeckettAppIntents.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/App/BeckettApp.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettCore/Models/MobileModels.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/Beckett.xcodeproj/project.pbxproj", import.meta.url), "utf8"),
+  ]);
+  assert.match(intents, /struct DecodeWithBeckettIntent: AppIntent/);
+  assert.match(intents, /struct RespondWithBeckettIntent: AppIntent/);
+  assert.match(intents, /struct RewriteWithBeckettIntent: AppIntent/);
+  assert.match(intents, /struct BeckettShortcuts: AppShortcutsProvider/);
+  assert.match(intents, /openAppWhenRun: Bool \{ true \}/);
+  assert.match(intents, /authenticationPolicy: IntentAuthenticationPolicy \{ \.requiresAuthentication \}/);
+  assert.match(intents, /inputConnectionBehavior: \.connectToPreviousIntentResult/);
+  assert.match(intents, /source: "app_intent"/);
+  assert.match(intents, /MobileCoachHandoffStore\.save/);
+  assert.doesNotMatch(intents, /beckett:\/\/coach[^\n]*message=/);
+  assert.match(models, /static func consumePending/);
+  assert.match(app, /handoff\.receivePending\(\)/);
+  assert.match(coach, /pending\.submitImmediately == true/);
+  assert.match(project, /BeckettAppIntents\.swift in Sources/);
+});
+
 test("coach scrolls to the top when a result is displayed or cleared", async () => {
   const view = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
   assert.match(view, /ScrollViewReader/);

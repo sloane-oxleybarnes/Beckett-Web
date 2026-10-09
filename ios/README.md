@@ -21,6 +21,13 @@ App Group and opens Beckett with only an opaque handoff ID in the URL. The app
 deletes the handoff as soon as it consumes it, and unconsumed handoffs expire
 after 15 minutes.
 
+Beckett also publishes Decode, Respond, and Rewrite App Shortcuts. They can be
+run from Siri, Spotlight, the Shortcuts app, or assigned to the iPhone Action
+button. Each shortcut accepts text from a previous shortcut action or prompts
+for a message, then opens Beckett and runs coaching with a configurable
+Professional or Personal lens. Shortcut handoffs use the same file-protected,
+15-minute App Group storage as the Share Extension.
+
 ## Local setup
 
 1. Open `Beckett.xcodeproj` in Xcode 16 or newer.
