@@ -97,6 +97,11 @@ private final class PracticeVoiceController: ObservableObject {
         try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetooth])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
 
+        guard session.isInputAvailable else {
+            try? session.setActive(false, options: .notifyOthersOnDeactivation)
+            throw PracticeVoiceError.microphoneUnavailable
+        }
+
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
         guard format.sampleRate > 0 else { throw PracticeVoiceError.microphoneUnavailable }

@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   MOBILE_RESULT_CONTRACT_VERSION,
+  hasUsableMobileDraftOptions,
   mobileCoachActions,
   normalizeMobileCoachResult,
   resultTypeForMobileAction,
@@ -52,6 +53,20 @@ test("draft options discard empty model output and cap options at three", () => 
   assert.equal(result.options.length, 3);
   assert.deepEqual(result.options.map((option) => option.style), ["direct", "warm", "balanced"]);
   assert.equal(result.originalFeedback, null);
+});
+
+test("draft options reject placeholders and require three complete messages", () => {
+  const result = normalizeMobileCoachResult("respond", {
+    options: [
+      { style: "direct", text: "Direct draft" },
+      { style: "warm", text: "Thanks for checking in — yes, I can send it Friday." },
+      { style: "balanced", text: "Balanced response" },
+    ],
+  });
+
+  assert.equal(result.type, "draft_options");
+  assert.deepEqual(result.options.map((option) => option.style), ["warm"]);
+  assert.equal(hasUsableMobileDraftOptions(result), false);
 });
 
 test("rewrite results include concise feedback on the original draft", () => {
@@ -106,7 +121,7 @@ test("tone feedback permits no rewrite when the draft already works", () => {
 test("mobile coaching requires current consent before the AI call", async () => {
   const route = await readFile(new URL("../app/api/mobile/v1/coach/route.ts", import.meta.url), "utf8");
   const consentCheck = route.indexOf("hasCurrentMobileAiConsent");
-  const modelCall = route.indexOf("callAnthropic(system");
+  const modelCall = route.indexOf("const response = await callAnthropic(");
   assert.ok(consentCheck > -1);
   assert.ok(modelCall > consentCheck);
   assert.match(route, /contentSaved:\s*false/);
@@ -115,7 +130,7 @@ test("mobile coaching requires current consent before the AI call", async () => 
   assert.match(route, /mobileUserVoiceInstruction/);
   assert.match(route, /messageHelpTask\(action\)/);
   assert.match(route, /Stay under 250 words total/);
-  assert.match(route, /\], 800\)/);
+  assert.match(route, /\s900,\s*\)/);
 });
 
 test("mobile coaching addresses the user directly instead of by profile name", async () => {
@@ -189,13 +204,27 @@ test("share extension supports text, images, local OCR, selection, and opaque ha
   assert.match(controller, /reading\.evidenceStrengthLabel/);
   assert.match(controller, /Feedback on your original/);
   assert.match(controller, /beckettBrandNavigation\(\)/);
-  assert.match(controller, /extensionContext\?\.open/);
+  assert.match(controller, /try model\.saveHandoff\(\)/);
+  assert.doesNotMatch(controller, /extensionContext\?\.open/);
+  assert.match(controller, /Open Beckett to continue this conversation in Inbox/);
   assert.match(models, /pending-coach-handoff\.json/);
   assert.match(models, /completeFileProtection/);
   assert.match(models, /let contextMode: MobileContextMode\?/);
   assert.match(models, /beckett:\/\/coach\/handoff\?id=/);
   assert.doesNotMatch(models, /beckett:\/\/coach\/handoff\?[^\n]*text=/);
   assert.match(app, /MobileCoachHandoffStore\.consume/);
+});
+
+test("mobile failure fixes guard voice input and route pending handoffs", async () => {
+  const [learning, root, route] = await Promise.all([
+    readFile(new URL("../ios/BeckettApp/Features/LearningViews.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/mobile/v1/coach/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(learning, /guard session\.isInputAvailable/);
+  assert.match(root, /\.onAppear \{\s*if handoff\.pending != nil \{ selectedTab = 0 \}/);
+  assert.match(route, /hasUsableMobileDraftOptions/);
+  assert.match(route, /generateResult\(true\)/);
 });
 
 test("iOS publishes secure App Intents for Siri, Spotlight, and the Action button", async () => {

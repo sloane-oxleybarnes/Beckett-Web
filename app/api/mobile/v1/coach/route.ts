@@ -8,6 +8,7 @@ import { getMobileUser } from "@/lib/mobile-auth";
 import { getMobilePrivacyPreferences, hasCurrentMobileAiConsent } from "@/lib/mobile-consent";
 import {
   MOBILE_RESULT_CONTRACT_VERSION,
+  hasUsableMobileDraftOptions,
   isMobileCoachAction,
   mobileResultJsonInstruction,
   mobileUserVoiceInstruction,
@@ -152,9 +153,23 @@ export async function POST(request: NextRequest) {
         contextMode,
       },
     });
-    const response = await callAnthropic(system, [{ role: "user", content: prompt }], 800);
-    const parsed = parseJsonObject<unknown>(response);
-    const result = normalizeMobileCoachResult(action, parsed);
+    const generateResult = async (repair = false) => {
+      const repairInstruction = repair
+        ? "Your previous output contained missing or placeholder drafts. Return the same JSON shape again with exactly three complete messages in every option.text field."
+        : null;
+      const response = await callAnthropic(
+        [system, repairInstruction].filter(Boolean).join("\n\n"),
+        [{ role: "user", content: prompt }],
+        900,
+      );
+      return normalizeMobileCoachResult(action, parseJsonObject<unknown>(response));
+    };
+
+    let result = await generateResult();
+    if (!hasUsableMobileDraftOptions(result)) result = await generateResult(true);
+    if (!hasUsableMobileDraftOptions(result)) {
+      throw new Error("The model did not return complete draft options.");
+    }
 
     return NextResponse.json({
       contractVersion: MOBILE_RESULT_CONTRACT_VERSION,

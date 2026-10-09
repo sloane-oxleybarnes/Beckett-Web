@@ -47,6 +47,9 @@ struct RootView: View {
                 .toolbar(.visible, for: .tabBar)
                 .toolbarBackground(.visible, for: .tabBar)
                 .toolbarBackground(BeckettColor.background, for: .tabBar)
+                .onAppear {
+                    if handoff.pending != nil { selectedTab = 0 }
+                }
                 .onChange(of: handoff.pending?.id) { _, newValue in
                     if newValue != nil { selectedTab = 0 }
                 }

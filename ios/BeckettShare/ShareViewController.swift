@@ -29,16 +29,8 @@ final class ShareViewController: UIViewController {
 
     private func continueInApp() {
         do {
-            let url = try model.makeHandoffURL()
-            extensionContext?.open(url) { [weak self] opened in
-                Task { @MainActor in
-                    if opened {
-                        self?.finish()
-                    } else {
-                        self?.model.errorMessage = "Beckett could not open. Try opening the app directly."
-                    }
-                }
-            }
+            try model.saveHandoff()
+            finish()
         } catch {
             model.errorMessage = "Beckett could not prepare the handoff."
         }
@@ -177,13 +169,11 @@ final class ShareCoachModel: ObservableObject {
         errorMessage = nil
     }
 
-    func makeHandoffURL() throws -> URL {
+    func saveHandoff() throws {
         let selected = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !selected.isEmpty else { throw HandoffError.emptyText }
         let handoff = MobileCoachHandoff(action: action, text: selected, contextMode: contextMode)
         try MobileCoachHandoffStore.save(handoff)
-        guard let url = handoff.deepLink else { throw HandoffError.invalidURL }
-        return url
     }
 
     private func coach(using accessToken: String) async throws -> CoachResponse {
@@ -261,7 +251,6 @@ final class ShareCoachModel: ObservableObject {
 
     private enum HandoffError: Error {
         case emptyText
-        case invalidURL
     }
 }
 
@@ -349,13 +338,22 @@ private struct ShareCoachView: View {
                             onCopyAndClose: onClose
                         )
                     }
-                    HStack {
+                    HStack(spacing: 10) {
                         Button("Edit request") { model.startOver() }
                             .buttonStyle(.bordered)
-                        Button("Continue in app", action: onContinueInApp)
-                            .buttonStyle(.borderedProminent)
-                            .tint(BeckettColor.primary)
+                        Button {
+                            UIPasteboard.general.string = response.result.compactCopyText
+                            onClose()
+                        } label: {
+                            Label("Copy & close", systemImage: "doc.on.doc")
+                        }
+                        .buttonStyle(.bordered)
                     }
+                    Button("Save for Beckett", action: onContinueInApp)
+                        .buttonStyle(BeckettPrimaryButtonStyle())
+                    Text("Open Beckett to continue this conversation in Inbox.")
+                        .font(.caption)
+                        .foregroundStyle(BeckettColor.inkLight)
                 } else {
                     sourceStatus
                     SelectableTextEditor(text: $model.text, selectedRange: $selectedRange)
@@ -383,7 +381,7 @@ private struct ShareCoachView: View {
                     .buttonStyle(BeckettPrimaryButtonStyle())
                     .disabled(model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isLoading)
 
-                    Button("Continue in the full app", action: onContinueInApp)
+                    Button("Save for Beckett", action: onContinueInApp)
                         .font(.subheadline.weight(.semibold))
                         .disabled(model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
@@ -573,5 +571,18 @@ private struct CompactResultActions: View {
         }
         .font(.subheadline.weight(.semibold))
         .tint(BeckettColor.primaryDark)
+    }
+}
+
+private extension MobileCoachResult {
+    var compactCopyText: String {
+        switch self {
+        case let .interpretation(value):
+            return value.summary
+        case let .draftOptions(value):
+            return value.options.first?.text ?? value.contextSummary
+        case let .toneFeedback(value):
+            return value.revision?.text ?? value.likelyLanding
+        }
     }
 }

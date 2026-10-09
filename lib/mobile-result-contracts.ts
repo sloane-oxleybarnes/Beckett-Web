@@ -82,6 +82,19 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function isDraftPlaceholder(value: string) {
+  const normalized = value.trim().toLowerCase().replace(/[.!]+$/, "");
+  if (["string", "draft", "response", "reply", "rewrite"].includes(normalized)) return true;
+  return /^(direct|warm|balanced|clear|warmer|more concise)\s+(draft|response|reply|rewrite)$/.test(normalized);
+}
+
+export function hasUsableMobileDraftOptions(result: MobileCoachResult) {
+  return result.type !== "draft_options" || (
+    result.options.length === 3
+    && result.options.every((option) => option.text.length >= 8 && !isDraftPlaceholder(option.text))
+  );
+}
+
 export function normalizeMobileCoachResult(
   action: MobileCoachAction,
   value: unknown,
@@ -154,7 +167,7 @@ export function normalizeMobileCoachResult(
           text: cleanText(option.text, "", 360),
           rationale: cleanText(option.rationale, "Preserves the user's intent.", 120),
         };
-      }).filter((option) => option.text)
+      }).filter((option) => option.text && !isDraftPlaceholder(option.text))
     : [];
 
   return {
@@ -182,9 +195,9 @@ Preserve the user's meaning and boundaries. If no revision is needed, return nul
   if (action === "rewrite") {
     return `Return only valid JSON with this exact shape:
 {"type":"draft_options","contextSummary":"one short sentence","preservedIntent":[],"originalFeedback":{"tone":"one short sentence","clarity":"one short sentence","strengths":["short phrase"],"watchFor":["short phrase"]},"options":[{"style":"direct","label":"Clear","text":"string","rationale":"string"},{"style":"warm","label":"Warmer","text":"string","rationale":"string"},{"style":"balanced","label":"More concise","text":"string","rationale":"string"}],"uncertaintyNote":null}
-Briefly assess the user's original draft before rewriting it. Keep tone and clarity to one short sentence each, with no more than two short strengths and two short watch-outs. Return exactly three editable rewrites. Keep each rewrite under 45 words. Preserve the user's intent, facts, boundaries, promises, and voice. Do not claim to send anything.`;
+Briefly assess the user's original draft before rewriting it. Keep tone and clarity to one short sentence each, with no more than two short strengths and two short watch-outs. Return exactly three complete, editable rewrites. The text field must contain the full rewritten message; never use placeholders such as "Clear draft," "Warmer draft," "More concise draft," "string," or a description of the rewrite. Keep each rewrite under 45 words. Preserve the user's intent, facts, boundaries, promises, and voice. Do not claim to send anything.`;
   }
   return `Return only valid JSON with this exact shape:
 {"type":"draft_options","contextSummary":"string","preservedIntent":["string"],"originalFeedback":null,"options":[{"style":"direct","label":"Direct","text":"string","rationale":"string"},{"style":"warm","label":"Warm","text":"string","rationale":"string"},{"style":"balanced","label":"Balanced","text":"string","rationale":"string"}],"uncertaintyNote":"string or null"}
-Return exactly three ready-to-send replies and no additional coaching. Keep each reply under 45 words. Each reply must move the conversation forward rather than repeat or paraphrase the incoming message. Preserve the user's intent, facts, boundaries, and voice. Write each rationale directly to the user using "you" and "your," never the user's name or third-person pronouns. Do not claim to send anything.`;
+Return exactly three complete, ready-to-send replies and no additional coaching. The text field must contain the full message the user could send; never use placeholders such as "Direct draft," "Warm draft," "Balanced draft," "string," or a description of what the reply should say. Keep each reply under 45 words. Each reply must move the conversation forward rather than repeat or paraphrase the incoming message. Preserve the user's intent, facts, boundaries, and voice. Write each rationale directly to the user using "you" and "your," never the user's name or third-person pronouns. Do not claim to send anything.`;
 }

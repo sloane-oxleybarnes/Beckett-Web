@@ -16,10 +16,11 @@ are transient in mobile v1 and are not added to Beckett history.
 The Share Extension accepts selected text or up to five images/screenshots. It
 uses Apple's Vision framework for on-device OCR, lets the user narrow the text
 before sending it, and can show a compact coaching result without leaving the
-source app. “Continue in app” writes a file-protected handoff into the shared
-App Group and opens Beckett with only an opaque handoff ID in the URL. The app
-deletes the handoff as soon as it consumes it, and unconsumed handoffs expire
-after 15 minutes.
+source app. “Save for Beckett” writes a file-protected handoff into the shared
+App Group. iOS does not allow Share Extensions to launch their containing app,
+so Beckett routes the saved request into Inbox the next time the app becomes
+active. The app deletes the handoff as soon as it consumes it, and unconsumed
+handoffs expire after 15 minutes.
 
 Beckett also publishes Decode, Respond, and Rewrite App Shortcuts. They can be
 run from Siri, Spotlight, the Shortcuts app, or assigned to the iPhone Action
