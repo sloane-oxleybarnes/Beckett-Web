@@ -206,7 +206,7 @@ test("share extension supports text, images, local OCR, selection, and opaque ha
   assert.match(controller, /beckettBrandNavigation\(\)/);
   assert.match(controller, /try model\.saveHandoff\(\)/);
   assert.doesNotMatch(controller, /extensionContext\?\.open/);
-  assert.match(controller, /Open Beckett to continue this conversation in Inbox/);
+  assert.match(controller, /Open Beckett to continue in Message Help/);
   assert.match(models, /pending-coach-handoff\.json/);
   assert.match(models, /completeFileProtection/);
   assert.match(models, /let contextMode: MobileContextMode\?/);
@@ -215,16 +215,18 @@ test("share extension supports text, images, local OCR, selection, and opaque ha
   assert.match(app, /MobileCoachHandoffStore\.consume/);
 });
 
-test("mobile failure fixes guard voice input and route pending handoffs", async () => {
-  const [learning, root, route] = await Promise.all([
+test("mobile failure fixes guard voice input, route handoffs, and configure native tests", async () => {
+  const [learning, root, route, scheme] = await Promise.all([
     readFile(new URL("../ios/BeckettApp/Features/LearningViews.swift", import.meta.url), "utf8"),
     readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
     readFile(new URL("../app/api/mobile/v1/coach/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../ios/Beckett.xcodeproj/xcshareddata/xcschemes/Beckett.xcscheme", import.meta.url), "utf8"),
   ]);
   assert.match(learning, /guard session\.isInputAvailable/);
   assert.match(root, /\.onAppear \{\s*if handoff\.pending != nil \{ selectedTab = 0 \}/);
   assert.match(route, /hasUsableMobileDraftOptions/);
   assert.match(route, /generateResult\(true\)/);
+  assert.match(scheme, /BlueprintName = "BeckettTests"/);
 });
 
 test("iOS publishes secure App Intents for Siri, Spotlight, and the Action button", async () => {
@@ -251,7 +253,7 @@ test("iOS publishes secure App Intents for Siri, Spotlight, and the Action butto
   assert.match(project, /BeckettAppIntents\.swift in Sources/);
 });
 
-test("mobile Inbox supports transient follow-up coaching and Practice handoff", async () => {
+test("mobile Message Help keeps follow-up infrastructure off the result screen and supports Practice handoff", async () => {
   const [route, store, view, root] = await Promise.all([
     readFile(new URL("../app/api/mobile/v1/inbox/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../ios/BeckettApp/Features/Coach/CoachStore.swift", import.meta.url), "utf8"),
@@ -268,11 +270,10 @@ test("mobile Inbox supports transient follow-up coaching and Practice handoff", 
   assert.doesNotMatch(route, /\.from\("[^"]*inbox/);
   assert.match(store, /api\/mobile\/v1\/inbox/);
   assert.match(store, /followUpMessages\.append\(InboxMessage\(role: \.assistant/);
-  assert.match(view, /Keep talking with Beckett/);
-  assert.match(view, /Ask a follow-up/);
+  assert.doesNotMatch(view, /Keep talking with Beckett/);
+  assert.doesNotMatch(view, /Ask a follow-up/);
   assert.match(view, /PracticeResultButton\(onPractice: practiceConversation\)/);
-  assert.match(view, /coach\.followUpMessages\.map/);
-  assert.match(root, /Label\("Inbox", systemImage:/);
+  assert.match(root, /Label\("Message Help", systemImage:/);
 });
 
 test("coach scrolls to the top when a result is displayed or cleared", async () => {
@@ -295,7 +296,7 @@ test("Inbox results hide the context toggle and use the branded result label", a
   assert.match(view, /ResultSectionLabel\("Possible readings"\)/);
   assert.match(view, /Label\("Draft response"/);
   assert.match(view, /Label\("Practice conversation"/);
-  assert.ok(view.indexOf("InboxFollowUpView(") < view.indexOf("PracticeResultButton(onPractice: practiceConversation)"));
+  assert.doesNotMatch(view, /InboxFollowUpView\(/);
   assert.match(view, /Text\("Feedback on your original message"\)/);
   assert.match(view, /feedbackRow\(title: "Tone"/);
   assert.match(view, /feedbackRow\(title: "Clarity"/);
@@ -312,11 +313,11 @@ test("Inbox uses the real Beckett brand asset and places usage below the editor"
     readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
   ]);
   assert.match(view, /beckettBrandNavigation\(\)/);
-  assert.match(root, /Label\("Inbox"/);
+  assert.match(root, /Label\("Message Help"/);
   assert.match(theme, /struct BeckettBrandHeader: View/);
   assert.match(theme, /Image\("BeckettWordmark"\)/);
   assert.match(theme, /ToolbarItem\(placement: \.principal\)[\s\S]*BeckettBrandHeader\(\)/);
-  assert.match(view, /BeckettCard[\s\S]*creditsView[\s\S]*Button\(action: submit\)/);
+  assert.match(view, /BeckettCard[\s\S]*Button\(action: submit\)[\s\S]*creditsView/);
   assert.doesNotMatch(view, /navigationTitle\("Coach"\)/);
 });
 
@@ -513,4 +514,45 @@ test("mobile Courses remain available when web credit limits are disabled", asyn
   const route = await readFile(new URL("../app/api/mobile/v1/courses/route.ts", import.meta.url), "utf8");
   assert.match(route, /!WEB_CREDITS_ENABLED \|\| await canBrowseWebCourses\(plan\)/);
   assert.match(route, /if \(WEB_CREDITS_ENABLED\) \{\s*try \{\s*await ensureWebCourseAccess/);
+});
+
+test("the refreshed mobile shell is branded, opaque, and personal-first", async () => {
+  const [root, signIn, models, coach] = await Promise.all([
+    readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/Auth/SignInView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettCore/Models/MobileModels.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
+  ]);
+  assert.match(signIn, /BeckettBrandHeader\(\)/);
+  assert.match(signIn, /built for neurodivergent people/);
+  assert.match(root, /configureWithOpaqueBackground\(\)/);
+  assert.match(root, /MobileContextMode\.personal\.rawValue/);
+  assert.ok(models.indexOf("case personal") < models.indexOf("case professional"));
+  assert.ok(coach.indexOf("BeckettCard {") < coach.indexOf("actionSelector"));
+  assert.ok(coach.indexOf("Button(action: submit)") < coach.indexOf("creditsView", coach.indexOf("Button(action: submit)")));
+});
+
+test("Respond, Practice, sharing, and Courses preserve their native intent", async () => {
+  const [coachRoute, practiceRoute, coachView, learning, coursesRoute] = await Promise.all([
+    readFile(new URL("../app/api/mobile/v1/coach/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/mobile/v1/practice/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/LearningViews.swift", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/mobile/v1/courses/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(coachRoute, /Incoming message sent to the user/);
+  assert.match(coachRoute, /not a rewrite of what the sender said/);
+  assert.match(coachView, /components\.scheme = "sms"/);
+  assert.match(coachView, /Label\("Message", systemImage: "message"\)/);
+  assert.match(learning, /@Published var initialMessage = ""/);
+  assert.match(learning, /person = prefill\.person\.trimmingCharacters/);
+  assert.doesNotMatch(learning, /\? "The sender"/);
+  assert.match(learning, /split\(separator: ",", maxSplits: 1\)/);
+  assert.match(learning, /if store\.sessionId == nil && store\.assessment == nil/);
+  assert.match(practiceRoute, /startingTranscript/);
+  assert.match(practiceRoute, /role: "simulated_person"/);
+  assert.match(coursesRoute, /sections: records\(value\.sections\)/);
+  assert.match(coursesRoute, /rounds: records\(value\.rounds\)/);
+  assert.match(learning, /CourseInteractiveLessonView/);
+  assert.match(learning, /DisclosureGroup\(section\.heading\)/);
 });

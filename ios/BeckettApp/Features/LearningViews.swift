@@ -168,6 +168,7 @@ private struct PracticeRequest: Encodable {
     let personStyle: String?
     let constraints: String?
     let difficulty: PracticeDifficulty?
+    let initialMessage: String?
     let message: String?
 
     static func start(
@@ -179,7 +180,8 @@ private struct PracticeRequest: Encodable {
         relationshipContext: String,
         personStyle: String,
         constraints: String,
-        difficulty: PracticeDifficulty
+        difficulty: PracticeDifficulty,
+        initialMessage: String
     ) -> Self {
         Self(
             operation: "start",
@@ -193,6 +195,7 @@ private struct PracticeRequest: Encodable {
             personStyle: personStyle,
             constraints: constraints,
             difficulty: difficulty,
+            initialMessage: initialMessage,
             message: nil
         )
     }
@@ -210,6 +213,7 @@ private struct PracticeRequest: Encodable {
             personStyle: nil,
             constraints: nil,
             difficulty: nil,
+            initialMessage: nil,
             message: message
         )
     }
@@ -247,6 +251,7 @@ private final class PracticeStore: ObservableObject {
     @Published var relationshipContext = ""
     @Published var personStyle = ""
     @Published var constraints = ""
+    @Published var initialMessage = ""
     @Published var difficulty: PracticeDifficulty = .realistic
     @Published var draft = ""
     @Published private(set) var sessionId: String?
@@ -259,7 +264,6 @@ private final class PracticeStore: ObservableObject {
     private let api = APIClient()
 
     var canStart: Bool {
-        !person.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !situation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -275,7 +279,8 @@ private final class PracticeStore: ObservableObject {
                 relationshipContext: relationshipContext,
                 personStyle: personStyle,
                 constraints: constraints,
-                difficulty: difficulty
+                difficulty: difficulty,
+                initialMessage: initialMessage
             ),
             accessToken: accessToken
         ) { response in
@@ -292,6 +297,7 @@ private final class PracticeStore: ObservableObject {
         guard !message.isEmpty else { return false }
         let original = draft
         draft = ""
+        initialMessage = ""
         let unauthorized = await request(
             .action("turn", sessionId: sessionId, message: message),
             accessToken: accessToken
@@ -324,10 +330,9 @@ private final class PracticeStore: ObservableObject {
 
     func apply(_ prefill: PracticePrefill) {
         startOver()
-        person = prefill.person.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "The sender"
-            : prefill.person
-        situation = "I received this message: \"\(prefill.originalMessage)\""
+        person = prefill.person.trimmingCharacters(in: .whitespacesAndNewlines)
+        initialMessage = prefill.originalMessage
+        situation = "Responding to a message I received."
         goal = prefill.goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "Practice a clear response that moves the conversation forward."
             : prefill.goal
@@ -372,7 +377,9 @@ struct PracticeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    ContextModePicker(selection: $contextMode)
+                    if store.sessionId == nil && store.assessment == nil {
+                        ContextModePicker(selection: $contextMode)
+                    }
                     if let assessment = store.assessment {
                         assessmentView(assessment)
                     } else if store.sessionId != nil {
@@ -462,14 +469,14 @@ struct PracticeView: View {
         Group {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Practicing with \(store.person)").font(.headline)
+                    Text(practiceTitle).font(.headline)
                     Text("\(store.difficulty.title) \(channel.title.lowercased()) conversation")
                         .font(.caption)
                         .foregroundStyle(BeckettColor.inkLight)
                 }
                 Spacer()
                 Button("End") { Task { await finish() } }
-                    .disabled(store.transcript.isEmpty || store.isWorking)
+                    .disabled(!store.transcript.contains(where: { $0.role == "user" }) || store.isWorking)
             }
 
             BeckettCard {
@@ -483,7 +490,7 @@ struct PracticeView: View {
                             HStack {
                                 if item.role == "user" { Spacer(minLength: 36) }
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(item.role == "user" ? "You" : store.person)
+                                    Text(item.role == "user" ? "You" : conversationPartnerLabel)
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(BeckettColor.inkLight)
                                     Text(item.content)
@@ -551,6 +558,20 @@ struct PracticeView: View {
 
             statusView
         }
+    }
+
+    private var conversationPartnerLabel: String {
+        let firstPart = store.person
+            .split(separator: ",", maxSplits: 1)
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return firstPart.isEmpty ? "Other person" : firstPart
+    }
+
+    private var practiceTitle: String {
+        conversationPartnerLabel == "Other person"
+            ? "Practice conversation"
+            : "Practicing with \(conversationPartnerLabel)"
     }
 
     private func assessmentView(_ assessment: PracticeAssessment) -> some View {
@@ -649,6 +670,78 @@ private struct MobileCourseLesson: Decodable, Identifiable {
     let type: String
     let body: [String]
     let bullets: [String]
+    let instruction: String?
+    let prompt: String?
+    let scenario: String?
+    let sections: [MobileCourseSection]?
+    let cards: [MobileCourseCard]?
+    let steps: [MobileCourseStep]?
+    let rounds: [MobileCourseRound]?
+    let items: [MobileCourseItem]?
+    let options: [MobileCourseChoice]?
+    let fields: [MobileCourseField]?
+    let pairs: [MobileCoursePair]?
+    let comparison: MobileCourseComparison?
+}
+
+private struct MobileCourseSection: Decodable {
+    let heading: String
+    let bullets: [String]
+    let examples: [String]
+}
+
+private struct MobileCourseCard: Decodable {
+    let front: String
+    let back: [String]
+}
+
+private struct MobileCourseStep: Decodable {
+    let label: String
+    let text: String
+    let example: String?
+}
+
+private struct MobileCourseChoice: Decodable {
+    let text: String
+    let correct: Bool?
+    let explanation: String?
+}
+
+private struct MobileCourseRound: Decodable {
+    let scenario: String
+    let question: String?
+    let explanation: String?
+    let options: [MobileCourseChoice]
+}
+
+private struct MobileCourseItem: Decodable {
+    let text: String
+    let correct: String?
+    let explanation: String?
+}
+
+private struct MobileCourseField: Decodable {
+    let key: String
+    let label: String
+    let placeholder: String?
+    let options: [String]
+    let multi: Bool
+}
+
+private struct MobileCoursePair: Decodable {
+    let left: String
+    let right: String
+}
+
+private struct MobileCourseComparisonItem: Decodable {
+    let label: String
+    let message: String
+    let note: String
+}
+
+private struct MobileCourseComparison: Decodable {
+    let good: MobileCourseComparisonItem
+    let bad: MobileCourseComparisonItem
 }
 
 private struct MobileCourse: Decodable {
@@ -780,6 +873,246 @@ struct CoursesView: View {
     }
 }
 
+private struct CourseInteractiveLessonView: View {
+    let lesson: MobileCourseLesson
+    @State private var revealedCards: Set<Int> = []
+    @State private var selectedChoices: [String: Set<Int>] = [:]
+    @State private var fieldValues: [String: String] = [:]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let instruction = lesson.instruction, !instruction.isEmpty {
+                Label(instruction, systemImage: "hand.tap")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(BeckettColor.primaryDark)
+            }
+            if let scenario = lesson.scenario, !scenario.isEmpty {
+                Text(scenario)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(BeckettColor.primaryLight, in: RoundedRectangle(cornerRadius: 12))
+            }
+            if let prompt = lesson.prompt, !prompt.isEmpty {
+                Text(prompt).font(.headline)
+            }
+
+            ForEach(Array((lesson.sections ?? []).enumerated()), id: \.offset) { _, section in
+                if lesson.type == "accordion" {
+                    DisclosureGroup(section.heading) {
+                        nestedContent(section.bullets, examples: section.examples)
+                            .padding(.top, 8)
+                    }
+                    .font(.headline)
+                    .tint(BeckettColor.primaryDark)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(section.heading).font(.headline)
+                        nestedContent(section.bullets, examples: section.examples)
+                    }
+                }
+            }
+
+            ForEach(Array((lesson.cards ?? []).enumerated()), id: \.offset) { index, card in
+                Button {
+                    if revealedCards.contains(index) { revealedCards.remove(index) }
+                    else { revealedCards.insert(index) }
+                } label: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(card.front).font(.headline)
+                            Spacer()
+                            Image(systemName: revealedCards.contains(index) ? "chevron.up" : "arrow.triangle.2.circlepath")
+                        }
+                        if revealedCards.contains(index) {
+                            nestedContent(card.back, examples: [])
+                        } else {
+                            Text("Tap to reveal")
+                                .font(.caption)
+                                .foregroundStyle(BeckettColor.inkLight)
+                        }
+                    }
+                    .padding(13)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(BeckettColor.primaryLight, in: RoundedRectangle(cornerRadius: 13))
+                }
+                .buttonStyle(.plain)
+            }
+
+            ForEach(Array((lesson.steps ?? []).enumerated()), id: \.offset) { index, step in
+                HStack(alignment: .top, spacing: 10) {
+                    Text("\(index + 1)")
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                        .frame(width: 25, height: 25)
+                        .background(BeckettColor.primary, in: Circle())
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(step.label).font(.headline)
+                        Text(step.text)
+                        if let example = step.example {
+                            Text(example).font(.footnote).foregroundStyle(BeckettColor.inkMid)
+                        }
+                    }
+                }
+            }
+
+            ForEach(Array((lesson.rounds ?? []).enumerated()), id: \.offset) { roundIndex, round in
+                roundView(round, index: roundIndex)
+            }
+
+            ForEach(Array((lesson.items ?? []).enumerated()), id: \.offset) { index, item in
+                choiceButton(
+                    text: item.text,
+                    key: "item-\(index)",
+                    index: 0,
+                    allowsMultiple: lesson.type == "checklist",
+                    feedback: [item.correct.map { "Expected: \($0)" }, item.explanation]
+                        .compactMap { $0 }.joined(separator: " — ")
+                )
+            }
+
+            if !(lesson.options ?? []).isEmpty {
+                ForEach(Array((lesson.options ?? []).enumerated()), id: \.offset) { index, option in
+                    choiceButton(
+                        text: option.text,
+                        key: "lesson-options",
+                        index: index,
+                        allowsMultiple: true,
+                        feedback: option.explanation ?? ""
+                    )
+                }
+            }
+
+            ForEach(Array((lesson.pairs ?? []).enumerated()), id: \.offset) { index, pair in
+                DisclosureGroup(pair.left) {
+                    Text(pair.right)
+                        .padding(.top, 8)
+                        .foregroundStyle(BeckettColor.inkMid)
+                }
+                .tint(BeckettColor.primaryDark)
+                .accessibilityHint("Reveal the matching answer")
+            }
+
+            if let comparison = lesson.comparison {
+                comparisonCard(comparison.good, systemImage: "checkmark.circle.fill", color: .green)
+                comparisonCard(comparison.bad, systemImage: "exclamationmark.circle.fill", color: BeckettColor.primary)
+            }
+
+            ForEach(lesson.fields ?? [], id: \.key) { field in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(field.label).font(.headline)
+                    if field.options.isEmpty {
+                        TextField(field.placeholder ?? "Type your answer", text: fieldBinding(field.key), axis: .vertical)
+                            .textFieldStyle(.roundedBorder)
+                    } else {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 7) {
+                                ForEach(field.options, id: \.self) { option in
+                                    Button(option) {
+                                        fieldValues[field.key] = option
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .buttonBorderShape(.capsule)
+                                    .tint(fieldValues[field.key] == option ? BeckettColor.primary : BeckettColor.primaryDark)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func fieldBinding(_ key: String) -> Binding<String> {
+        Binding(
+            get: { fieldValues[key] ?? "" },
+            set: { fieldValues[key] = $0 }
+        )
+    }
+
+    private func roundView(_ round: MobileCourseRound, index: Int) -> some View {
+        let key = "round-\(index)"
+        return VStack(alignment: .leading, spacing: 9) {
+            if !round.scenario.isEmpty { Text(round.scenario).font(.headline) }
+            if let question = round.question { Text(question).foregroundStyle(BeckettColor.inkMid) }
+            ForEach(Array(round.options.enumerated()), id: \.offset) { optionIndex, option in
+                choiceButton(
+                    text: option.text,
+                    key: key,
+                    index: optionIndex,
+                    allowsMultiple: lesson.type == "multi-select-quiz",
+                    feedback: option.explanation ?? round.explanation ?? ""
+                )
+                if selectedChoices[key]?.contains(optionIndex) == true, let correct = option.correct {
+                    Label(correct ? "That fits" : "Try another option", systemImage: correct ? "checkmark.circle" : "arrow.counterclockwise.circle")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(correct ? Color.green : BeckettColor.primaryDark)
+                }
+            }
+        }
+    }
+
+    private func choiceButton(
+        text: String,
+        key: String,
+        index: Int,
+        allowsMultiple: Bool,
+        feedback: String
+    ) -> some View {
+        let selected = selectedChoices[key]?.contains(index) == true
+        return VStack(alignment: .leading, spacing: 5) {
+            Button {
+                var values = selectedChoices[key] ?? []
+                if allowsMultiple {
+                    if values.contains(index) { values.remove(index) } else { values.insert(index) }
+                } else {
+                    values = [index]
+                }
+                selectedChoices[key] = values
+            } label: {
+                HStack {
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    Text(text).multilineTextAlignment(.leading)
+                    Spacer()
+                }
+                .padding(11)
+                .background(selected ? BeckettColor.primaryLight : BeckettColor.background, in: RoundedRectangle(cornerRadius: 11))
+            }
+            .buttonStyle(.plain)
+            if selected, !feedback.isEmpty {
+                Text(feedback).font(.footnote).foregroundStyle(BeckettColor.inkMid).padding(.leading, 12)
+            }
+        }
+    }
+
+    private func nestedContent(_ bullets: [String], examples: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ForEach(bullets, id: \.self) { bullet in
+                HStack(alignment: .top, spacing: 8) {
+                    Circle().fill(BeckettColor.primary).frame(width: 5, height: 5).padding(.top, 7)
+                    Text(bullet).font(.body)
+                }
+            }
+            ForEach(examples, id: \.self) { example in
+                Text(example)
+                    .font(.footnote)
+                    .foregroundStyle(BeckettColor.inkMid)
+                    .padding(.leading, 13)
+            }
+        }
+    }
+
+    private func comparisonCard(_ item: MobileCourseComparisonItem, systemImage: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(item.label, systemImage: systemImage).font(.headline).foregroundStyle(color)
+            Text(item.message)
+            Text(item.note).font(.footnote).foregroundStyle(BeckettColor.inkMid)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(BeckettColor.background, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
 private struct CourseDetailView: View {
     let summary: MobileCourseSummary
     @EnvironmentObject private var auth: AuthStore
@@ -865,6 +1198,7 @@ private struct CourseDetailView: View {
                         Text(bullet)
                     }
                 }
+                CourseInteractiveLessonView(lesson: lesson)
             }
         }
     }

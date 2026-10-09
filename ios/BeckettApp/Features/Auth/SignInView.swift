@@ -10,9 +10,11 @@ struct SignInView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Beckett")
-                        .font(.system(size: 42, weight: .regular, design: .serif))
-                    Text("A private communication coach for the moments that are hard to read or hard to answer.")
+                    BeckettBrandHeader()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Communication support built for neurodivergent people.")
+                        .font(.system(size: 30, weight: .regular, design: .serif))
+                    Text("Decode tone, find the words, and practice difficult conversations—with privacy built in.")
                         .font(.title3)
                         .foregroundStyle(BeckettColor.inkMid)
                 }

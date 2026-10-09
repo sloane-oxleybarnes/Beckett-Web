@@ -33,6 +33,7 @@ type PracticeBody = {
   personStyle?: unknown;
   constraints?: unknown;
   difficulty?: unknown;
+  initialMessage?: unknown;
   message?: unknown;
 };
 
@@ -72,11 +73,12 @@ export async function POST(request: NextRequest) {
   const operation = body.operation;
 
   if (operation === "start") {
-    const person = clean(body.person, 160);
+    const person = clean(body.person, 160) || "Conversation partner";
     const situation = clean(body.situation, 4_000);
     const goal = clean(body.goal, 1_000);
-    if (!person || !situation || !goal) {
-      return NextResponse.json({ error: "Add the person, situation, and goal." }, { status: 400 });
+    const initialMessage = clean(body.initialMessage, 4_000);
+    if (!situation || !goal) {
+      return NextResponse.json({ error: "Add the situation and goal." }, { status: 400 });
     }
 
     const { data: profile } = await platformRepository
@@ -84,7 +86,7 @@ export async function POST(request: NextRequest) {
       .select("safety_resource_region")
       .eq("id", user.id)
       .maybeSingle();
-    const safety = getSafetyResponse([situation, goal, clean(body.concern, 1_000)].join("\n"), profile?.safety_resource_region);
+    const safety = getSafetyResponse([initialMessage, situation, goal, clean(body.concern, 1_000)].join("\n"), profile?.safety_resource_region);
     if (safety) {
       return NextResponse.json({
         error: safety.message,
@@ -117,6 +119,14 @@ export async function POST(request: NextRequest) {
       approvedContactContext: "",
       voicePreference: "gender_neutral",
     };
+    const startingTranscript: AdaptiveTranscriptItem[] = initialMessage
+      ? [{
+        role: "simulated_person",
+        content: initialMessage,
+        turn: 0,
+        createdAt: new Date().toISOString(),
+      }]
+      : [];
 
     const { data, error } = await platformRepository
       .from("adaptive_conversation_sessions")
@@ -129,7 +139,7 @@ export async function POST(request: NextRequest) {
         lifecycle: "ready",
         setup_snapshot: snapshot,
         simulation_state: initialAdaptiveState(snapshot),
-        transcript: [],
+        transcript: startingTranscript,
         status: "active",
       })
       .select("id")
@@ -137,7 +147,7 @@ export async function POST(request: NextRequest) {
     if (error || !data) {
       return NextResponse.json({ error: error?.message || "Practice could not start." }, { status: 500 });
     }
-    return NextResponse.json({ sessionId: data.id, transcript: [] }, { status: 201 });
+    return NextResponse.json({ sessionId: data.id, transcript: startingTranscript }, { status: 201 });
   }
 
   const sessionId = clean(body.sessionId, 80);

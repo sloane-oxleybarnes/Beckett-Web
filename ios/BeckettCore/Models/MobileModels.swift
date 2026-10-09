@@ -1,8 +1,8 @@
 import Foundation
 
 enum MobileContextMode: String, CaseIterable, Codable, Identifiable {
-    case professional
     case personal
+    case professional
 
     var id: String { rawValue }
     var title: String { rawValue.capitalized }

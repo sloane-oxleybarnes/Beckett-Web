@@ -1,15 +1,28 @@
 import SwiftUI
+import UIKit
 
 struct RootView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var handoff: CoachHandoffCoordinator
     @State private var selectedTab = 0
     @State private var practicePrefill: PracticePrefill?
-    @AppStorage("beckett.mobile.context-mode") private var contextModeRaw = MobileContextMode.professional.rawValue
+    @AppStorage("beckett.mobile.context-mode") private var contextModeRaw = MobileContextMode.personal.rawValue
+
+    init() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0.10, green: 0.09, blue: 0.08, alpha: 1)
+                : UIColor(red: 0.98, green: 0.96, blue: 0.93, alpha: 1)
+        }
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
+    }
 
     private var contextMode: Binding<MobileContextMode> {
         Binding(
-            get: { MobileContextMode(rawValue: contextModeRaw) ?? .professional },
+            get: { MobileContextMode(rawValue: contextModeRaw) ?? .personal },
             set: { contextModeRaw = $0.rawValue }
         )
     }
@@ -34,7 +47,7 @@ struct RootView: View {
                         selectedTab = 1
                     }
                         .tag(0)
-                        .tabItem { Label("Inbox", systemImage: "bubble.left.and.text.bubble.right") }
+                        .tabItem { Label("Message Help", systemImage: "bubble.left.and.text.bubble.right") }
                     PracticeView(contextMode: contextMode, prefill: $practicePrefill)
                         .tag(1)
                         .tabItem { Label("Practice", systemImage: "person.2.wave.2") }

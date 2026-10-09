@@ -27,20 +27,13 @@ struct CoachView: View {
                                     onStartOver: coach.startOver,
                                     onDraftResponse: draftResponse
                                 )
-                                InboxFollowUpView(
-                                    messages: coach.followUpMessages,
-                                    draft: $coach.followUpDraft,
-                                    suggestions: followUpSuggestions,
-                                    isLoading: coach.isFollowingUp,
-                                    onSend: sendFollowUp
-                                )
                                 if let safety = coach.safetyResponse {
                                     SafetyResultView(safety: safety, onStartOver: coach.startOver)
                                 } else if let message = coach.errorMessage {
                                     CoachFailureView(
                                         message: message,
                                         isCreditLimit: coach.errorCode == "mobile_usage_limit_reached",
-                                        onRetry: sendFollowUp
+                                        onRetry: submit
                                     )
                                 }
                                 PracticeResultButton(onPractice: practiceConversation)
@@ -64,9 +57,6 @@ struct CoachView: View {
                 .onChange(of: coach.safetyResponse) { _, _ in
                     scrollToTop(proxy)
                 }
-                .onChange(of: coach.followUpMessages.count) { _, count in
-                    if count > 0 { scrollToBottom(proxy) }
-                }
                 .onChange(of: handoff.pending) { _, pending in
                     guard let pending else { return }
                     apply(pending)
@@ -87,14 +77,6 @@ struct CoachView: View {
         }
     }
 
-    private func scrollToBottom(_ proxy: ScrollViewProxy) {
-        DispatchQueue.main.async {
-            withAnimation(.easeOut(duration: 0.25)) {
-                proxy.scrollTo("inbox-bottom", anchor: .bottom)
-            }
-        }
-    }
-
     @ViewBuilder
     private var creditsView: some View {
         if let usage = coach.usage ?? auth.profile?.usage {
@@ -111,16 +93,14 @@ struct CoachView: View {
     private var composeView: some View {
         Group {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Inbox")
+                Text("Message Help")
                     .font(.system(size: 30, weight: .regular, design: .serif))
-                Text("Start with a message, then keep talking with Beckett.")
+                Text("Paste a conversation, then choose what you want help with.")
                     .font(.subheadline)
                     .foregroundStyle(BeckettColor.inkMid)
             }
 
             ContextModePicker(selection: $contextMode)
-
-            actionSelector
 
             BeckettCard {
                 VStack(alignment: .leading, spacing: 10) {
@@ -150,7 +130,7 @@ struct CoachView: View {
             }
             .disabled(coach.isLoading)
 
-            creditsView
+            actionSelector
 
             Button(action: submit) {
                 HStack {
@@ -160,6 +140,8 @@ struct CoachView: View {
             }
             .buttonStyle(BeckettPrimaryButtonStyle())
             .disabled(coach.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || coach.isLoading)
+
+            creditsView
 
             if let safety = coach.safetyResponse {
                 SafetyResultView(safety: safety, onStartOver: coach.startOver)
@@ -186,7 +168,7 @@ struct CoachView: View {
                 }
             }
         } else {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(spacing: 8) {
                 ForEach(MobileCoachAction.visibleCases) { action in
                     actionButton(action, horizontal: false)
                 }
@@ -217,15 +199,25 @@ struct CoachView: View {
                         in: RoundedRectangle(cornerRadius: 16, style: .continuous)
                     )
                 } else {
-                    VStack(spacing: 8) {
-                        actionIcon(action, size: 64)
+                    HStack(spacing: 6) {
+                        Image(systemName: action.systemImage)
+                            .font(.caption.weight(.semibold))
                         Text(action.shortTitle)
-                            .font(.subheadline.bold())
+                            .font(.subheadline.weight(.semibold))
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
-                            .foregroundStyle(BeckettColor.ink)
                     }
+                    .foregroundStyle(coach.selectedAction == action ? Color.white : BeckettColor.primaryDark)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 9)
                     .frame(maxWidth: .infinity)
+                    .background(
+                        coach.selectedAction == action ? BeckettColor.primary : BeckettColor.card,
+                        in: Capsule()
+                    )
+                    .overlay {
+                        Capsule().stroke(BeckettColor.primary.opacity(0.22), lineWidth: 1)
+                    }
                 }
             }
         }
@@ -281,29 +273,6 @@ struct CoachView: View {
         requestCoaching(action: .respond)
     }
 
-    private func sendFollowUp() {
-        guard let token = auth.session?.accessToken else { return }
-        Task {
-            let unauthorized = await coach.sendFollowUp(accessToken: token, contextMode: contextMode)
-            if unauthorized, let refreshed = await auth.refreshedAccessToken() {
-                await coach.sendFollowUp(accessToken: refreshed, contextMode: contextMode)
-            }
-        }
-    }
-
-    private var followUpSuggestions: [String] {
-        switch coach.selectedAction {
-        case .decode:
-            ["What should I say back?", "What might I be missing?", "Help me ask for clarity"]
-        case .respond:
-            ["Make it warmer", "Make it more direct", "What reaction should I expect?"]
-        case .rewrite:
-            ["Make it shorter", "Keep my boundary firm", "Make it sound more like me"]
-        case .clarify, .toneCheck:
-            ["Make it clearer", "What should I change?", "Help me practice this"]
-        }
-    }
-
     private func apply(_ pending: MobileCoachHandoff) {
         if let mode = pending.contextMode { contextMode = mode }
         coach.apply(pending)
@@ -323,10 +292,7 @@ struct CoachView: View {
     }
 
     private var practiceContext: String {
-        let followUps = coach.followUpMessages.map { message in
-            "\(message.role == .user ? "You" : "Beckett"): \(message.content)"
-        }.joined(separator: "\n")
-        return [coach.conversationContext, followUps]
+        return [coach.conversationContext]
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
@@ -475,95 +441,6 @@ private struct DecodeNextActions: View {
     }
 }
 
-private struct InboxFollowUpView: View {
-    let messages: [InboxMessage]
-    @Binding var draft: String
-    let suggestions: [String]
-    let isLoading: Bool
-    let onSend: () -> Void
-
-    var body: some View {
-        BeckettCard {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Keep talking with Beckett")
-                        .font(.system(size: 23, weight: .regular, design: .serif))
-                    Text("Ask a follow-up without starting over or repeating the context.")
-                        .font(.subheadline)
-                        .foregroundStyle(BeckettColor.inkMid)
-                }
-
-                if messages.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(suggestions, id: \.self) { suggestion in
-                                Button(suggestion) { draft = suggestion }
-                                    .buttonStyle(.bordered)
-                                    .buttonBorderShape(.capsule)
-                                    .tint(BeckettColor.primaryDark)
-                            }
-                        }
-                    }
-                } else {
-                    ForEach(messages) { message in
-                        InboxMessageBubble(message: message)
-                    }
-                }
-
-                HStack(alignment: .bottom, spacing: 10) {
-                    TextField("Ask a follow-up…", text: $draft, axis: .vertical)
-                        .lineLimit(1...5)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(BeckettColor.background, in: RoundedRectangle(cornerRadius: 16))
-                    Button(action: onSend) {
-                        if isLoading {
-                            ProgressView().tint(.white)
-                        } else {
-                            Image(systemName: "arrow.up")
-                                .font(.headline)
-                        }
-                    }
-                    .frame(width: 42, height: 42)
-                    .background(BeckettColor.primary, in: Circle())
-                    .foregroundStyle(.white)
-                    .buttonStyle(.plain)
-                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
-                    .accessibilityLabel(isLoading ? "Beckett is responding" : "Send follow-up")
-                }
-
-                Label("This conversation is not saved to your Beckett history.", systemImage: "lock")
-                    .font(.caption)
-                    .foregroundStyle(BeckettColor.inkLight)
-            }
-        }
-    }
-}
-
-private struct InboxMessageBubble: View {
-    let message: InboxMessage
-
-    var body: some View {
-        HStack {
-            if message.role == .user { Spacer(minLength: 34) }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(message.role == .user ? "You" : "Beckett")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(message.role == .user ? Color.white.opacity(0.8) : BeckettColor.inkLight)
-                Text(message.content)
-                    .textSelection(.enabled)
-            }
-            .padding(12)
-            .background(
-                message.role == .user ? BeckettColor.primary : BeckettColor.primaryLight,
-                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
-            )
-            .foregroundStyle(message.role == .user ? Color.white : BeckettColor.ink)
-            if message.role == .assistant { Spacer(minLength: 34) }
-        }
-    }
-}
-
 private struct InterpretationResultView: View {
     let result: InterpretationResult
 
@@ -697,6 +574,13 @@ private struct ResultActions: View {
     let text: String
     @State private var copied = false
 
+    private var messageURL: URL? {
+        var components = URLComponents()
+        components.scheme = "sms"
+        components.queryItems = [URLQueryItem(name: "body", value: text)]
+        return components.url
+    }
+
     var body: some View {
         HStack(spacing: 14) {
             Button {
@@ -707,6 +591,11 @@ private struct ResultActions: View {
             }
             ShareLink(item: text) {
                 Label("Share", systemImage: "square.and.arrow.up")
+            }
+            if let messageURL {
+                Link(destination: messageURL) {
+                    Label("Message", systemImage: "message")
+                }
             }
         }
         .font(.subheadline.weight(.semibold))

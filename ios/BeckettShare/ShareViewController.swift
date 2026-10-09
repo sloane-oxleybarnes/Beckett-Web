@@ -76,7 +76,7 @@ final class ShareCoachModel: ObservableObject {
         let defaults = AppConfiguration.appGroupIdentifier.flatMap { UserDefaults(suiteName: $0) }
         sharedDefaults = defaults
         contextMode = defaults?.string(forKey: Self.contextModeKey)
-            .flatMap(MobileContextMode.init(rawValue:)) ?? .professional
+            .flatMap(MobileContextMode.init(rawValue:)) ?? .personal
     }
 
     func load(from context: NSExtensionContext?) async {
@@ -351,7 +351,7 @@ private struct ShareCoachView: View {
                     }
                     Button("Save for Beckett", action: onContinueInApp)
                         .buttonStyle(BeckettPrimaryButtonStyle())
-                    Text("Open Beckett to continue this conversation in Inbox.")
+                    Text("Open Beckett to continue in Message Help.")
                         .font(.caption)
                         .foregroundStyle(BeckettColor.inkLight)
                 } else {

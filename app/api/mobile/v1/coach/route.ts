@@ -132,9 +132,14 @@ export async function POST(request: NextRequest) {
     "Match Beckett's web Message Help output: concise, practical, and easy to scan. Stay under 250 words total. Do not add an introduction, conclusion, unsolicited next steps, or an offer to help further.",
     mobileResultJsonInstruction(action),
   ].filter(Boolean).join("\n\n");
+  const inputLabel = action === "respond"
+    ? "Incoming message sent to the user. Write replies from the user's point of view; do not rewrite or paraphrase the incoming message"
+    : action === "rewrite"
+      ? "The user's draft to improve"
+      : "Message to interpret";
   const prompt = [
     `Coaching settings: warmth ${settings.warmth}; directness ${settings.directness}; formality ${settings.formality}; length ${settings.length}.`,
-    `Message or draft:\n${text}`,
+    `${inputLabel}:\n${text}`,
     conversationContext ? `Surrounding conversation context:\n${conversationContext}` : null,
     person ? `Person or relationship:\n${person}` : null,
     goal ? `What the user wants to happen:\n${goal}` : null,
@@ -155,7 +160,7 @@ export async function POST(request: NextRequest) {
     });
     const generateResult = async (repair = false) => {
       const repairInstruction = repair
-        ? "Your previous output contained missing or placeholder drafts. Return the same JSON shape again with exactly three complete messages in every option.text field."
+        ? `Your previous output contained missing or placeholder drafts. Return the same JSON shape again with exactly three complete messages in every option.text field.${action === "respond" ? " Each option must be a reply from the user to the incoming message—not a rewrite of what the sender said." : ""}`
         : null;
       const response = await callAnthropic(
         [system, repairInstruction].filter(Boolean).join("\n\n"),

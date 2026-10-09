@@ -47,54 +47,30 @@ function lessonFromSlide(slide: CourseSlide, index: number) {
   const body = [
     value.description,
     value.intro,
-    value.instruction,
-    value.prompt,
-    value.scenario,
     value.draftContext,
   ].filter((item): item is string => typeof item === "string" && item.trim().length > 0);
 
   const bullets = [
     ...strings(value.bullets),
     ...strings(value.stats),
-    ...strings(value.items),
     ...strings(value.helperChecklist),
   ];
 
-  if (Array.isArray(value.sections)) {
-    for (const sectionValue of value.sections) {
-      const section = sectionValue as Record<string, unknown>;
-      if (typeof section.heading === "string") bullets.push(section.heading);
-      bullets.push(...strings(section.bullets), ...strings(section.examples));
-    }
-  }
-  if (Array.isArray(value.cards)) {
-    for (const cardValue of value.cards) {
-      const card = cardValue as Record<string, unknown>;
-      if (typeof card.front === "string") bullets.push(card.front);
-      bullets.push(...strings(card.back));
-    }
-  }
-  if (Array.isArray(value.steps)) {
-    for (const stepValue of value.steps) {
-      const step = stepValue as Record<string, unknown>;
-      const line = [step.label, step.text, step.example]
-        .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-        .join(": ");
-      if (line) bullets.push(line);
-    }
-  }
-  if (Array.isArray(value.rounds)) {
-    for (const roundValue of value.rounds) {
-      const round = roundValue as Record<string, unknown>;
-      if (typeof round.scenario === "string" && round.scenario.trim()) bullets.push(round.scenario);
-      if (typeof round.question === "string" && round.question.trim()) bullets.push(round.question);
-      if (Array.isArray(round.options)) {
-        bullets.push(...round.options
-          .map((option) => (option as Record<string, unknown>).text)
-          .filter((item): item is string => typeof item === "string" && item.trim().length > 0));
-      }
-    }
-  }
+  const records = (candidate: unknown) => Array.isArray(candidate)
+    ? candidate.filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+    : [];
+  const text = (candidate: unknown) => typeof candidate === "string" ? candidate : null;
+  const choices = (candidate: unknown) => Array.isArray(candidate)
+    ? candidate.map((item) => {
+      if (typeof item === "string") return { text: item, correct: null, explanation: null };
+      const option = item as Record<string, unknown>;
+      return {
+        text: text(option.text) || "",
+        correct: typeof option.correct === "boolean" ? option.correct : null,
+        explanation: text(option.explanation),
+      };
+    }).filter((item) => item.text)
+    : [];
 
   return {
     id: `lesson-${index + 1}`,
@@ -102,6 +78,58 @@ function lessonFromSlide(slide: CourseSlide, index: number) {
     type: slide.type,
     body,
     bullets,
+    instruction: text(value.instruction),
+    prompt: text(value.prompt),
+    scenario: text(value.scenario),
+    sections: records(value.sections).map((section) => ({
+      heading: text(section.heading) || "",
+      bullets: strings(section.bullets),
+      examples: strings(section.examples),
+    })),
+    cards: records(value.cards).map((card) => ({
+      front: text(card.front) || "",
+      back: strings(card.back),
+    })),
+    steps: records(value.steps).map((step) => ({
+      label: text(step.label) || "",
+      text: text(step.text) || "",
+      example: text(step.example),
+    })),
+    rounds: records(value.rounds).map((round) => ({
+      scenario: text(round.scenario) || "",
+      question: text(round.question),
+      explanation: text(round.explanation),
+      options: choices(round.options),
+    })),
+    items: Array.isArray(value.items) ? value.items.map((item) => {
+      if (typeof item === "string") return { text: item, correct: null, explanation: null };
+      const record = item as Record<string, unknown>;
+      return {
+        text: text(record.message) || text(record.text) || "",
+        correct: text(record.correct),
+        explanation: text(record.explanation),
+      };
+    }).filter((item) => item.text) : [],
+    options: choices(value.options),
+    fields: records(value.fields).map((field) => ({
+      key: text(field.key) || "",
+      label: text(field.label) || "",
+      placeholder: text(field.placeholder),
+      options: strings(field.options),
+      multi: field.multi === true,
+    })),
+    pairs: records(value.pairs).map((pair) => {
+      const left = pair.left as Record<string, unknown> | undefined;
+      const right = pair.right as Record<string, unknown> | undefined;
+      return {
+        left: [text(left?.name), text(left?.description)].filter(Boolean).join(": "),
+        right: [text(right?.name), text(right?.description)].filter(Boolean).join(": "),
+      };
+    }),
+    comparison: value.good && value.bad ? {
+      good: value.good,
+      bad: value.bad,
+    } : null,
   };
 }
 
