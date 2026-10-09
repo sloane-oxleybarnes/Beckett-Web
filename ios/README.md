@@ -28,6 +28,11 @@ for a message, then opens Beckett and runs coaching with a configurable
 Professional or Personal lens. Shortcut handoffs use the same file-protected,
 15-minute App Group storage as the Share Extension.
 
+The Inbox keeps follow-up coaching conversational after Decode, Respond, or
+Rewrite. Its thread exists only in app memory and is sent back with each
+follow-up so Beckett can retain context; the API does not save the conversation
+to Beckett history. Every thread can hand its scenario directly into Practice.
+
 ## Local setup
 
 1. Open `Beckett.xcodeproj` in Xcode 16 or newer.

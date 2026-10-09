@@ -17,19 +17,39 @@ struct CoachView: View {
                             .frame(height: 0)
                             .id("coach-top")
                         if let response = coach.response {
-                            CoachResultView(
-                                response: response,
-                                action: coach.selectedAction,
-                                originalMessage: coach.text,
-                                contextMode: contextMode,
-                                isLoading: coach.isLoading,
-                                onStartOver: coach.startOver,
-                                onDraftResponse: draftResponse,
-                                onPractice: practiceConversation
-                            )
+                            VStack(alignment: .leading, spacing: 18) {
+                                CoachResultView(
+                                    response: response,
+                                    originalMessage: coach.text,
+                                    contextMode: contextMode,
+                                    isLoading: coach.isLoading,
+                                    onStartOver: coach.startOver,
+                                    onDraftResponse: draftResponse
+                                )
+                                InboxFollowUpView(
+                                    messages: coach.followUpMessages,
+                                    draft: $coach.followUpDraft,
+                                    suggestions: followUpSuggestions,
+                                    isLoading: coach.isFollowingUp,
+                                    onSend: sendFollowUp
+                                )
+                                if let safety = coach.safetyResponse {
+                                    SafetyResultView(safety: safety, onStartOver: coach.startOver)
+                                } else if let message = coach.errorMessage {
+                                    CoachFailureView(
+                                        message: message,
+                                        isCreditLimit: coach.errorCode == "mobile_usage_limit_reached",
+                                        onRetry: sendFollowUp
+                                    )
+                                }
+                                PracticeResultButton(onPractice: practiceConversation)
+                            }
                         } else {
                             composeView
                         }
+                        Color.clear
+                            .frame(height: 0)
+                            .id("inbox-bottom")
                     }
                     .padding(20)
                 }
@@ -42,6 +62,9 @@ struct CoachView: View {
                 }
                 .onChange(of: coach.safetyResponse) { _, _ in
                     scrollToTop(proxy)
+                }
+                .onChange(of: coach.followUpMessages.count) { _, count in
+                    if count > 0 { scrollToBottom(proxy) }
                 }
                 .onChange(of: handoff.pending) { _, pending in
                     guard let pending else { return }
@@ -63,6 +86,14 @@ struct CoachView: View {
         }
     }
 
+    private func scrollToBottom(_ proxy: ScrollViewProxy) {
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.25)) {
+                proxy.scrollTo("inbox-bottom", anchor: .bottom)
+            }
+        }
+    }
+
     @ViewBuilder
     private var creditsView: some View {
         if let usage = coach.usage ?? auth.profile?.usage {
@@ -78,6 +109,14 @@ struct CoachView: View {
 
     private var composeView: some View {
         Group {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Inbox")
+                    .font(.system(size: 30, weight: .regular, design: .serif))
+                Text("Start with a message, then keep talking with Beckett.")
+                    .font(.subheadline)
+                    .foregroundStyle(BeckettColor.inkMid)
+            }
+
             ContextModePicker(selection: $contextMode)
 
             HStack(alignment: .top, spacing: 12) {
@@ -201,6 +240,29 @@ struct CoachView: View {
         requestCoaching(action: .respond)
     }
 
+    private func sendFollowUp() {
+        guard let token = auth.session?.accessToken else { return }
+        Task {
+            let unauthorized = await coach.sendFollowUp(accessToken: token, contextMode: contextMode)
+            if unauthorized, let refreshed = await auth.refreshedAccessToken() {
+                await coach.sendFollowUp(accessToken: refreshed, contextMode: contextMode)
+            }
+        }
+    }
+
+    private var followUpSuggestions: [String] {
+        switch coach.selectedAction {
+        case .decode:
+            ["What should I say back?", "What might I be missing?", "Help me ask for clarity"]
+        case .respond:
+            ["Make it warmer", "Make it more direct", "What reaction should I expect?"]
+        case .rewrite:
+            ["Make it shorter", "Keep my boundary firm", "Make it sound more like me"]
+        case .clarify, .toneCheck:
+            ["Make it clearer", "What should I change?", "Help me practice this"]
+        }
+    }
+
     private func apply(_ pending: MobileCoachHandoff) {
         if let mode = pending.contextMode { contextMode = mode }
         coach.apply(pending)
@@ -215,8 +277,18 @@ struct CoachView: View {
             originalMessage: coach.text,
             person: coach.person,
             goal: coach.goal,
-            conversationContext: coach.conversationContext
+            conversationContext: practiceContext
         ))
+    }
+
+    private var practiceContext: String {
+        let followUps = coach.followUpMessages.map { message in
+            "\(message.role == .user ? "You" : "Beckett"): \(message.content)"
+        }.joined(separator: "\n")
+        return [coach.conversationContext, followUps]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
     }
 }
 
@@ -275,13 +347,11 @@ private struct SafetyResultView: View {
 
 private struct CoachResultView: View {
     let response: CoachResponse
-    let action: MobileCoachAction
     let originalMessage: String
     let contextMode: MobileContextMode
     let isLoading: Bool
     let onStartOver: () -> Void
     let onDraftResponse: () -> Void
-    let onPractice: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -320,17 +390,13 @@ private struct CoachResultView: View {
                 InterpretationResultView(result: result)
                 DecodeNextActions(
                     isLoading: isLoading,
-                    onDraftResponse: onDraftResponse,
-                    onPractice: onPractice
+                    onDraftResponse: onDraftResponse
                 )
             case let .draftOptions(result):
                 if let feedback = result.originalFeedback {
                     RewriteFeedbackView(feedback: feedback)
                 }
                 DraftOptionsResultView(result: result)
-                if action == .respond || action == .rewrite {
-                    PracticeResultButton(onPractice: onPractice)
-                }
             case let .toneFeedback(result): ToneFeedbackResultView(result: result)
             }
 
@@ -355,30 +421,105 @@ private struct PracticeResultButton: View {
 private struct DecodeNextActions: View {
     let isLoading: Bool
     let onDraftResponse: () -> Void
-    let onPractice: () -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
-            Button(action: onDraftResponse) {
-                HStack {
-                    if isLoading { ProgressView().tint(.white) }
-                    Label("Draft response", systemImage: "arrowshape.turn.up.left")
-                }
+        Button(action: onDraftResponse) {
+            HStack {
+                if isLoading { ProgressView().tint(.white) }
+                Label("Draft response", systemImage: "arrowshape.turn.up.left")
             }
-            .buttonStyle(BeckettPrimaryButtonStyle())
-            .disabled(isLoading)
-
-            Button(action: onPractice) {
-                Label("Practice conversation", systemImage: "person.2.wave.2")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-            }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .tint(BeckettColor.primaryDark)
         }
-        .accessibilityElement(children: .contain)
+        .buttonStyle(BeckettPrimaryButtonStyle())
+        .disabled(isLoading)
+    }
+}
+
+private struct InboxFollowUpView: View {
+    let messages: [InboxMessage]
+    @Binding var draft: String
+    let suggestions: [String]
+    let isLoading: Bool
+    let onSend: () -> Void
+
+    var body: some View {
+        BeckettCard {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Keep talking with Beckett")
+                        .font(.system(size: 23, weight: .regular, design: .serif))
+                    Text("Ask a follow-up without starting over or repeating the context.")
+                        .font(.subheadline)
+                        .foregroundStyle(BeckettColor.inkMid)
+                }
+
+                if messages.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(suggestions, id: \.self) { suggestion in
+                                Button(suggestion) { draft = suggestion }
+                                    .buttonStyle(.bordered)
+                                    .buttonBorderShape(.capsule)
+                                    .tint(BeckettColor.primaryDark)
+                            }
+                        }
+                    }
+                } else {
+                    ForEach(messages) { message in
+                        InboxMessageBubble(message: message)
+                    }
+                }
+
+                HStack(alignment: .bottom, spacing: 10) {
+                    TextField("Ask a follow-up…", text: $draft, axis: .vertical)
+                        .lineLimit(1...5)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(BeckettColor.background, in: RoundedRectangle(cornerRadius: 16))
+                    Button(action: onSend) {
+                        if isLoading {
+                            ProgressView().tint(.white)
+                        } else {
+                            Image(systemName: "arrow.up")
+                                .font(.headline)
+                        }
+                    }
+                    .frame(width: 42, height: 42)
+                    .background(BeckettColor.primary, in: Circle())
+                    .foregroundStyle(.white)
+                    .buttonStyle(.plain)
+                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                    .accessibilityLabel(isLoading ? "Beckett is responding" : "Send follow-up")
+                }
+
+                Label("This conversation is not saved to your Beckett history.", systemImage: "lock")
+                    .font(.caption)
+                    .foregroundStyle(BeckettColor.inkLight)
+            }
+        }
+    }
+}
+
+private struct InboxMessageBubble: View {
+    let message: InboxMessage
+
+    var body: some View {
+        HStack {
+            if message.role == .user { Spacer(minLength: 34) }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(message.role == .user ? "You" : "Beckett")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(message.role == .user ? Color.white.opacity(0.8) : BeckettColor.inkLight)
+                Text(message.content)
+                    .textSelection(.enabled)
+            }
+            .padding(12)
+            .background(
+                message.role == .user ? BeckettColor.primary : BeckettColor.primaryLight,
+                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+            )
+            .foregroundStyle(message.role == .user ? Color.white : BeckettColor.ink)
+            if message.role == .assistant { Spacer(minLength: 34) }
+        }
     }
 }
 

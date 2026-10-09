@@ -32,7 +32,7 @@ struct RootView: View {
                         selectedTab = 1
                     }
                         .tag(0)
-                        .tabItem { Label("Message Help", systemImage: "bubble.left.and.text.bubble.right") }
+                        .tabItem { Label("Inbox", systemImage: "bubble.left.and.text.bubble.right") }
                     PracticeView(contextMode: contextMode, prefill: $practicePrefill)
                         .tag(1)
                         .tabItem { Label("Practice", systemImage: "person.2.wave.2") }

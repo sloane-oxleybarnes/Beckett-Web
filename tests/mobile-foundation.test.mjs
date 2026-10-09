@@ -222,6 +222,30 @@ test("iOS publishes secure App Intents for Siri, Spotlight, and the Action butto
   assert.match(project, /BeckettAppIntents\.swift in Sources/);
 });
 
+test("mobile Inbox supports transient follow-up coaching and Practice handoff", async () => {
+  const [route, store, view, root] = await Promise.all([
+    readFile(new URL("../app/api/mobile/v1/inbox/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/Coach/CoachStore.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
+  ]);
+  assert.match(route, /getMobileUser\(request\)/);
+  assert.match(route, /hasCurrentMobileAiConsent\(privacy\)/);
+  assert.match(route, /hasCurrentBetaConsent/);
+  assert.match(route, /getSafetyResponse/);
+  assert.match(route, /mobile_inbox_follow_up/);
+  assert.match(route, /contentSaved: false/);
+  assert.match(route, /"Cache-Control": "no-store"/);
+  assert.doesNotMatch(route, /\.from\("[^"]*inbox/);
+  assert.match(store, /api\/mobile\/v1\/inbox/);
+  assert.match(store, /followUpMessages\.append\(InboxMessage\(role: \.assistant/);
+  assert.match(view, /Keep talking with Beckett/);
+  assert.match(view, /Ask a follow-up/);
+  assert.match(view, /PracticeResultButton\(onPractice: practiceConversation\)/);
+  assert.match(view, /coach\.followUpMessages\.map/);
+  assert.match(root, /Label\("Inbox", systemImage:/);
+});
+
 test("coach scrolls to the top when a result is displayed or cleared", async () => {
   const view = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
   assert.match(view, /ScrollViewReader/);
@@ -229,7 +253,7 @@ test("coach scrolls to the top when a result is displayed or cleared", async () 
   assert.match(view, /proxy\.scrollTo\("coach-top", anchor: \.top\)/);
 });
 
-test("message-help results hide the context toggle and use the branded result label", async () => {
+test("Inbox results hide the context toggle and use the branded result label", async () => {
   const view = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
   const resultBranch = view.indexOf("if let response = coach.response");
   const composeView = view.indexOf("private var composeView");
@@ -242,7 +266,7 @@ test("message-help results hide the context toggle and use the branded result la
   assert.match(view, /ResultSectionLabel\("Possible readings"\)/);
   assert.match(view, /Label\("Draft response"/);
   assert.match(view, /Label\("Practice conversation"/);
-  assert.match(view, /action == \.respond \|\| action == \.rewrite/);
+  assert.ok(view.indexOf("InboxFollowUpView(") < view.indexOf("PracticeResultButton(onPractice: practiceConversation)"));
   assert.match(view, /Text\("Feedback on your original message"\)/);
   assert.match(view, /feedbackRow\(title: "Tone"/);
   assert.match(view, /feedbackRow\(title: "Clarity"/);
@@ -252,14 +276,14 @@ test("message-help results hide the context toggle and use the branded result la
   assert.doesNotMatch(view, /Text\("Beckett’s read"\)[\s\S]*design: \.serif/);
 });
 
-test("message help uses the real Beckett brand asset and places usage below the editor", async () => {
+test("Inbox uses the real Beckett brand asset and places usage below the editor", async () => {
   const [view, theme, root] = await Promise.all([
     readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
     readFile(new URL("../ios/BeckettCore/Design/BeckettTheme.swift", import.meta.url), "utf8"),
     readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
   ]);
   assert.match(view, /beckettBrandNavigation\(\)/);
-  assert.match(root, /Label\("Message Help"/);
+  assert.match(root, /Label\("Inbox"/);
   assert.match(theme, /struct BeckettBrandHeader: View/);
   assert.match(theme, /Image\("BeckettWordmark"\)/);
   assert.match(theme, /ToolbarItem\(placement: \.principal\)[\s\S]*BeckettBrandHeader\(\)/);
