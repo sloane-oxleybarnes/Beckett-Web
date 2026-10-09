@@ -377,3 +377,24 @@ test("mobile Courses uses the published catalog and shared progress tables", asy
   assert.match(route, /course_progress/);
   assert.match(route, /course_completions/);
 });
+
+test("mobile Practice supports native voice input and spoken replies", async () => {
+  const [learning, plist] = await Promise.all([
+    readFile(new URL("../ios/BeckettApp/Features/LearningViews.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/Info.plist", import.meta.url), "utf8"),
+  ]);
+  assert.match(learning, /import AVFoundation/);
+  assert.match(learning, /import Speech/);
+  assert.match(learning, /enum PracticeChannel/);
+  assert.match(learning, /SFSpeechAudioBufferRecognitionRequest/);
+  assert.match(learning, /AVSpeechSynthesizer/);
+  assert.match(learning, /voice\.speak\(reply\)/);
+  assert.match(plist, /NSMicrophoneUsageDescription/);
+  assert.match(plist, /NSSpeechRecognitionUsageDescription/);
+});
+
+test("mobile Courses remain available when web credit limits are disabled", async () => {
+  const route = await readFile(new URL("../app/api/mobile/v1/courses/route.ts", import.meta.url), "utf8");
+  assert.match(route, /!WEB_CREDITS_ENABLED \|\| await canBrowseWebCourses\(plan\)/);
+  assert.match(route, /if \(WEB_CREDITS_ENABLED\) \{\s*try \{\s*await ensureWebCourseAccess/);
+});

@@ -8,6 +8,7 @@ import type { CourseSlide } from "@/lib/courses";
 import { getMobileUser } from "@/lib/mobile-auth";
 import { platformRepository } from "@/lib/repositories/platform-repository";
 import {
+  WEB_CREDITS_ENABLED,
   canBrowseWebCourses,
   ensureWebCourseAccess,
   WebCourseLimitError,
@@ -33,7 +34,7 @@ async function accessFor(userId: string) {
     .eq("id", userId)
     .maybeSingle();
   const plan = profile?.plan || "free";
-  return { plan, allowed: await canBrowseWebCourses(plan) };
+  return { plan, allowed: !WEB_CREDITS_ENABLED || await canBrowseWebCourses(plan) };
 }
 
 function strings(value: unknown): string[] {
@@ -154,13 +155,15 @@ export async function POST(request: NextRequest) {
   if (!access.allowed) {
     return NextResponse.json({ error: "Courses require Beta or Pro access." }, { status: 403 });
   }
-  try {
-    await ensureWebCourseAccess(user.id, access.plan, courseId);
-  } catch (error) {
-    if (error instanceof WebCourseLimitError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+  if (WEB_CREDITS_ENABLED) {
+    try {
+      await ensureWebCourseAccess(user.id, access.plan, courseId);
+    } catch (error) {
+      if (error instanceof WebCourseLimitError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      throw error;
     }
-    throw error;
   }
 
   if (body?.operation === "content") {

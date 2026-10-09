@@ -1,4 +1,6 @@
 import SwiftUI
+import AVFoundation
+import Speech
 
 struct ContextModePicker: View {
     @Binding var selection: MobileContextMode
@@ -28,6 +30,125 @@ private enum PracticeDifficulty: String, CaseIterable, Identifiable, Encodable {
 
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
+}
+
+private enum PracticeChannel: String, CaseIterable, Identifiable {
+    case text
+    case voice
+
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+}
+
+@MainActor
+private final class PracticeVoiceController: ObservableObject {
+    @Published private(set) var isListening = false
+    @Published var errorMessage: String?
+
+    private let audioEngine = AVAudioEngine()
+    private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    private let synthesizer = AVSpeechSynthesizer()
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+
+    func toggleListening(onTranscript: @escaping (String) -> Void) async {
+        if isListening {
+            stopListening()
+            return
+        }
+        guard await speechPermissionGranted(), await microphonePermissionGranted() else {
+            errorMessage = "Allow microphone and speech recognition access in Settings to use Voice Practice."
+            return
+        }
+        do {
+            try startListening(onTranscript: onTranscript)
+        } catch {
+            errorMessage = "Voice Practice could not start listening. You can continue by typing."
+        }
+    }
+
+    func speak(_ text: String) {
+        stopListening()
+        synthesizer.stopSpeaking(at: .immediate)
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = 0.48
+        synthesizer.speak(utterance)
+    }
+
+    func stop() {
+        stopListening()
+        synthesizer.stopSpeaking(at: .immediate)
+    }
+
+    private func startListening(onTranscript: @escaping (String) -> Void) throws {
+        errorMessage = nil
+        synthesizer.stopSpeaking(at: .immediate)
+        recognitionTask?.cancel()
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        if speechRecognizer?.supportsOnDeviceRecognition == true {
+            request.requiresOnDeviceRecognition = true
+        }
+        recognitionRequest = request
+
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetooth])
+        try session.setActive(true, options: .notifyOthersOnDeactivation)
+
+        let inputNode = audioEngine.inputNode
+        let format = inputNode.outputFormat(forBus: 0)
+        guard format.sampleRate > 0 else { throw PracticeVoiceError.microphoneUnavailable }
+        inputNode.installTap(onBus: 0, bufferSize: 1_024, format: format) { buffer, _ in
+            request.append(buffer)
+        }
+        audioEngine.prepare()
+        try audioEngine.start()
+        isListening = true
+
+        recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
+            Task { @MainActor in
+                if let result {
+                    onTranscript(result.bestTranscription.formattedString)
+                }
+                if error != nil || result?.isFinal == true {
+                    self?.stopListening()
+                }
+            }
+        }
+    }
+
+    private func stopListening() {
+        guard isListening else { return }
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        recognitionRequest?.endAudio()
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        recognitionRequest = nil
+        isListening = false
+    }
+
+    private func speechPermissionGranted() async -> Bool {
+        if SFSpeechRecognizer.authorizationStatus() == .authorized { return true }
+        let status = await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
+        }
+        return status == .authorized
+    }
+
+    private func microphonePermissionGranted() async -> Bool {
+        await withCheckedContinuation { continuation in
+            AVAudioApplication.requestRecordPermission {
+                continuation.resume(returning: $0)
+            }
+        }
+    }
+}
+
+private enum PracticeVoiceError: Error {
+    case microphoneUnavailable
 }
 
 private struct PracticeRequest: Encodable {
@@ -239,6 +360,8 @@ struct PracticeView: View {
     @Binding var prefill: PracticePrefill?
     @EnvironmentObject private var auth: AuthStore
     @StateObject private var store = PracticeStore()
+    @StateObject private var voice = PracticeVoiceController()
+    @State private var channel: PracticeChannel = .text
 
     var body: some View {
         NavigationStack {
@@ -265,6 +388,7 @@ struct PracticeView: View {
             .onAppear {
                 applyPrefill(prefill)
             }
+            .onDisappear { voice.stop() }
         }
     }
 
@@ -278,7 +402,9 @@ struct PracticeView: View {
         Group {
             Text(contextMode == .professional ? "Rehearse a work conversation" : "Rehearse a personal conversation")
                 .font(.system(size: 27, weight: .regular, design: .serif))
-            Text("Practice a realistic text exchange before the real conversation.")
+            Text(channel == .voice
+                ? "Speak naturally and hear the simulated person respond."
+                : "Practice a realistic text exchange before the real conversation.")
                 .font(.subheadline)
                 .foregroundStyle(BeckettColor.inkMid)
 
@@ -302,6 +428,14 @@ struct PracticeView: View {
                 }
             }
 
+            Picker("Practice format", selection: $channel) {
+                ForEach(PracticeChannel.allCases) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("Text or voice practice")
+
             Picker("Simulation mode", selection: $store.difficulty) {
                 ForEach(PracticeDifficulty.allCases) { difficulty in
                     Text(difficulty.title).tag(difficulty)
@@ -324,7 +458,7 @@ struct PracticeView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Practicing with \(store.person)").font(.headline)
-                    Text("\(store.difficulty.title) text conversation")
+                    Text("\(store.difficulty.title) \(channel.title.lowercased()) conversation")
                         .font(.caption)
                         .foregroundStyle(BeckettColor.inkLight)
                 }
@@ -368,15 +502,39 @@ struct PracticeView: View {
                     .foregroundStyle(BeckettColor.inkMid)
             }
 
-            TextField("What would you like to say?", text: $store.draft, axis: .vertical)
+            TextField(
+                channel == .voice ? "Tap the microphone or type what you want to say" : "What would you like to say?",
+                text: $store.draft,
+                axis: .vertical
+            )
                 .lineLimit(2...5)
                 .padding(13)
                 .background(BeckettColor.card, in: RoundedRectangle(cornerRadius: 14))
                 .overlay { RoundedRectangle(cornerRadius: 14).stroke(BeckettColor.ink.opacity(0.1)) }
 
             HStack {
-                Button("Start over") { store.startOver() }
+                Button("Start over") {
+                    voice.stop()
+                    store.startOver()
+                }
                     .buttonStyle(.bordered)
+                if channel == .voice {
+                    Button {
+                        Task {
+                            await voice.toggleListening { transcript in
+                                store.draft = transcript
+                            }
+                        }
+                    } label: {
+                        Label(
+                            voice.isListening ? "Stop listening" : "Speak",
+                            systemImage: voice.isListening ? "stop.circle.fill" : "mic.fill"
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(voice.isListening ? .red : BeckettColor.primaryDark)
+                    .disabled(store.isWorking)
+                }
                 Button(store.isWorking ? "Responding…" : "Send") {
                     Task { await send() }
                 }
@@ -420,6 +578,9 @@ struct PracticeView: View {
         if let error = store.errorMessage {
             Text(error).font(.footnote).foregroundStyle(.red)
         }
+        if let error = voice.errorMessage {
+            Text(error).font(.footnote).foregroundStyle(.red)
+        }
     }
 
     private func start() async {
@@ -432,14 +593,22 @@ struct PracticeView: View {
 
     private func send() async {
         guard let token = auth.session?.accessToken else { return }
+        voice.stop()
+        let previousTranscriptCount = store.transcript.count
         if await store.send(accessToken: token),
            let refreshed = await auth.refreshedAccessToken() {
             await store.send(accessToken: refreshed)
+        }
+        if channel == .voice,
+           store.transcript.count > previousTranscriptCount,
+           let reply = store.transcript.last(where: { $0.role != "user" })?.content {
+            voice.speak(reply)
         }
     }
 
     private func finish() async {
         guard let token = auth.session?.accessToken else { return }
+        voice.stop()
         if await store.finish(accessToken: token),
            let refreshed = await auth.refreshedAccessToken() {
             await store.finish(accessToken: refreshed)

@@ -8,6 +8,10 @@
 	<string>$(APP_GROUP_IDENTIFIER)</string>
 	<key>KEYCHAIN_GROUP_IDENTIFIER</key>
 	<string>$(KEYCHAIN_GROUP_IDENTIFIER)</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Beckett uses your microphone only while you practice a spoken conversation.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Beckett converts what you say during Practice into text so the simulated person can respond.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Beckett</string>
 	<key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
