@@ -50,6 +50,15 @@ function actionInstruction(action: MobileCoachAction) {
   return "Assess how the user's draft may land. Name strengths and possible friction without shaming the user or treating one interpretation as certain.";
 }
 
+function contextModeInstruction(contextMode: "professional" | "personal", action: MobileCoachAction) {
+  const lens = contextMode === "personal"
+    ? `Personal lens: Treat ambiguous people and situations as part of the user's personal life. Focus plausible interpretations on relationship expectations, emotional impact, closeness or distance, reassurance, personal boundaries, and everyday coordination. Do not introduce workplace concepts such as deliverables, ownership, deadlines, or blocked work unless the message explicitly contains them.`
+    : `Professional lens: Treat ambiguous people and situations as part of the user's work life. Focus plausible interpretations on commitments, ownership, dependencies, timelines, decisions, feedback, professional boundaries, and effects on the work. Do not frame ordinary work ambiguity as concern about personal closeness or the relationship unless the message explicitly contains it.`;
+
+  if (action !== "decode") return lens;
+  return `${lens}\nFor Decode, keep observable facts grounded in the message, but make the summary and possible readings meaningfully specific to this lens. Do not merely swap a few adjectives. Never invent facts, roles, feelings, or intent to create contrast.`;
+}
+
 export async function POST(request: NextRequest) {
   const user = await getMobileUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -114,6 +123,7 @@ export async function POST(request: NextRequest) {
     contextMode === "personal"
       ? "You are Beckett, a personalized communication coach for neurodivergent adults. This request concerns the user's personal life, not their workplace. Use natural everyday language and do not force workplace framing into the response."
       : "You are Beckett, a personalized workplace communication coach for neurodivergent adults.",
+    contextModeInstruction(contextMode, action),
     actionInstruction(action),
     beckettBoundaryPrompt(),
     sharedContext.promptContext,

@@ -21,6 +21,7 @@ struct CoachView: View {
                                 response: response,
                                 action: coach.selectedAction,
                                 originalMessage: coach.text,
+                                contextMode: contextMode,
                                 isLoading: coach.isLoading,
                                 onStartOver: coach.startOver,
                                 onDraftResponse: draftResponse,
@@ -267,6 +268,7 @@ private struct CoachResultView: View {
     let response: CoachResponse
     let action: MobileCoachAction
     let originalMessage: String
+    let contextMode: MobileContextMode
     let isLoading: Bool
     let onStartOver: () -> Void
     let onDraftResponse: () -> Void
@@ -274,11 +276,19 @@ private struct CoachResultView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("BECKETT’S READ")
-                    .font(.caption.weight(.bold))
-                    .tracking(0.8)
-                    .foregroundStyle(BeckettColor.primaryDark)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("BECKETT’S READ")
+                        .font(.caption.weight(.bold))
+                        .tracking(0.8)
+                        .foregroundStyle(BeckettColor.primaryDark)
+                    Text("\(contextMode.title) lens")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(BeckettColor.primaryDark)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(BeckettColor.primaryLight, in: Capsule())
+                }
                 Spacer()
                 Button("Start over", action: onStartOver).font(.subheadline)
             }

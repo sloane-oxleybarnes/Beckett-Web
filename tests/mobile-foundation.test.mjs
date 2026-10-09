@@ -331,6 +331,20 @@ test("rewrite always shows returned feedback and full response text", async () =
   assert.doesNotMatch(view, /action == \.rewrite, let feedback/);
 });
 
+test("professional and personal coaching use visibly distinct grounded lenses", async () => {
+  const [view, route] = await Promise.all([
+    readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/mobile/v1/coach/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(view, /contextMode: contextMode/);
+  assert.match(view, /Text\("\\\(contextMode\.title\) lens"\)/);
+  assert.match(route, /function contextModeInstruction/);
+  assert.match(route, /relationship expectations, emotional impact, closeness or distance, reassurance/);
+  assert.match(route, /commitments, ownership, dependencies, timelines, decisions, feedback/);
+  assert.match(route, /make the summary and possible readings meaningfully specific to this lens/);
+  assert.match(route, /Never invent facts, roles, feelings, or intent to create contrast/);
+});
+
 test("mobile context mode is shared across Coach, Practice, and Courses", async () => {
   const [root, coachRoute, models] = await Promise.all([
     readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
