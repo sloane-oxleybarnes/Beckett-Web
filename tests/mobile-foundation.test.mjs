@@ -183,9 +183,16 @@ test("share extension supports text, images, local OCR, selection, and opaque ha
   assert.match(controller, /VNRecognizeTextRequest/);
   assert.match(controller, /automaticallyDetectsLanguage = true/);
   assert.match(controller, /Use selection/);
+  assert.match(controller, /Picker\("Conversation context", selection: \$model\.contextMode\)/);
+  assert.match(controller, /contextMode: contextMode/);
+  assert.match(controller, /Label\("Copy & close", systemImage: "doc\.on\.doc"\)/);
+  assert.match(controller, /reading\.evidenceStrengthLabel/);
+  assert.match(controller, /Feedback on your original/);
+  assert.match(controller, /beckettBrandNavigation\(\)/);
   assert.match(controller, /extensionContext\?\.open/);
   assert.match(models, /pending-coach-handoff\.json/);
   assert.match(models, /completeFileProtection/);
+  assert.match(models, /let contextMode: MobileContextMode\?/);
   assert.match(models, /beckett:\/\/coach\/handoff\?id=/);
   assert.doesNotMatch(models, /beckett:\/\/coach\/handoff\?[^\n]*text=/);
   assert.match(app, /MobileCoachHandoffStore\.consume/);

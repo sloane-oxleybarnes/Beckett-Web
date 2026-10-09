@@ -185,12 +185,20 @@ struct MobileCoachHandoff: Codable, Equatable, Identifiable {
     let id: UUID
     let action: MobileCoachAction
     let text: String
+    let contextMode: MobileContextMode?
     let createdAt: Date
 
-    init(id: UUID = UUID(), action: MobileCoachAction, text: String, createdAt: Date = Date()) {
+    init(
+        id: UUID = UUID(),
+        action: MobileCoachAction,
+        text: String,
+        contextMode: MobileContextMode? = nil,
+        createdAt: Date = Date()
+    ) {
         self.id = id
         self.action = action
         self.text = text
+        self.contextMode = contextMode
         self.createdAt = createdAt
     }
 

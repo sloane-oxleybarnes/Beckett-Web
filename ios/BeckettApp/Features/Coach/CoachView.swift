@@ -45,11 +45,13 @@ struct CoachView: View {
                 }
                 .onChange(of: handoff.pending) { _, pending in
                     guard let pending else { return }
+                    if let mode = pending.contextMode { contextMode = mode }
                     coach.apply(pending)
                     handoff.finish(pending.id)
                 }
                 .onAppear {
                     guard let pending = handoff.pending else { return }
+                    if let mode = pending.contextMode { contextMode = mode }
                     coach.apply(pending)
                     handoff.finish(pending.id)
                 }

@@ -65,6 +65,9 @@ final class ShareCoachModel: ObservableObject {
 
     @Published var text = ""
     @Published var action: MobileCoachAction = .decode
+    @Published var contextMode: MobileContextMode {
+        didSet { sharedDefaults?.set(contextMode.rawValue, forKey: Self.contextModeKey) }
+    }
     @Published var response: CoachResponse?
     @Published var safetyResponse: SafetyResponse?
     @Published var isLoading = true
@@ -74,6 +77,15 @@ final class ShareCoachModel: ObservableObject {
 
     private let api = APIClient()
     private let keychain = KeychainSessionStore()
+    private let sharedDefaults: UserDefaults?
+    private static let contextModeKey = "beckett.mobile.context-mode"
+
+    init() {
+        let defaults = AppConfiguration.appGroupIdentifier.flatMap { UserDefaults(suiteName: $0) }
+        sharedDefaults = defaults
+        contextMode = defaults?.string(forKey: Self.contextModeKey)
+            .flatMap(MobileContextMode.init(rawValue:)) ?? .professional
+    }
 
     func load(from context: NSExtensionContext?) async {
         defer { isLoading = false }
@@ -168,7 +180,7 @@ final class ShareCoachModel: ObservableObject {
     func makeHandoffURL() throws -> URL {
         let selected = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !selected.isEmpty else { throw HandoffError.emptyText }
-        let handoff = MobileCoachHandoff(action: action, text: selected)
+        let handoff = MobileCoachHandoff(action: action, text: selected, contextMode: contextMode)
         try MobileCoachHandoffStore.save(handoff)
         guard let url = handoff.deepLink else { throw HandoffError.invalidURL }
         return url
@@ -183,7 +195,7 @@ final class ShareCoachModel: ObservableObject {
                 conversationContext: "",
                 person: "",
                 goal: "",
-                contextMode: .professional,
+                contextMode: contextMode,
                 source: "share_extension"
             ),
             accessToken: accessToken
@@ -282,13 +294,44 @@ private struct ShareCoachView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
-                Picker("Coaching action", selection: $model.action) {
+                Text("What would help?")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 8) {
                     ForEach(MobileCoachAction.visibleCases) { action in
-                        Text(action.shortTitle).tag(action)
+                        Button {
+                            model.action = action
+                        } label: {
+                            VStack(spacing: 5) {
+                                Image(systemName: action.systemImage)
+                                Text(action.shortTitle)
+                                    .font(.caption.weight(.semibold))
+                                    .lineLimit(1)
+                            }
+                            .foregroundStyle(model.action == action ? Color.white : BeckettColor.primaryDark)
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                            .background(
+                                model.action == action ? BeckettColor.primary : BeckettColor.card,
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(model.action == action ? BeckettColor.primary : BeckettColor.border)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(model.action == action ? .isSelected : [])
                     }
                 }
-                .pickerStyle(.menu)
-                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Picker("Conversation context", selection: $model.contextMode) {
+                    ForEach(MobileContextMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityLabel("Personal or professional context")
 
                 if model.isLoading && model.text.isEmpty {
                     Spacer()
@@ -299,7 +342,13 @@ private struct ShareCoachView: View {
                     Button("Continue in Beckett", action: onContinueInApp)
                         .buttonStyle(BeckettPrimaryButtonStyle())
                 } else if let response = model.response {
-                    ScrollView { CompactShareResult(result: response.result) }
+                    ScrollView {
+                        CompactShareResult(
+                            result: response.result,
+                            contextMode: model.contextMode,
+                            onCopyAndClose: onClose
+                        )
+                    }
                     HStack {
                         Button("Edit request") { model.startOver() }
                             .buttonStyle(.bordered)
@@ -351,8 +400,7 @@ private struct ShareCoachView: View {
                     .foregroundStyle(BeckettColor.inkLight)
             }
             .padding()
-            .navigationTitle("Beckett")
-            .navigationBarTitleDisplayMode(.inline)
+            .beckettBrandNavigation()
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Close", action: onClose) } }
             .beckettPage()
         }
@@ -428,24 +476,53 @@ private struct CompactSafetyResult: View {
 
 private struct CompactShareResult: View {
     let result: MobileCoachResult
+    let contextMode: MobileContextMode
+    let onCopyAndClose: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Text("\(contextMode.title) lens")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(BeckettColor.primaryDark)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(BeckettColor.primaryLight, in: Capsule())
             switch result {
             case let .interpretation(value):
                 BeckettCard {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(value.summary).font(.title3)
                         ForEach(value.clearSignals.prefix(2), id: \.self) { Text("• \($0)") }
+                        if let reading = value.possibleReadings.first {
+                            Text("Possible reading").font(.headline)
+                            HStack {
+                                Text(reading.label).bold()
+                                Spacer()
+                                Text(reading.evidenceStrengthLabel)
+                                    .font(.caption)
+                                    .foregroundStyle(BeckettColor.inkLight)
+                            }
+                            Text(reading.explanation)
+                        }
                         if let uncertainty = value.uncertainties.first {
                             Text("Still uncertain").font(.headline)
                             Text(uncertainty)
                         }
+                        CompactResultActions(text: value.summary, onCopyAndClose: onCopyAndClose)
                     }
                 }
             case let .draftOptions(value):
+                if let feedback = value.originalFeedback {
+                    BeckettCard {
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text("Feedback on your original").font(.headline)
+                            Text("Tone: \(feedback.tone)")
+                            Text("Clarity: \(feedback.clarity)")
+                        }
+                    }
+                }
                 ForEach(value.options.prefix(2)) { option in
-                    CompactDraftCard(label: option.label, text: option.text)
+                    CompactDraftCard(label: option.label, text: option.text, onCopyAndClose: onCopyAndClose)
                 }
             case let .toneFeedback(value):
                 BeckettCard {
@@ -453,10 +530,11 @@ private struct CompactShareResult: View {
                         Text("How it may land").font(.headline)
                         Text(value.likelyLanding).font(.title3)
                         if let watch = value.watchFor.first { Text("• \(watch)") }
+                        CompactResultActions(text: value.likelyLanding, onCopyAndClose: onCopyAndClose)
                     }
                 }
                 if let revision = value.revision {
-                    CompactDraftCard(label: "Optional revision", text: revision.text)
+                    CompactDraftCard(label: "Optional revision", text: revision.text, onCopyAndClose: onCopyAndClose)
                 }
             }
         }
@@ -466,23 +544,34 @@ private struct CompactShareResult: View {
 private struct CompactDraftCard: View {
     let label: String
     let text: String
-    @State private var copied = false
+    let onCopyAndClose: () -> Void
 
     var body: some View {
         BeckettCard {
             VStack(alignment: .leading, spacing: 8) {
                 Text(label).bold()
                 Text(text).textSelection(.enabled)
-                HStack {
-                    Button {
-                        UIPasteboard.general.string = text
-                        copied = true
-                    } label: {
-                        Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
-                    }
-                    ShareLink(item: text) { Label("Share", systemImage: "square.and.arrow.up") }
-                }
+                CompactResultActions(text: text, onCopyAndClose: onCopyAndClose)
             }
         }
+    }
+}
+
+private struct CompactResultActions: View {
+    let text: String
+    let onCopyAndClose: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Button {
+                UIPasteboard.general.string = text
+                onCopyAndClose()
+            } label: {
+                Label("Copy & close", systemImage: "doc.on.doc")
+            }
+            ShareLink(item: text) { Label("Share", systemImage: "square.and.arrow.up") }
+        }
+        .font(.subheadline.weight(.semibold))
+        .tint(BeckettColor.primaryDark)
     }
 }
