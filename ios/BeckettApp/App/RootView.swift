@@ -22,6 +22,8 @@ struct RootView: View {
                 .beckettPage()
         case .signedOut, .codeSent:
             SignInView()
+        case .offline:
+            OfflineSessionView()
         case .signedIn:
             if auth.profile?.user.onboardingComplete != true {
                 AccountSetupView()
@@ -57,5 +59,30 @@ struct RootView: View {
                 ConsentView()
             }
         }
+    }
+}
+
+private struct OfflineSessionView: View {
+    @EnvironmentObject private var auth: AuthStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            BeckettBrandHeader()
+                .frame(maxWidth: .infinity)
+            Spacer()
+            Text("You’re offline")
+                .font(.system(size: 34, weight: .regular, design: .serif))
+            Text(auth.errorMessage ?? "Beckett could not connect. Check your connection and try again.")
+                .foregroundStyle(BeckettColor.inkMid)
+            Button("Try again") {
+                Task { await auth.bootstrap() }
+            }
+            .buttonStyle(BeckettPrimaryButtonStyle())
+            Button("Sign out", role: .cancel) { auth.signOut() }
+                .frame(maxWidth: .infinity)
+            Spacer()
+        }
+        .padding(24)
+        .beckettPage()
     }
 }

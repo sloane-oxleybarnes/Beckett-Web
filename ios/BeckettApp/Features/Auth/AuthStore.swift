@@ -10,6 +10,7 @@ final class AuthStore: ObservableObject {
         case signedOut
         case codeSent(email: String)
         case signedIn
+        case offline
     }
 
     @Published private(set) var state: State = .loading
@@ -28,6 +29,8 @@ final class AuthStore: ObservableObject {
     }
 
     func bootstrap() async {
+        state = .loading
+        errorMessage = nil
         guard var stored = keychain.load() else {
             state = .signedOut
             return
@@ -37,11 +40,16 @@ final class AuthStore: ObservableObject {
             session = stored
             profile = try await api.get("api/mobile/v1/session", accessToken: stored.accessToken)
             state = .signedIn
-        } catch {
+        } catch let APIError.server(status, _, _, _, _) where status == 401 {
             keychain.clear()
             session = nil
             profile = nil
             state = .signedOut
+        } catch {
+            session = stored
+            profile = nil
+            errorMessage = "Beckett could not connect. Check your connection and try again."
+            state = .offline
         }
     }
 

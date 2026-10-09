@@ -6,6 +6,7 @@ struct CoachView: View {
     let onPractice: (PracticePrefill) -> Void
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var handoff: CoachHandoffCoordinator
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @StateObject private var coach = CoachStore()
 
     var body: some View {
@@ -119,43 +120,7 @@ struct CoachView: View {
 
             ContextModePicker(selection: $contextMode)
 
-            HStack(alignment: .top, spacing: 12) {
-                ForEach(MobileCoachAction.visibleCases) { action in
-                    Button {
-                        coach.selectedAction = action
-                    } label: {
-                        VStack(spacing: 8) {
-                            Image(systemName: action.systemImage)
-                                .font(.title2)
-                                .frame(width: 64, height: 64)
-                                .foregroundStyle(
-                                    coach.selectedAction == action ? Color.white : BeckettColor.primaryDark
-                                )
-                                .background(
-                                    coach.selectedAction == action ? BeckettColor.primary : BeckettColor.card,
-                                    in: Circle()
-                                )
-                                .overlay {
-                                    Circle()
-                                        .stroke(
-                                            coach.selectedAction == action ? BeckettColor.primaryDark : BeckettColor.ink.opacity(0.12),
-                                            lineWidth: coach.selectedAction == action ? 2 : 1
-                                        )
-                                }
-                            Text(action.shortTitle)
-                                .font(.subheadline.bold())
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                                .foregroundStyle(BeckettColor.ink)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(coach.isLoading)
-                    .accessibilityLabel(action.shortTitle)
-                    .accessibilityAddTraits(coach.selectedAction == action ? .isSelected : [])
-                }
-            }
+            actionSelector
 
             BeckettCard {
                 VStack(alignment: .leading, spacing: 10) {
@@ -210,6 +175,82 @@ struct CoachView: View {
                 .font(.footnote)
                 .foregroundStyle(BeckettColor.inkLight)
         }
+    }
+
+    @ViewBuilder
+    private var actionSelector: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: 10) {
+                ForEach(MobileCoachAction.visibleCases) { action in
+                    actionButton(action, horizontal: true)
+                }
+            }
+        } else {
+            HStack(alignment: .top, spacing: 12) {
+                ForEach(MobileCoachAction.visibleCases) { action in
+                    actionButton(action, horizontal: false)
+                }
+            }
+        }
+    }
+
+    private func actionButton(_ action: MobileCoachAction, horizontal: Bool) -> some View {
+        Button {
+            coach.selectedAction = action
+        } label: {
+            Group {
+                if horizontal {
+                    HStack(spacing: 14) {
+                        actionIcon(action, size: 48)
+                        Text(action.shortTitle)
+                            .font(.headline)
+                            .foregroundStyle(BeckettColor.ink)
+                        Spacer()
+                        if coach.selectedAction == action {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(BeckettColor.primaryDark)
+                        }
+                    }
+                    .padding(12)
+                    .background(
+                        coach.selectedAction == action ? BeckettColor.primaryLight : BeckettColor.card,
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    )
+                } else {
+                    VStack(spacing: 8) {
+                        actionIcon(action, size: 64)
+                        Text(action.shortTitle)
+                            .font(.subheadline.bold())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .foregroundStyle(BeckettColor.ink)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(coach.isLoading)
+        .accessibilityLabel(action.shortTitle)
+        .accessibilityAddTraits(coach.selectedAction == action ? .isSelected : [])
+    }
+
+    private func actionIcon(_ action: MobileCoachAction, size: CGFloat) -> some View {
+        Image(systemName: action.systemImage)
+            .font(.title2)
+            .frame(width: size, height: size)
+            .foregroundStyle(coach.selectedAction == action ? Color.white : BeckettColor.primaryDark)
+            .background(
+                coach.selectedAction == action ? BeckettColor.primary : BeckettColor.card,
+                in: Circle()
+            )
+            .overlay {
+                Circle()
+                    .stroke(
+                        coach.selectedAction == action ? BeckettColor.primaryDark : BeckettColor.ink.opacity(0.12),
+                        lineWidth: coach.selectedAction == action ? 2 : 1
+                    )
+            }
     }
 
     private func submit() {
@@ -617,7 +658,7 @@ private struct DraftOptionCard: View {
                 Text(option.text)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
-                    .accessibilityLabel("\(option.label) draft")
+                    .accessibilityLabel("\(option.label) draft. \(option.text)")
                 ResultActions(text: option.text)
             }
         }

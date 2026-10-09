@@ -373,12 +373,44 @@ test("iOS uses the same warm brand palette and button states as the website", as
     readFile(new URL("../ios/BeckettCore/Design/BeckettTheme.swift", import.meta.url), "utf8"),
     readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
   ]);
-  assert.match(theme, /static let primary = Color\(red: 186 \/ 255, green: 117 \/ 255, blue: 23 \/ 255\)/);
-  assert.match(theme, /static let background = Color\(red: 251 \/ 255, green: 248 \/ 255, blue: 243 \/ 255\)/);
-  assert.match(theme, /static let card = Color\.white/);
+  assert.match(theme, /static let primary = adaptive\(light: rgb\(186, 117, 23\), dark: rgb\(216, 151, 62\)\)/);
+  assert.match(theme, /static let background = adaptive\(light: rgb\(251, 248, 243\), dark: rgb\(18, 17, 15\)\)/);
+  assert.match(theme, /static let card = adaptive\(light: \.white, dark: rgb\(34, 31, 27\)\)/);
+  assert.match(theme, /traits\.userInterfaceStyle == \.dark \? dark : light/);
   assert.match(theme, /configuration\.isPressed \? BeckettColor\.primaryDark : BeckettColor\.primary/);
   assert.match(root, /toolbarBackground\(BeckettColor\.background, for: \.tabBar\)/);
   assert.doesNotMatch(theme, /systemGroupedBackground|secondarySystemGroupedBackground/);
+});
+
+test("result drafts remain readable to VoiceOver", async () => {
+  const view = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
+  assert.match(view, /\.accessibilityLabel\("\\\(option\.label\) draft\. \\\(option\.text\)"\)/);
+});
+
+test("the Beckett wordmark remains visible in dark mode", async () => {
+  const theme = await readFile(new URL("../ios/BeckettCore/Design/BeckettTheme.swift", import.meta.url), "utf8");
+  assert.match(theme, /@Environment\(\\\.colorScheme\)/);
+  assert.match(theme, /if colorScheme == \.dark/);
+  assert.match(theme, /Text\("beckett"\)/);
+});
+
+test("coaching actions adapt instead of truncating at accessibility text sizes", async () => {
+  const view = await readFile(new URL("../ios/BeckettApp/Features/Coach/CoachView.swift", import.meta.url), "utf8");
+  assert.match(view, /@Environment\(\\\.dynamicTypeSize\)/);
+  assert.match(view, /dynamicTypeSize\.isAccessibilitySize/);
+  assert.match(view, /actionButton\(action, horizontal: true\)/);
+});
+
+test("offline app launch preserves the stored session and offers retry", async () => {
+  const [auth, root] = await Promise.all([
+    readFile(new URL("../ios/BeckettApp/Features/Auth/AuthStore.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios/BeckettApp/App/RootView.swift", import.meta.url), "utf8"),
+  ]);
+  assert.match(auth, /case offline/);
+  assert.match(auth, /status == 401[\s\S]*keychain\.clear\(\)/);
+  assert.match(auth, /catch \{[\s\S]*session = stored[\s\S]*state = \.offline/);
+  assert.match(root, /case \.offline:[\s\S]*OfflineSessionView\(\)/);
+  assert.match(root, /Button\("Try again"\)/);
 });
 
 test("decode caps readings at three and drafts responses in place", async () => {
